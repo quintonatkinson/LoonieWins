@@ -1,0 +1,14 @@
+/// <reference types="vite/client" />
+
+declare module 'canvas-confetti' {
+  export default function confetti(options?: { particleCount?: number; spread?: number; origin?: { x?: number; y?: number } }): void
+}
+
+interface ImportMetaEnv {
+  readonly VITE_SUPABASE_URL: string
+  readonly VITE_SUPABASE_ANON_KEY: string
+}
+
+interface ImportMeta {
+  readonly env: ImportMetaEnv
+}

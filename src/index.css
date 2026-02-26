@@ -1,0 +1,20 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --accent-win: #39FF14;
+  --accent-earn: #FFD700;
+}
+
+body {
+  @apply bg-gray-900 text-gray-50 antialiased font-sans;
+}
+
+
+/* Glass / card panel (gray-800 = #1f2937) */
+.glass {
+  @apply backdrop-blur-xl bg-gray-800 border border-gray-600/50;
+}
