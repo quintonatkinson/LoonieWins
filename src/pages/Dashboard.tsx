@@ -8,6 +8,30 @@ import type { AutoFillData } from '../types/profile'
 
 type SortFilter = 'high-value' | 'ending-soon' | 'best-odds' | 'most-popular'
 
+/** Filter by tag or requirement — matches contest.tags or contest.requirements */
+const TAG_REQ_FILTERS: { key: string; label: string; match: (c: Contest) => boolean }[] = [
+  {
+    key: 'easy',
+    label: '⚡ Easy Entry',
+    match: (c) => {
+      const tags = c.tags ?? []
+      const reqs = c.requirements ?? []
+      if (tags.includes('⚡ Easy Entry')) return true
+      if (reqs.length === 0 && !tags.includes('🧾 Purchase')) return true
+      return false
+    },
+  },
+  { key: 'purchase', label: 'Purchase Required', match: (c) => (c.requirements ?? []).includes('Purchase Required') },
+  { key: 'app', label: 'App Download', match: (c) => (c.requirements ?? []).includes('App Download') },
+  { key: 'social', label: 'Social Follow', match: (c) => (c.requirements ?? []).includes('Social Action') },
+  { key: 'creative', label: 'Creative', match: (c) => (c.requirements ?? []).includes('Creative Submission') },
+  { key: 'newsletter', label: 'Newsletter', match: (c) => (c.requirements ?? []).includes('Newsletter Signup') },
+  { key: 'daily', label: 'Daily', match: (c) => (c.tags ?? []).includes('Daily') },
+  { key: 'instant', label: 'Instant Win', match: (c) => (c.tags ?? []).includes('Instant Win') },
+  { key: 'highvalue', label: 'High Value', match: (c) => (c.tags ?? []).includes('High Value') },
+  { key: 'math', label: 'Math', match: (c) => (c.tags ?? []).includes('🧠 Math') },
+]
+
 const STORAGE_ENTERED = 'looniewins_entered'
 
 function getEnteredIds(): Set<string> {
@@ -31,6 +55,7 @@ export default function Dashboard() {
   const [sortFilter, setSortFilter] = useState<SortFilter | null>(null)
   const [hideEntered, setHideEntered] = useState(false)
   const [hideQCExcluded, setHideQCExcluded] = useState(false)
+  const [tagFilters, setTagFilters] = useState<Set<string>>(new Set())
   const [enteredIds, setEnteredIdsState] = useState(getEnteredIds)
   const [overlayContest, setOverlayContest] = useState<Contest | null>(null)
   const [autoFillData] = useState<AutoFillData>(() => ({
@@ -54,6 +79,12 @@ export default function Dashboard() {
     if (search.trim()) {
       const q = search.toLowerCase()
       if (!c.title.toLowerCase().includes(q)) return false
+    }
+    if (tagFilters.size > 0) {
+      const matchesAny = TAG_REQ_FILTERS.some(
+        (f) => tagFilters.has(f.key) && f.match(c)
+      )
+      if (!matchesAny) return false
     }
     return true
   })
@@ -172,6 +203,32 @@ export default function Dashboard() {
         >
           Hide QC Excluded
         </button>
+      </div>
+
+      {/* Tag / requirement filters */}
+      <div className="px-4 py-2 flex flex-wrap gap-2 items-center">
+        <span className="text-xs text-gray-500 font-medium shrink-0">Filter:</span>
+        {TAG_REQ_FILTERS.map(({ key, label }) => (
+          <button
+            key={key}
+            type="button"
+            onClick={() => {
+              setTagFilters((prev) => {
+                const next = new Set(prev)
+                if (next.has(key)) next.delete(key)
+                else next.add(key)
+                return next
+              })
+            }}
+            className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
+              tagFilters.has(key)
+                ? 'bg-win text-gray-900'
+                : 'bg-surface border border-gray-600/50 text-gray-400 hover:text-gray-50'
+            }`}
+          >
+            {label}
+          </button>
+        ))}
       </div>
         </>
       )}

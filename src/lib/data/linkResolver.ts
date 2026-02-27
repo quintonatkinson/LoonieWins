@@ -10,6 +10,7 @@ const PROXY = 'https://corsproxy.io/?'
 export interface DeepScrapeResult {
   finalUrl: string
   status?: number
+  isLocked?: boolean
   scrapedExpiry?: string // ISO
   scrapedValue?: number
   scrapedEligibility?: 'CA' | 'US' | 'NA' | 'Unknown'
@@ -17,8 +18,35 @@ export interface DeepScrapeResult {
   scrapedRequirements?: string[]
 }
 
+const WIDGET_DOMAINS = /(?:gleam\.io|woobox\.com|rafflecopter\.com|kingsumo\.com|vyre\.network|promosimple\.com)/i
+
+/**
+ * Extract contest/widget URLs from raw RSS text before fetching the page.
+ * Avoids hitting RFD login wall when the link is already in the description.
+ */
+export function extractFromText(text: string): string | null {
+  if (!text || typeof text !== 'string') return null
+  const urlRe = /https?:\/\/[^\s"'<>)\]]+/gi
+  let m: RegExpExecArray | null
+  while ((m = urlRe.exec(text)) !== null) {
+    const url = m[0].replace(/[.,;:!?)\]]+$/, '')
+    if (/\.(css|js|png|jpg|jpeg|gif|ico|woff|svg)/i.test(url)) continue
+    if (WIDGET_DOMAINS.test(url)) return url
+  }
+  return null
+}
+
+const LOGIN_WALL_PHRASES = [
+  /you must be logged in to view this link/i,
+  /sign in to see/i,
+]
+
+function isLoginWall(html: string): boolean {
+  return LOGIN_WALL_PHRASES.some((p) => p.test(html))
+}
+
 const cache = new Map<string, DeepScrapeResult>()
-const CACHE_VERSION = 2 // bump when extractFinalUrl logic changes to invalidate stale URLs
+const CACHE_VERSION = 3 // bump when extractFinalUrl logic changes to invalidate stale URLs
 
 async function fetchHtml(url: string): Promise<{ html: string; status: number }> {
   const res = await fetch(PROXY + encodeURIComponent(url))
@@ -166,15 +194,29 @@ function extractValueFromHtml(html: string): number | undefined {
 
 /**
  * Deep scrape: fetch page, find final URL, extract expiry and value from HTML.
- * Caches result by input URL.
+ * If rssContent is provided, extracts widget URLs from text first to avoid fetching
+ * RFD pages behind the login wall.
  */
-export async function deepScrape(url: string): Promise<DeepScrapeResult> {
+export async function deepScrape(url: string, rssContent?: string): Promise<DeepScrapeResult> {
   const cacheKey = `${CACHE_VERSION}:${url}`
   const cached = cache.get(cacheKey)
   if (cached) return cached
 
+  const textToScan = rssContent ?? ''
+  const extracted = extractFromText(textToScan)
+  if (extracted) {
+    const result: DeepScrapeResult = { finalUrl: extracted }
+    cache.set(cacheKey, result)
+    return result
+  }
+
   try {
     const { html, status } = await fetchHtml(url)
+    if (isLoginWall(html)) {
+      const locked: DeepScrapeResult = { finalUrl: url, isLocked: true }
+      cache.set(cacheKey, locked)
+      return locked
+    }
     const finalUrl = extractFinalUrl(html, url)
     const scrapedExpiry = extractExpiryFromHtml(html)
     const scrapedValue = extractValueFromHtml(html)

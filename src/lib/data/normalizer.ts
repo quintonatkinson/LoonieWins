@@ -17,6 +17,8 @@ export interface Contest {
   category?: string
   source: string
   description?: string
+  contentSnippet?: string
+  isLocked?: boolean
   tags: string[]
   restrictions: string[]
   eligibility?: 'CA' | 'US' | 'NA' | 'Unknown'
@@ -279,6 +281,7 @@ export function normalizeJsonItem(item: Rss2JsonItem, source: Source, index: num
     category: undefined,
     source: source.name,
     description: item.description,
+    contentSnippet: body,
     tags,
     restrictions,
     eligibility,
@@ -316,6 +319,7 @@ export function normalizeXmlItem(item: RawFeedItem, source: Source, index: numbe
     category: undefined,
     source: source.name,
     description: item.description,
+    contentSnippet: body,
     tags,
     restrictions,
     eligibility,

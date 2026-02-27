@@ -288,7 +288,8 @@ export async function fetchRawContests(): Promise<{
 export async function enrichContest(contest: Contest): Promise<Contest> {
   if (contest.id === '__offline_alert__') return contest
 
-  const result = await deepScrape(contest.url)
+  const rssContent = contest.contentSnippet ?? contest.description ?? ''
+  const result = await deepScrape(contest.url, rssContent)
   let expiryDate = contest.expiryDate
   let is_estimated_expiry = contest.is_estimated_expiry
   let prizeValue = contest.prizeValue
@@ -321,6 +322,7 @@ export async function enrichContest(contest: Contest): Promise<Contest> {
     eligibilityUnverified,
     requirements,
     ...(result.status != null && (result.status < 200 || result.status >= 300) && { linkStatus: result.status }),
+    ...(result.isLocked === true && { isLocked: true }),
   }
 }
 

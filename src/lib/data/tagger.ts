@@ -15,9 +15,27 @@ const MATH_PATTERNS = /\b(math|skill testing|equation|answer correctly)\b/i
 const PURCHASE_PATTERNS = /\b(purchase|receipt|buy|upc)\b/i
 const SOCIAL_PATTERNS = /\b(instagram|tiktok|share|tag a friend)\b/i
 
+// Patterns for "heavy" requirements — if none match, contest is Easy Entry (autofill + maybe math)
+const REQ_PURCHASE = /\b(purchase|buy|receipt|upc)\b/i
+const REQ_SOCIAL = /\b(instagram|tiktok|tag|share|retweet)\b/i
+const REQ_APP = /\b(download|app store|install)\b/i
+const REQ_CREATIVE = /\b(photo|video|essay|story|recipe)\b/i
+const REQ_NEWSLETTER = /\b(subscribe|email list)\b/i
+
+function hasHeavyRequirements(text: string): boolean {
+  return (
+    REQ_PURCHASE.test(text) ||
+    REQ_SOCIAL.test(text) ||
+    REQ_APP.test(text) ||
+    REQ_CREATIVE.test(text) ||
+    REQ_NEWSLETTER.test(text)
+  )
+}
+
 /**
  * Derive tags and restrictions from contest title and body.
  * CRITICAL: Quebec-excluded contests get "no_quebec" in restrictions.
+ * "Easy Entry" = autofill + maybe math only — no purchase, social, app, creative, newsletter.
  */
 export function autoCategorize(title: string, body: string): TagResult {
   const tags: string[] = []
@@ -30,6 +48,7 @@ export function autoCategorize(title: string, body: string): TagResult {
   if (MATH_PATTERNS.test(text)) tags.push('🧠 Math')
   if (PURCHASE_PATTERNS.test(text)) tags.push('🧾 Purchase')
   if (SOCIAL_PATTERNS.test(text)) tags.push('📱 Social')
+  if (!hasHeavyRequirements(text)) tags.push('⚡ Easy Entry')
   if (QUEBEC_EXCLUDED_PATTERNS.test(text)) restrictions.push('no_quebec')
 
   return { tags, restrictions }
@@ -39,12 +58,6 @@ export function autoCategorize(title: string, body: string): TagResult {
 const ELIG_NA = /\b(us and canada|north america|us\/ca|us\s*&\s*canada)\b/i
 const ELIG_US = /\b(50 us|us only|united states only|residents of the us|us residents only)\b/i
 const ELIG_CA = /\b(residents of canada|canada only|canadian residents)\b/i
-
-const REQ_PURCHASE = /\b(purchase|buy|receipt|upc)\b/i
-const REQ_SOCIAL = /\b(instagram|tiktok|tag|share|retweet)\b/i
-const REQ_APP = /\b(download|app store|install)\b/i
-const REQ_CREATIVE = /\b(photo|video|essay|story|recipe)\b/i
-const REQ_NEWSLETTER = /\b(subscribe|email list)\b/i
 
 export interface MetadataResult {
   eligibility: 'CA' | 'US' | 'NA' | 'Unknown'

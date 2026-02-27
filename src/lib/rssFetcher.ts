@@ -13,8 +13,9 @@ export { fetchAllContests, fetchRawContests, enrichContest } from './data/engine
 /**
  * Resolve a middleman/blog URL to the actual contest entry form URL.
  * Uses linkResolver.deepScrape (CORS proxy + form/CTA parsing). Caches internally.
+ * Pass textContent (e.g. RSS description/content) to avoid fetching RFD pages behind the login wall.
  */
-export async function resolveContestUrl(url: string): Promise<string> {
-  const result = await deepScrape(url)
+export async function resolveContestUrl(url: string, textContent?: string): Promise<string> {
+  const result = await deepScrape(url, textContent)
   return result.finalUrl
 }

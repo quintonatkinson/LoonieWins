@@ -98,11 +98,11 @@ export default function ContestBrowser({
     setLoading(true)
     setResolvedUrl(null)
     setIframeLikelyBlocked(false)
-    resolveContestUrl(contest.url).then((url) => {
+    resolveContestUrl(contest.url, contest.contentSnippet ?? contest.description).then((url) => {
       setResolvedUrl(url)
       setLoading(false)
     })
-  }, [open, contest?.url])
+  }, [open, contest])
 
   useEffect(() => {
     return () => {

@@ -46,6 +46,10 @@ export default function ContestCard({ contest, onOpenOverlay, variant, daysLeft:
 
   const handleEnter = useCallback(() => {
     if (contest.id === '__offline_alert__') return
+    if (contest.isLocked) {
+      window.open(contest.url, '_blank', 'noopener,noreferrer')
+      return
+    }
     if (hasUnlimitedEntries) {
       onOpenOverlay(contest)
       return
@@ -95,6 +99,7 @@ export default function ContestCard({ contest, onOpenOverlay, variant, daysLeft:
     )
   }
 
+  const isLocked = contest.isLocked === true
   const button = showUnlock ? (
     <button
       type="button"
@@ -109,7 +114,7 @@ export default function ContestCard({ contest, onOpenOverlay, variant, daysLeft:
       onClick={handleEnter}
       className="shrink-0 px-5 py-2.5 rounded-lg bg-win text-gray-900 font-semibold text-sm"
     >
-      Enter
+      {isLocked ? 'View on RFD' : 'Enter'}
     </button>
   )
 
@@ -193,7 +198,7 @@ export default function ContestCard({ contest, onOpenOverlay, variant, daysLeft:
               showUnlock ? 'bg-amber-500/20 text-amber-400 border border-amber-500/40' : 'bg-win text-gray-900'
             }`}
           >
-            {showUnlock ? `UNLOCK (${entryCostPts} Pts)` : 'Enter'}
+            {showUnlock ? `UNLOCK (${entryCostPts} Pts)` : isLocked ? 'View on RFD' : 'Enter'}
           </span>
         </button>
         {toastEl}
@@ -246,6 +251,11 @@ export default function ContestCard({ contest, onOpenOverlay, variant, daysLeft:
             )}
           </div>
           <div className="flex flex-wrap items-center gap-1.5 mt-2">
+            {isLocked && (
+              <span className="rounded-full px-2 py-0.5 text-xs font-medium bg-amber-500/20 text-amber-400 border border-amber-500/40">
+                🔒 RFD Account Required
+              </span>
+            )}
             {reqs.length === 0 ? (
               <span className="rounded-full px-2 py-0.5 text-xs font-medium bg-win/20 text-win border border-win/40">
                 Easy Entry
