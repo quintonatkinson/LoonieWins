@@ -169,11 +169,12 @@ export default function ContestCard({ contest, onOpenOverlay, variant, daysLeft:
     typeof document !== 'undefined' && el ? createPortal(el, document.body) : null
 
   const elig = contest.eligibility ?? 'Unknown'
+  // Use maple leaf for CA/Unknown — 🇨🇦 often renders as "CA" on Windows
   const eligDisplay =
-    elig === 'CA' ? '🇨🇦' :
+    elig === 'CA' ? '🍁' :
     elig === 'US' ? '🇺🇸' :
     elig === 'NA' ? '🌎' :
-    '🇨🇦' // default: Canadian suppliers
+    '🍁' // Unknown = assume Canadian suppliers
   const eligUnverified = contest.eligibilityUnverified ?? false
   const reqs = contest.requirements ?? []
   const reqLabels: Record<string, string> = {

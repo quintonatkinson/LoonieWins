@@ -208,6 +208,15 @@ export default function Dashboard() {
       {/* Tag / requirement filters */}
       <div className="px-4 py-2 flex flex-wrap gap-2 items-center">
         <span className="text-xs text-gray-500 font-medium shrink-0">Filter:</span>
+        {tagFilters.size > 0 && (
+          <button
+            type="button"
+            onClick={() => setTagFilters(new Set())}
+            className="px-3 py-1.5 rounded-full text-xs font-medium text-gray-400 hover:text-gray-50 hover:bg-gray-600/50"
+          >
+            Clear filters
+          </button>
+        )}
         {TAG_REQ_FILTERS.map(({ key, label }) => (
           <button
             key={key}
@@ -254,6 +263,17 @@ export default function Dashboard() {
                   className="px-5 py-2.5 rounded-lg bg-win text-gray-900 font-semibold"
                 >
                   Retry Fetch
+                </button>
+              </div>
+            ) : feedContests.length === 0 ? (
+              <div className="rounded-xl bg-surface border border-gray-600/50 p-6 text-center space-y-4">
+                <p className="text-gray-300">No contests match your filters.</p>
+                <button
+                  type="button"
+                  onClick={() => { setTagFilters(new Set()); setSearch('') }}
+                  className="px-5 py-2.5 rounded-lg bg-win text-gray-900 font-semibold"
+                >
+                  Clear filters
                 </button>
               </div>
             ) : (
