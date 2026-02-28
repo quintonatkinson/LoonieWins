@@ -19,7 +19,7 @@ type FetchResult =
   | { strategy: 'B'; data: string }
   | { strategy: 'C' }
 
-const RSS2JSON_COUNT = 50
+const RSS2JSON_COUNT = import.meta.env.VITE_RSS2JSON_API_KEY ? 100 : 50
 
 /**
  * Try Strategy B (corsproxy XML) first for full feeds, then A (rss2json), then C (no data).
@@ -62,10 +62,12 @@ async function fetchWithFallback(feedUrl: string): Promise<FetchResult> {
 function parseFeedXml(xml: string): RawFeedItem[] {
   const parser = new DOMParser()
   const doc = parser.parseFromString(xml, 'text/xml')
-  const items = doc.querySelectorAll('item')
+  const itemNodes = doc.querySelectorAll('item')
+  const atomNodes = doc.querySelectorAll('entry')
+  const nodes = itemNodes.length ? itemNodes : atomNodes
   const entries: RawFeedItem[] = []
 
-  items.forEach((item) => {
+  nodes.forEach((item) => {
     const title = item.querySelector('title')?.textContent?.trim() ?? ''
     let link =
       item.querySelector('link')?.textContent?.trim() ??
@@ -75,10 +77,13 @@ function parseFeedXml(xml: string): RawFeedItem[] {
       const el = item.querySelector('link')
       link = el?.getAttribute('href') ?? el?.textContent?.trim() ?? ''
     }
-    const description = item.querySelector('description')?.textContent?.trim()
+    const description =
+      item.querySelector('description')?.textContent?.trim() ??
+      item.querySelector('summary')?.textContent?.trim()
     const pubDate =
       item.querySelector('pubDate')?.textContent?.trim() ??
-      item.querySelector('published')?.textContent?.trim()
+      item.querySelector('published')?.textContent?.trim() ??
+      item.querySelector('updated')?.textContent?.trim()
     const enc = item.querySelector('enclosure')
     const enclosure = enc?.getAttribute('url') ?? undefined
     const mediaContent =
@@ -93,6 +98,9 @@ function parseFeedXml(xml: string): RawFeedItem[] {
     if (!content) {
       const atomContent = item.getElementsByTagNameNS('http://www.w3.org/2005/Atom', 'content')[0]
       content = atomContent?.textContent?.trim() ?? undefined
+    }
+    if (!content) {
+      content = item.querySelector('summary')?.textContent?.trim() ?? undefined
     }
 
     if (title && link) {
