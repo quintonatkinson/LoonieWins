@@ -9,8 +9,19 @@ const PHRASES = [
   'Extracting odds...',
 ]
 
-const CONCURRENCY = 5
+const CONCURRENCY = 12
 const PHRASE_INTERVAL_MS = 2000
+const DEFAULT_ELIGIBILITY: 'CA' | 'US' = 'CA'
+
+function computeQualityScore(c: Contest, defaultEligibility: 'CA' | 'US' = DEFAULT_ELIGIBILITY): number {
+  let score = 0
+  const reqs = c.requirements ?? []
+  if (reqs.length === 0) score += 50
+  if (reqs.includes('Purchase Required')) score -= 20
+  if (reqs.includes('Creative Submission')) score -= 30
+  if (c.eligibility === defaultEligibility) score += 10
+  return score
+}
 
 export function useContestPipeline() {
   const [liveContests, setLiveContests] = useState<Contest[]>([])
@@ -46,6 +57,7 @@ export function useContestPipeline() {
 
     const toProcess = rawItems.filter((c) => c.id !== '__offline_alert__')
     let nextIndex = 0
+    const collected: Contest[] = []
 
     const processOne = async (): Promise<void> => {
       while (nextIndex < toProcess.length && !abortRef.current) {
@@ -65,9 +77,8 @@ export function useContestPipeline() {
             })()
           if (expired) return
           if (enriched.linkStatus === 404) return
-          if (enriched.eligibility === 'US') return
 
-          setLiveContests((prev) => [...prev, enriched])
+          collected.push(enriched)
         } catch (_) {
           // skip failed enrichment
         }
@@ -77,6 +88,15 @@ export function useContestPipeline() {
     await Promise.all(Array.from({ length: CONCURRENCY }, () => processOne()))
 
     if (!abortRef.current) {
+      const sorted = [...collected].sort((a, b) => {
+        const scoreA = computeQualityScore(a)
+        const scoreB = computeQualityScore(b)
+        if (scoreB !== scoreA) return scoreB - scoreA
+        const da = a.expiryDate ? new Date(a.expiryDate).getTime() : 0
+        const db = b.expiryDate ? new Date(b.expiryDate).getTime() : 0
+        return db - da
+      })
+      setLiveContests(sorted)
       setIsScanning(false)
       setIsFinished(true)
     }

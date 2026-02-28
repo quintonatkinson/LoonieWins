@@ -311,6 +311,12 @@ export async function enrichContest(contest: Contest): Promise<Contest> {
   const eligibility = result.scrapedEligibility ?? contest.eligibility
   const eligibilityUnverified = result.scrapedEligibilityUnverified ?? contest.eligibilityUnverified
   const requirements = result.scrapedRequirements ?? contest.requirements ?? []
+  const rssTags = contest.tags ?? []
+  const rssRestrictions = contest.restrictions ?? []
+  const scrapedTags = result.scrapedTags ?? []
+  const scrapedRestrictions = result.scrapedRestrictions ?? []
+  const tags = [...new Set([...rssTags, ...scrapedTags])]
+  const restrictions = [...new Set([...rssRestrictions, ...scrapedRestrictions])]
 
   if (prizeValue == null || prizeValue === 0) {
     const estimated = estimatePrizeValue(contest.title, contest.description)
@@ -326,6 +332,8 @@ export async function enrichContest(contest: Contest): Promise<Contest> {
     eligibility,
     eligibilityUnverified,
     requirements,
+    tags,
+    restrictions,
     ...(result.status != null && (result.status < 200 || result.status >= 300) && { linkStatus: result.status }),
     ...(result.isLocked === true && { isLocked: true }),
   }

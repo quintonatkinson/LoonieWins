@@ -4,6 +4,7 @@
 
 import type { Source } from './sources'
 import { SOURCE_FALLBACK_IMAGES } from './sources'
+import { sanitizeContestUrl } from '../utils/sanitizeContestUrl'
 import { autoCategorize, scanForMetadata } from './tagger'
 
 export interface Contest {
@@ -273,7 +274,7 @@ export function normalizeJsonItem(item: Rss2JsonItem, source: Source, index: num
   return {
     id,
     title,
-    url: item.link,
+    url: sanitizeContestUrl(item.link),
     imageUrl,
     prizeValue: extractPrizeValue(item.title + ' ' + body),
     expiryDate,
@@ -311,7 +312,7 @@ export function normalizeXmlItem(item: RawFeedItem, source: Source, index: numbe
   return {
     id,
     title,
-    url: item.link,
+    url: sanitizeContestUrl(item.link),
     imageUrl,
     prizeValue: extractPrizeValue(item.title + ' ' + body),
     expiryDate,

@@ -13,7 +13,9 @@ const QUEBEC_EXCLUDED_PATTERNS = /\b(no qc|void in qc|excl quebec|excl\.?\s*queb
 const HIGH_VALUE_PATTERNS = /\b(car|trip|vacation|\$10,?000|cash)\b/i
 const MATH_PATTERNS = /\b(math|skill testing|equation|answer correctly)\b/i
 const PURCHASE_PATTERNS = /\b(purchase|receipt|buy|upc)\b/i
-const SOCIAL_PATTERNS = /\b(instagram|tiktok|share|tag a friend)\b/i
+const AGE_PATTERNS = /\b(18\+|21\+|18 years|21 years|age of majority)\b/i
+const SINGLE_ENTRY_PATTERNS = /\b(single entry|one time|one entry|1 entry per person)\b/i
+const WEEKLY_PATTERNS = /\b(weekly|every week)\b/i
 
 // Patterns for "heavy" requirements — if none match, contest is Easy Entry (autofill + maybe math)
 const REQ_PURCHASE = /\b(purchase|buy|receipt|upc)\b/i
@@ -47,7 +49,10 @@ export function autoCategorize(title: string, body: string): TagResult {
   if (HIGH_VALUE_PATTERNS.test(text)) tags.push('High Value')
   if (MATH_PATTERNS.test(text)) tags.push('🧠 Math')
   if (PURCHASE_PATTERNS.test(text)) tags.push('🧾 Purchase')
-  if (SOCIAL_PATTERNS.test(text)) tags.push('📱 Social')
+  if (REQ_SOCIAL.test(text)) tags.push('📱 Social')
+  if (AGE_PATTERNS.test(text)) tags.push('18+')
+  if (SINGLE_ENTRY_PATTERNS.test(text)) tags.push('1 Single Entry')
+  if (WEEKLY_PATTERNS.test(text)) tags.push('Weekly')
   if (!hasHeavyRequirements(text)) tags.push('⚡ Easy Entry')
   if (QUEBEC_EXCLUDED_PATTERNS.test(text)) restrictions.push('no_quebec')
 

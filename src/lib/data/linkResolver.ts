@@ -3,7 +3,8 @@
  * Scans the middleman page HTML for eligibility and entry requirements.
  */
 
-import { scanForMetadata } from './tagger'
+import { sanitizeContestUrl } from '../utils/sanitizeContestUrl'
+import { scanForMetadata, autoCategorize } from './tagger'
 
 const PROXY = 'https://corsproxy.io/?'
 
@@ -16,6 +17,8 @@ export interface DeepScrapeResult {
   scrapedEligibility?: 'CA' | 'US' | 'NA' | 'Unknown'
   scrapedEligibilityUnverified?: boolean
   scrapedRequirements?: string[]
+  scrapedTags?: string[]
+  scrapedRestrictions?: string[]
 }
 
 const WIDGET_DOMAINS = /(?:gleam\.io|woobox\.com|rafflecopter\.com|kingsumo\.com|vyre\.network|promosimple\.com)/i
@@ -198,31 +201,34 @@ function extractValueFromHtml(html: string): number | undefined {
  * RFD pages behind the login wall.
  */
 export async function deepScrape(url: string, rssContent?: string): Promise<DeepScrapeResult> {
-  const cacheKey = `${CACHE_VERSION}:${url}`
+  const cleanUrl = sanitizeContestUrl(url)
+  const cacheKey = `${CACHE_VERSION}:${cleanUrl}`
   const cached = cache.get(cacheKey)
   if (cached) return cached
 
   const textToScan = rssContent ?? ''
   const extracted = extractFromText(textToScan)
   if (extracted) {
-    const result: DeepScrapeResult = { finalUrl: extracted }
+    const result: DeepScrapeResult = { finalUrl: sanitizeContestUrl(extracted) }
     cache.set(cacheKey, result)
     return result
   }
 
   try {
-    const { html, status } = await fetchHtml(url)
+    const { html, status } = await fetchHtml(cleanUrl)
     if (isLoginWall(html)) {
-      const locked: DeepScrapeResult = { finalUrl: url, isLocked: true }
+      const locked: DeepScrapeResult = { finalUrl: cleanUrl, isLocked: true }
       cache.set(cacheKey, locked)
       return locked
     }
-    const finalUrl = extractFinalUrl(html, url)
+    const rawUrl = extractFinalUrl(html, cleanUrl)
+    const finalUrl = sanitizeContestUrl(rawUrl)
     const scrapedExpiry = extractExpiryFromHtml(html)
     const scrapedValue = extractValueFromHtml(html)
 
     const pageText = html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()
     const { eligibility, eligibilityUnverified, requirements } = scanForMetadata('', pageText)
+    const { tags: scrapedTags, restrictions: scrapedRestrictions } = autoCategorize('', pageText)
 
     const result: DeepScrapeResult = { finalUrl }
     if (status < 200 || status >= 300) result.status = status
@@ -231,11 +237,13 @@ export async function deepScrape(url: string, rssContent?: string): Promise<Deep
     result.scrapedEligibility = eligibility
     result.scrapedEligibilityUnverified = eligibilityUnverified
     result.scrapedRequirements = requirements
+    result.scrapedTags = scrapedTags
+    result.scrapedRestrictions = scrapedRestrictions
 
     cache.set(cacheKey, result)
     return result
   } catch (_) {
-    const fallback: DeepScrapeResult = { finalUrl: url, status: 500 }
+    const fallback: DeepScrapeResult = { finalUrl: cleanUrl, status: 500 }
     cache.set(cacheKey, fallback)
     return fallback
   }

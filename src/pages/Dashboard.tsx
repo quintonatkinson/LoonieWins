@@ -1,7 +1,8 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect, useRef } from 'react'
 import type { Contest } from '../lib/rssFetcher'
 import ContestBrowser from '../components/ContestBrowser'
 import ContestCard from '../components/ContestCard'
+import CountryToggle from '../components/CountryToggle'
 import RadarLoader from '../components/RadarLoader'
 import { useContestPipeline } from '../hooks/useContestPipeline'
 import type { AutoFillData } from '../types/profile'
@@ -30,6 +31,9 @@ const TAG_REQ_FILTERS: { key: string; label: string; match: (c: Contest) => bool
   { key: 'instant', label: 'Instant Win', match: (c) => (c.tags ?? []).includes('Instant Win') },
   { key: 'highvalue', label: 'High Value', match: (c) => (c.tags ?? []).includes('High Value') },
   { key: 'math', label: 'Math', match: (c) => (c.tags ?? []).includes('🧠 Math') },
+  { key: '18plus', label: '18+', match: (c) => (c.tags ?? []).includes('18+') },
+  { key: 'single', label: 'Single Entry', match: (c) => (c.tags ?? []).includes('1 Single Entry') },
+  { key: 'weekly', label: 'Weekly', match: (c) => (c.tags ?? []).includes('Weekly') },
 ]
 
 const STORAGE_ENTERED = 'looniewins_entered'
@@ -56,7 +60,10 @@ export default function Dashboard() {
   const [hideEntered, setHideEntered] = useState(false)
   const [hideQCExcluded, setHideQCExcluded] = useState(false)
   const [tagFilters, setTagFilters] = useState<Set<string>>(new Set())
+  const [geoFilter, setGeoFilter] = useState<'CA' | 'US' | 'ANY'>('CA')
+  const [visibleCount, setVisibleCount] = useState(75)
   const [enteredIds, setEnteredIdsState] = useState(getEnteredIds)
+  const sentinelRef = useRef<HTMLDivElement | null>(null)
   const [overlayContest, setOverlayContest] = useState<Contest | null>(null)
   const [autoFillData] = useState<AutoFillData>(() => ({
     name: 'Jane Doe',
@@ -76,6 +83,14 @@ export default function Dashboard() {
   let feedContests = liveContests.filter((c) => {
     if (hideEntered && enteredIds.has(c.id)) return false
     if (hideQCExcluded && c.restrictions?.includes('no_quebec')) return false
+    if (geoFilter === 'CA') {
+      const elig = c.eligibility ?? 'Unknown'
+      if (elig === 'US') return false
+    }
+    if (geoFilter === 'US') {
+      const elig = c.eligibility ?? 'Unknown'
+      if (elig === 'CA') return false
+    }
     if (search.trim()) {
       const q = search.toLowerCase()
       if (!c.title.toLowerCase().includes(q)) return false
@@ -109,6 +124,26 @@ export default function Dashboard() {
 
   const showFullRadar = isScanning && liveContests.length === 0
 
+  const visibleContests = feedContests.slice(0, visibleCount)
+  const hasMore = visibleCount < feedContests.length
+
+  useEffect(() => {
+    setVisibleCount(75)
+  }, [liveContests, tagFilters, search, hideEntered, hideQCExcluded, sortFilter, geoFilter])
+
+  useEffect(() => {
+    const sentinel = sentinelRef.current
+    if (!sentinel || !hasMore) return
+    const obs = new IntersectionObserver(
+      (entries) => {
+        if (entries[0]?.isIntersecting) setVisibleCount((prev) => Math.min(prev + 50, feedContests.length))
+      },
+      { rootMargin: '100px', threshold: 0 }
+    )
+    obs.observe(sentinel)
+    return () => obs.disconnect()
+  }, [hasMore, feedContests.length])
+
   return (
     <div className="flex flex-col bg-gray-900">
       {offlineMode && (
@@ -118,6 +153,9 @@ export default function Dashboard() {
       )}
       {!showFullRadar && (
         <>
+      <div className="px-4 pt-3 pb-2">
+        <CountryToggle value={geoFilter} onChange={setGeoFilter} />
+      </div>
       {/* Your Daily Routine */}
       <section className="px-4 pt-4">
         <h2 className="text-base font-bold text-gray-50 flex items-center gap-2 mb-3">
@@ -251,7 +289,9 @@ export default function Dashboard() {
             <div className="flex items-center justify-between mb-3">
               <h2 className="text-base font-bold text-gray-50">Opportunity List</h2>
               {liveContests.length > 0 && (
-                <span className="text-sm text-gray-500">{feedContests.length} contests</span>
+                <span className="text-lg font-semibold text-gray-300">
+                  {feedContests.length >= 100 ? `${feedContests.length}+` : feedContests.length} contests
+                </span>
               )}
             </div>
             {liveContests.length === 0 ? (
@@ -279,7 +319,7 @@ export default function Dashboard() {
             ) : (
               <>
                 <ul className="space-y-2">
-                  {feedContests.map((c) => (
+                  {visibleContests.map((c) => (
                     <ContestCard
                       key={c.id}
                       contest={c}
@@ -289,6 +329,7 @@ export default function Dashboard() {
                     />
                   ))}
                 </ul>
+                {hasMore && <div ref={sentinelRef} className="h-8 w-full" aria-hidden />}
                 {!isFinished && (
                   <RadarLoader mini phaseMessage={phaseMessage} liveCount={liveContests.length} />
                 )}
