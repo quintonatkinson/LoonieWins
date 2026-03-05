@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef, useCallback } from 'react'
 import type { Contest } from '../lib/rssFetcher'
 import { resolveContestUrl } from '../lib/rssFetcher'
+import { reportUrl } from '../lib/utils/reportedUrls'
 import { getInjectionScript } from '../lib/autofill/assassin'
 import type { AutoFillData } from '../types/profile'
 
@@ -89,6 +90,7 @@ export default function ContestBrowser({
   const [resolvedUrl, setResolvedUrl] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [iframeLikelyBlocked, setIframeLikelyBlocked] = useState(false)
+  const [reportToast, setReportToast] = useState(false)
   const iframeRef = useRef<HTMLIFrameElement>(null)
   const isNativeRef = useRef<boolean | null>(null)
   const iframeLoadTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -299,15 +301,16 @@ export default function ContestBrowser({
         </div>
 
         {contest && (
-          <div className="p-4 border-t border-white/10 shrink-0 flex gap-2">
-            <button
-              type="button"
-              onClick={handleEnterContest}
-              className="flex-1 py-2.5 rounded-lg bg-win text-gray-900 font-semibold hover:opacity-90"
-            >
-              Open in Browser
-            </button>
-            {onMarkEntered && (
+          <div className="p-4 border-t border-white/10 shrink-0 flex flex-col gap-2">
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={handleEnterContest}
+                className="flex-1 py-2.5 rounded-lg bg-win text-gray-900 font-semibold hover:opacity-90"
+              >
+                Open in Browser
+              </button>
+              {onMarkEntered && (
               <button
                 type="button"
                 onClick={() => {
@@ -318,6 +321,23 @@ export default function ContestBrowser({
               >
                 Mark as Entered
               </button>
+            )}
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                reportUrl(contest.url)
+                setReportToast(true)
+                setTimeout(() => setReportToast(false), 2500)
+              }}
+              className="text-xs text-white/50 hover:text-white/70 transition-colors self-start"
+            >
+              Report bad link
+            </button>
+            {reportToast && (
+              <p className="text-xs text-win" role="status">
+                Thanks, we&apos;ll look into it.
+              </p>
             )}
           </div>
         )}

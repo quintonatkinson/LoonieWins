@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { fetchRawContests, enrichContest, type Contest } from '../lib/rssFetcher'
 import { toExpiryEndOfDay } from '../lib/utils/expiryDate'
+import { getSeasonalPromos } from '../lib/data/seasonalPromos'
 
 const PHRASES = [
   'Scanning feeds...',
@@ -16,11 +17,37 @@ const DEFAULT_ELIGIBILITY: 'CA' | 'US' = 'CA'
 function computeQualityScore(c: Contest, defaultEligibility: 'CA' | 'US' = DEFAULT_ELIGIBILITY): number {
   let score = 0
   const reqs = c.requirements ?? []
+  const tags = c.tags ?? []
   if (reqs.length === 0) score += 50
+  if (tags.includes('⚡ Easy Entry')) score += 15
+  if (tags.includes('High Value')) score += 20
+  if ((c.prizeValue ?? 0) >= 500) score += 10
   if (reqs.includes('Purchase Required')) score -= 20
   if (reqs.includes('Creative Submission')) score -= 30
   if (c.eligibility === defaultEligibility) score += 10
   return score
+}
+
+function normalizeUrlForDedupe(url: string): string {
+  try {
+    const u = new URL(url)
+    const base = `${u.protocol}//${u.host}${u.pathname}`.toLowerCase().replace(/\/$/, '')
+    return base
+  } catch {
+    return url.toLowerCase().replace(/\/$/, '')
+  }
+}
+
+function normalizeTitleForDedupe(s: string): string {
+  return s.toLowerCase().replace(/\s+/g, ' ').trim()
+}
+
+function isSimilarTitle(a: string, b: string): boolean {
+  const na = normalizeTitleForDedupe(a)
+  const nb = normalizeTitleForDedupe(b)
+  if (na === nb) return true
+  if (na.length < 15 || nb.length < 15) return na === nb
+  return na.includes(nb) || nb.includes(na)
 }
 
 export function useContestPipeline() {
@@ -88,7 +115,39 @@ export function useContestPipeline() {
     await Promise.all(Array.from({ length: CONCURRENCY }, () => processOne()))
 
     if (!abortRef.current) {
-      const sorted = [...collected].sort((a, b) => {
+      const byResolvedUrl = new Map<string, Contest>()
+      for (const c of collected) {
+        const key = normalizeUrlForDedupe(c.url)
+        if (!byResolvedUrl.has(key)) byResolvedUrl.set(key, c)
+      }
+      let deduped = [...byResolvedUrl.values()]
+      const final: Contest[] = []
+      for (const c of deduped) {
+        const key = normalizeUrlForDedupe(c.url)
+        const similar = final.find(
+          (f) => normalizeUrlForDedupe(f.url) !== key && isSimilarTitle(f.title, c.title)
+        )
+        if (!similar) {
+          final.push(c)
+        } else {
+          const scoreC = computeQualityScore(c)
+          const scoreS = computeQualityScore(similar)
+          if (scoreC > scoreS) {
+            const idx = final.indexOf(similar)
+            final[idx] = c
+          }
+        }
+      }
+      deduped = final
+      const seasonal = getSeasonalPromos()
+      const existingUrls = new Set(deduped.map((c) => normalizeUrlForDedupe(c.url)))
+      for (const s of seasonal) {
+        if (!existingUrls.has(normalizeUrlForDedupe(s.url))) {
+          deduped.push(s)
+          existingUrls.add(normalizeUrlForDedupe(s.url))
+        }
+      }
+      const sorted = [...deduped].sort((a, b) => {
         const scoreA = computeQualityScore(a)
         const scoreB = computeQualityScore(b)
         if (scoreB !== scoreA) return scoreB - scoreA

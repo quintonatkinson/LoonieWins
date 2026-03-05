@@ -39,6 +39,7 @@ export const SOURCE_FALLBACK_IMAGES: Record<string, string> = {
   'mamalikesthis': 'https://mamalikesthis.com/favicon.ico',
   'steamykitchen': 'https://steamykitchen.com/favicon.ico',
   'rkin-blog': 'https://rkin.com/favicon.ico',
+  'sweepsadvantage': 'https://www.sweepsadvantage.com/favicon.ico',
 }
 
 export const MASTER_SOURCES: Source[] = [
@@ -202,5 +203,13 @@ export const MASTER_SOURCES: Source[] = [
     url: 'https://rkin.com/blogs/giveaways.atom',
     type: 'rss_standard',
     trustScore: 5,
+  },
+  // Sweepstakes Advantage: no native RSS; use rss.app feed. Create at rss.app if URL fails.
+  {
+    id: 'sweepsadvantage',
+    name: 'Sweepstakes Advantage',
+    url: 'https://rss.app/feeds/sweepsadvantage.xml',
+    type: 'rss_standard',
+    trustScore: 8,
   },
 ]

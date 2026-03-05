@@ -67,15 +67,23 @@ function parseFeedXml(xml: string): RawFeedItem[] {
   const nodes = itemNodes.length ? itemNodes : atomNodes
   const entries: RawFeedItem[] = []
 
+  const feedLinkPattern = /\/(feed|rss)(\/|$)|atom\.xml$/i
+
   nodes.forEach((item) => {
     const title = item.querySelector('title')?.textContent?.trim() ?? ''
-    let link =
-      item.querySelector('link')?.textContent?.trim() ??
-      item.querySelector('link')?.nextSibling?.textContent?.trim() ??
-      ''
-    if (!link && item.querySelector('link')) {
-      const el = item.querySelector('link')
-      link = el?.getAttribute('href') ?? el?.textContent?.trim() ?? ''
+    const linkEls = item.querySelectorAll('link')
+    let link = ''
+    for (const el of linkEls) {
+      if (el.getAttribute('rel') === 'self') continue
+      const href = (el.getAttribute('href') ?? el.textContent?.trim() ?? '').trim()
+      if (!href) continue
+      if (feedLinkPattern.test(href)) continue
+      link = href
+      break
+    }
+    if (!link && linkEls.length > 0) {
+      const first = linkEls[0]
+      link = (first?.getAttribute('href') ?? first?.textContent?.trim() ?? '').trim()
     }
     const description =
       item.querySelector('description')?.textContent?.trim() ??
