@@ -53,7 +53,7 @@ function setEnteredIds(ids: Set<string>) {
 
 export default function Dashboard() {
   const pipeline = useContestPipeline()
-  const { liveContests, isScanning, isFinished, offlineMode, phaseMessage, refetch } = pipeline
+  const { liveContests, isScanning, isSyncingCloud, isFinished, offlineMode, phaseMessage, refetch } = pipeline
 
   const [search, setSearch] = useState('')
   const [sortFilter, setSortFilter] = useState<SortFilter | null>(null)
@@ -122,7 +122,7 @@ export default function Dashboard() {
       ? Math.max(0, Math.ceil((new Date(c.expiryDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24)))
       : null
 
-  const showFullRadar = isScanning && liveContests.length === 0
+  const showFullRadar = (isScanning || isSyncingCloud) && liveContests.length === 0
 
   const visibleContests = feedContests.slice(0, visibleCount)
   const hasMore = visibleCount < feedContests.length
@@ -283,7 +283,20 @@ export default function Dashboard() {
       {/* Opportunity List */}
       <section className="px-4 pb-24">
         {showFullRadar ? (
-          <RadarLoader phaseMessage={phaseMessage} liveCount={liveContests.length} />
+          isSyncingCloud ? (
+            <div className="flex min-h-[60vh] flex-col items-center justify-center gap-6 px-4">
+              <span
+                className="h-12 w-12 animate-pulse rounded-full bg-win/40"
+                aria-hidden
+              />
+              <p className="text-center text-lg font-medium text-gray-50">Syncing Live Contests…</p>
+              <p className="text-center text-sm text-gray-500">
+                Downloading the latest from the Hive Mind
+              </p>
+            </div>
+          ) : (
+            <RadarLoader phaseMessage={phaseMessage} liveCount={liveContests.length} />
+          )
         ) : (
           <>
             <div className="flex items-center justify-between mb-3">

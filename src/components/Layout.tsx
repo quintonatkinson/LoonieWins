@@ -1,11 +1,12 @@
 import { NavLink } from 'react-router-dom'
-import { Coins } from 'lucide-react'
+import { Coins, History } from 'lucide-react'
 
 const ROUTES = [
   { path: '/', label: 'Home', icon: '🏠' },
   { path: '/referrals', label: 'Referrals', icon: '🔗' },
   { path: '/earn', label: 'Earn', icon: 'earn' as const },
   { path: '/winners', label: 'Winners', icon: '🏆' },
+  { path: '/past', label: 'Past', icon: 'past' as const },
   { path: '/profile', label: 'Profile', icon: '👤' },
 ] as const
 
@@ -68,6 +69,8 @@ export default function Layout({ children }: { children?: React.ReactNode }) {
           >
             {path === '/earn' ? (
               <Coins className="w-5 h-5 shrink-0" aria-hidden />
+            ) : path === '/past' ? (
+              <History className="w-5 h-5 shrink-0" aria-hidden />
             ) : (
               <span className="text-lg">{icon}</span>
             )}

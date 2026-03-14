@@ -10,7 +10,7 @@ import CountdownTimer from './CountdownTimer'
 interface ContestCardProps {
   contest: Contest
   onOpenOverlay: (contest: Contest) => void
-  variant: 'routine' | 'feed'
+  variant: 'routine' | 'feed' | 'ended'
   daysLeft?: number | null
 }
 
@@ -46,6 +46,10 @@ export default function ContestCard({ contest, onOpenOverlay, variant, daysLeft:
 
   const handleEnter = useCallback(() => {
     if (contest.id === '__offline_alert__') return
+    if (variant === 'ended') {
+      window.open(contest.url, '_blank', 'noopener,noreferrer')
+      return
+    }
     if (contest.isLocked) {
       window.open(contest.url, '_blank', 'noopener,noreferrer')
       return
@@ -69,6 +73,7 @@ export default function ContestCard({ contest, onOpenOverlay, variant, daysLeft:
     }
   }, [
     contest,
+    variant,
     hasUnlimitedEntries,
     canEnterFree,
     dailyLimitReached,
@@ -100,7 +105,15 @@ export default function ContestCard({ contest, onOpenOverlay, variant, daysLeft:
   }
 
   const isLocked = contest.isLocked === true
-  const button = showUnlock ? (
+  const button = variant === 'ended' ? (
+    <button
+      type="button"
+      onClick={handleEnter}
+      className="shrink-0 px-5 py-2.5 rounded-lg bg-gray-600 text-gray-400 font-semibold text-sm cursor-pointer"
+    >
+      Ended
+    </button>
+  ) : showUnlock ? (
     <button
       type="button"
       onClick={handleEnter}
@@ -199,7 +212,7 @@ export default function ContestCard({ contest, onOpenOverlay, variant, daysLeft:
               showUnlock ? 'bg-amber-500/20 text-amber-400 border border-amber-500/40' : 'bg-win text-gray-900'
             }`}
           >
-            {showUnlock ? `UNLOCK (${entryCostPts} Pts)` : isLocked ? 'View on RFD' : 'Enter'}
+            {variant === 'ended' ? 'Ended' : showUnlock ? `UNLOCK (${entryCostPts} Pts)` : isLocked ? 'View on RFD' : 'Enter'}
           </span>
         </button>
         {toastEl}

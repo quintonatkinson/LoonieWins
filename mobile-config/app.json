@@ -1,0 +1,31 @@
+{
+  "expo": {
+    "name": "LoonieWins",
+    "slug": "looniewins",
+    "scheme": "looniewins",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/images/icon.png",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/images/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#171717"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.quinton.looniewins"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/images/adaptive-icon.png",
+        "backgroundColor": "#171717"
+      },
+      "package": "com.quinton.looniewins"
+    },
+    "updates": {
+      "fallbackToCacheTimeout": 0
+    }
+  }
+}

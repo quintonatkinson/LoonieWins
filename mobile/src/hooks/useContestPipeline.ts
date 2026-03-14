@@ -4,15 +4,8 @@ import { toExpiryEndOfDay } from '../lib/utils/expiryDate'
 import { getSeasonalPromos } from '../lib/data/seasonalPromos'
 import { syncToVault, syncToCloud, fetchFromCloud, getLiveContests, isVaultEmpty } from './useContestVault'
 
-const PHRASES = [
-  'Scanning feeds...',
-  'Analyzing 150+ links...',
-  'Filtering dead contests...',
-  'Extracting odds...',
-]
-
+const PHRASES = ['Scanning feeds...', 'Analyzing 150+ links...', 'Filtering dead contests...', 'Extracting odds...']
 const CONCURRENCY = 3
-const PHRASE_INTERVAL_MS = 2000
 const DEFAULT_ELIGIBILITY: 'CA' | 'US' = 'CA'
 
 function computeQualityScore(c: Contest, defaultEligibility: 'CA' | 'US' = DEFAULT_ELIGIBILITY): number {
@@ -32,8 +25,7 @@ function computeQualityScore(c: Contest, defaultEligibility: 'CA' | 'US' = DEFAU
 function normalizeUrlForDedupe(url: string): string {
   try {
     const u = new URL(url)
-    const base = `${u.protocol}//${u.host}${u.pathname}`.toLowerCase().replace(/\/$/, '')
-    return base
+    return `${u.protocol}//${u.host}${u.pathname}`.toLowerCase().replace(/\/$/, '')
   } catch {
     return url.toLowerCase().replace(/\/$/, '')
   }
@@ -67,7 +59,8 @@ export function useContestPipeline() {
     setIsFinished(false)
     setOfflineMode(false)
 
-    if (isVaultEmpty()) {
+    const empty = await isVaultEmpty()
+    if (empty) {
       setIsSyncingCloud(true)
       await fetchFromCloud()
       setIsSyncingCloud(false)
@@ -79,7 +72,7 @@ export function useContestPipeline() {
     try {
       const data = await fetchRawContests()
       rawItems = data.contests
-      if (data.offlineMode && rawItems.length > 0 && rawItems[0].id === '__offline_alert__') {
+      if (data.offlineMode && rawItems.length > 0 && rawItems[0]?.id === '__offline_alert__') {
         setLiveContests(rawItems)
         setOfflineMode(true)
         setIsScanning(false)
@@ -106,10 +99,8 @@ export function useContestPipeline() {
         try {
           const enriched = await enrichContest(contest)
           if (abortRef.current) return
-
           allEnriched.push(enriched)
 
-          // Only drop from live display if we have a mathematically proven expiry date in the past. Never drop when expiryDate is undefined.
           const expired =
             enriched.expiryDate != null &&
             (() => {
@@ -117,20 +108,18 @@ export function useContestPipeline() {
               return !Number.isNaN(end.getTime()) && end <= new Date()
             })()
           if (expired) return
-          // Drop dead links: 404, 403 (Cloudflare blocked), 500 (server error)
           if (enriched.linkStatus === 404 || enriched.linkStatus === 403 || enriched.linkStatus === 500) return
 
           collected.push(enriched)
-        } catch (_) {
-          // skip failed enrichment
-        }
+        } catch (_) {}
       }
     }
 
     await Promise.all(Array.from({ length: CONCURRENCY }, () => processOne()))
 
     if (!abortRef.current) {
-      syncToVault(allEnriched)
+      await syncToVault(allEnriched)
+      void syncToCloud(allEnriched)
 
       const byResolvedUrl = new Map<string, Contest>()
       for (const c of collected) {
@@ -138,39 +127,31 @@ export function useContestPipeline() {
         if (!byResolvedUrl.has(key)) byResolvedUrl.set(key, c)
       }
       let deduped = [...byResolvedUrl.values()]
+
       const final: Contest[] = []
       for (const c of deduped) {
         const key = normalizeUrlForDedupe(c.url)
-        const similar = final.find(
-          (f) => normalizeUrlForDedupe(f.url) !== key && isSimilarTitle(f.title, c.title)
-        )
-        if (!similar) {
-          final.push(c)
-        } else {
+        const similar = final.find((f) => normalizeUrlForDedupe(f.url) !== key && isSimilarTitle(f.title, c.title))
+        if (!similar) final.push(c)
+        else {
           const scoreC = computeQualityScore(c)
           const scoreS = computeQualityScore(similar)
-          if (scoreC > scoreS) {
-            const idx = final.indexOf(similar)
-            final[idx] = c
-          }
+          if (scoreC > scoreS) final[final.indexOf(similar)] = c
         }
       }
       deduped = final
-      const vaultLive = getLiveContests()
+
+      const vaultLive = await getLiveContests()
       const byUrl = new Map<string, Contest>()
-      for (const c of vaultLive) {
-        byUrl.set(normalizeUrlForDedupe(c.url), c)
-      }
-      for (const c of deduped) {
-        byUrl.set(normalizeUrlForDedupe(c.url), c)
-      }
+      for (const c of vaultLive) byUrl.set(normalizeUrlForDedupe(c.url), c)
+      for (const c of deduped) byUrl.set(normalizeUrlForDedupe(c.url), c)
       const seasonal = getSeasonalPromos()
       for (const s of seasonal) {
         const key = normalizeUrlForDedupe(s.url)
         if (!byUrl.has(key)) byUrl.set(key, s)
       }
       const merged = [...byUrl.values()]
-      const sorted = [...merged].sort((a, b) => {
+      const sorted = merged.sort((a, b) => {
         const scoreA = computeQualityScore(a)
         const scoreB = computeQualityScore(b)
         if (scoreB !== scoreA) return scoreB - scoreA
@@ -186,25 +167,7 @@ export function useContestPipeline() {
 
   useEffect(() => {
     runPipeline()
-    return () => {
-      abortRef.current = true
-    }
-  }, [runPipeline])
-
-  useEffect(() => {
-    if (!isScanning) return
-    const id = setInterval(() => {
-      setPhaseMessage((prev) => {
-        const idx = PHRASES.indexOf(prev)
-        const next = (idx + 1) % PHRASES.length
-        return PHRASES[next]
-      })
-    }, PHRASE_INTERVAL_MS)
-    return () => clearInterval(id)
-  }, [isScanning])
-
-  const refetch = useCallback(() => {
-    runPipeline()
+    return () => { abortRef.current = true }
   }, [runPipeline])
 
   return {
@@ -214,6 +177,6 @@ export function useContestPipeline() {
     isFinished,
     offlineMode,
     phaseMessage,
-    refetch,
+    refetch: runPipeline,
   }
 }
