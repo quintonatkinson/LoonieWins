@@ -8,7 +8,7 @@ Canadian contest aggregator & offerwall — Win More, Work Less.
 - Vite
 - Tailwind CSS (glassmorphism dark theme)
 - React Router
-- Supabase (client + schema in `supabase/schema.sql`)
+- Supabase (client + full bootstrap schema in `supabase/schema.sql`)
 
 ## Setup
 
@@ -18,12 +18,14 @@ Canadian contest aggregator & offerwall — Win More, Work Less.
    npm install
    ```
 
-2. **Environment (optional for Supabase)**
+2. **Environment (required for Hive Mind / cloud contest sync)**
 
    Copy `.env.example` to `.env` and set:
 
    - `VITE_SUPABASE_URL`
    - `VITE_SUPABASE_ANON_KEY`
+
+   Mobile / Expo uses `EXPO_PUBLIC_SUPABASE_URL` and `EXPO_PUBLIC_SUPABASE_ANON_KEY`.
 
 3. **Run dev server**
 
@@ -33,7 +35,7 @@ Canadian contest aggregator & offerwall — Win More, Work Less.
 
 4. **Database**
 
-   Run `supabase/schema.sql` in your Supabase project SQL editor to create tables and RLS.
+   In a fresh Supabase project, paste and run all of `supabase/schema.sql` in the SQL Editor (tables, indexes, RLS, triggers). Contests are filled by the app’s vault sync — no seed SQL required. Do not use the deprecated root `supabase_schema.sql` stub.
 
 ## Features
 
