@@ -1,6 +1,7 @@
 import { NavLink } from 'react-router-dom'
 import { Coins, History, LogOut } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
+import { isSupabaseConfigured } from '../lib/supabase'
 
 const ROUTES = [
   { path: '/', label: 'Home', icon: '🏠' },
@@ -13,6 +14,8 @@ const ROUTES = [
 
 export default function Layout({ children }: { children?: React.ReactNode }) {
   const { profile, signOut, session } = useAuth()
+  // Guest demo (no Supabase) still needs bottom nav + profile access
+  const showAppChrome = Boolean(session) || !isSupabaseConfigured || Boolean(profile)
   const displayName = profile?.display_name || profile?.email?.split('@')[0] || 'Contester'
   const greeting = (() => {
     const h = new Date().getHours()
@@ -22,10 +25,10 @@ export default function Layout({ children }: { children?: React.ReactNode }) {
   })()
 
   return (
-    <div className={`min-h-screen flex flex-col bg-gray-900 ${session ? 'pb-20' : ''}`}>
+    <div className={`min-h-screen flex flex-col bg-gray-900 ${showAppChrome ? 'pb-20' : ''}`}>
       <header className="sticky top-0 z-30 px-4 py-3 flex items-center justify-between bg-gray-900/95 border-b border-gray-700/50">
         <div>
-          {session ? (
+          {showAppChrome ? (
             <>
               <h1 className="text-xl font-bold text-gray-50">
                 {greeting}, <span className="text-win font-bold"> {displayName}</span>
@@ -35,6 +38,9 @@ export default function Layout({ children }: { children?: React.ReactNode }) {
                 <span className="text-base" aria-hidden>
                   🍁
                 </span>
+                {!session && !isSupabaseConfigured && (
+                  <span className="ml-2 text-[10px] uppercase tracking-wide text-amber-400/90">Guest</span>
+                )}
               </p>
             </>
           ) : (
@@ -45,7 +51,7 @@ export default function Layout({ children }: { children?: React.ReactNode }) {
           )}
         </div>
         <div className="flex items-center gap-3">
-          {session && (
+          {showAppChrome && (
             <>
               <span className="flex items-center gap-1 text-sm text-gray-300" title="Streak">
                 🔥 <span>{profile?.streak ?? 0}</span>
@@ -54,15 +60,17 @@ export default function Layout({ children }: { children?: React.ReactNode }) {
                 🏆 <span>Lv.{profile?.level ?? 1}</span>{' '}
                 <span className="text-gray-50">{profile?.xp ?? 0} XP</span>
               </span>
-              <button
-                type="button"
-                onClick={() => void signOut()}
-                className="p-2 rounded-lg text-gray-400 hover:text-win hover:bg-gray-800"
-                title="Log out"
-                aria-label="Log out"
-              >
-                <LogOut className="w-4 h-4" />
-              </button>
+              {session && (
+                <button
+                  type="button"
+                  onClick={() => void signOut()}
+                  className="p-2 rounded-lg text-gray-400 hover:text-win hover:bg-gray-800"
+                  title="Log out"
+                  aria-label="Log out"
+                >
+                  <LogOut className="w-4 h-4" />
+                </button>
+              )}
             </>
           )}
         </div>
@@ -70,7 +78,7 @@ export default function Layout({ children }: { children?: React.ReactNode }) {
 
       <main className="flex-1">{children}</main>
 
-      {session && (
+      {showAppChrome && (
       <nav
         className="fixed bottom-0 left-0 right-0 bg-surface border-t border-gray-600/50 px-2 py-2 flex justify-around items-center"
         aria-label="Main navigation"
@@ -81,7 +89,7 @@ export default function Layout({ children }: { children?: React.ReactNode }) {
             to={path}
             end={path === '/'}
             className={({ isActive }) =>
-              `flex flex-col items-center gap-0.5 py-1 px-3 rounded-lg text-xs transition-colors ${
+              `flex flex-col items-center gap-1.5 py-1 px-3 rounded-lg text-xs transition-colors ${
                 isActive ? 'text-win bg-gray-700/50' : 'text-gray-400 hover:text-gray-50'
               }`
             }

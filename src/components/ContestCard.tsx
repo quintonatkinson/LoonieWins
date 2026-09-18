@@ -66,8 +66,11 @@ export default function ContestCard({
       return
     }
     if (canEnterFree) {
-      useFreeEntry()
+      // Open first so guest/demo never blocks on bookkeeping
       onOpenOverlay(contest)
+      try {
+        useFreeEntry()
+      } catch (_) {}
       return
     }
     if (dailyLimitReached && userIsFree) {
@@ -77,7 +80,10 @@ export default function ContestCard({
       } else {
         setShowInsufficient(true)
       }
+      return
     }
+    // Fallback: never dead-end the Enter CTA
+    onOpenOverlay(contest)
   }, [
     contest,
     variant,
