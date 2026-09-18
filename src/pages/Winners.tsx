@@ -21,7 +21,7 @@ const MOCK_WINNERS: WinnerCard[] = [
     contestName: 'Summer Giveaway',
     winnerDisplay: 'Anonymous',
     prize: '$500 Gift Card',
-    wonAt: '2025-02-20',
+    wonAt: daysAgo(3),
     prizeValueEstimate: 500,
     contestSource: 'RedFlagDeals',
     contestUrl: '#',
@@ -33,7 +33,7 @@ const MOCK_WINNERS: WinnerCard[] = [
     contestName: 'Tech Bundle',
     winnerDisplay: 'Sarah M.',
     prize: 'Laptop',
-    wonAt: '2025-02-18',
+    wonAt: daysAgo(5),
     prizeValueEstimate: 1500,
     contestSource: 'ContestScoop',
     contestUrl: '#',
@@ -45,7 +45,7 @@ const MOCK_WINNERS: WinnerCard[] = [
     contestName: 'Coffee for a Year',
     winnerDisplay: 'Anonymous',
     prize: 'Coffee subscription',
-    wonAt: '2025-02-15',
+    wonAt: daysAgo(12),
     prizeValueEstimate: 600,
     contestSource: 'CanadianFreeStuff',
     winnerRegion: 'AB',
@@ -55,7 +55,7 @@ const MOCK_WINNERS: WinnerCard[] = [
     contestName: 'Tropical Getaway',
     winnerDisplay: 'Mike T.',
     prize: '7-night vacation',
-    wonAt: '2025-02-10',
+    wonAt: daysAgo(20),
     prizeValueEstimate: 3500,
     contestSource: 'RedFlagDeals',
     contestUrl: '#',
@@ -67,7 +67,7 @@ const MOCK_WINNERS: WinnerCard[] = [
     contestName: 'Grocery Gift Card',
     winnerDisplay: 'Anonymous',
     prize: '$100 Gift Card',
-    wonAt: '2025-02-08',
+    wonAt: daysAgo(40),
     prizeValueEstimate: 100,
     contestSource: 'SmartCanucks',
     winnerRegion: 'ON',
@@ -77,6 +77,12 @@ const MOCK_WINNERS: WinnerCard[] = [
 const BIG_WIN_THRESHOLD = 1000
 
 type TimeFilter = 'week' | 'month' | 'all'
+
+function daysAgo(n: number): string {
+  const d = new Date()
+  d.setDate(d.getDate() - n)
+  return d.toISOString().slice(0, 10)
+}
 
 function filterByTime(winners: WinnerCard[], filter: TimeFilter): WinnerCard[] {
   const now = Date.now()

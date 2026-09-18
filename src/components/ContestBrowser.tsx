@@ -189,7 +189,9 @@ export default function ContestBrowser({
       >
         <div className="flex items-start justify-between p-4 border-b border-white/10 shrink-0">
           <div>
-            <h2 className="font-semibold text-lg line-clamp-2">{contest?.title}</h2>
+            <h2 className="font-semibold text-lg line-clamp-2">
+              {(contest?.title ?? '').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')}
+            </h2>
             <div className="flex gap-3 mt-1 text-sm text-white/80">
               {contest?.prizeValue != null && <span>${contest.prizeValue}</span>}
               {daysLeft != null && (

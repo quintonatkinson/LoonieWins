@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import {
   User,
   Trophy,
@@ -13,12 +13,12 @@ import {
 import { useUserEarn } from '../contexts/UserEarnContext'
 import SubscriptionModal from '../components/SubscriptionModal'
 import type { AutoFillData } from '../types/profile'
+import { loadAutoFillData, saveAutoFillData } from '../lib/utils/autoFillStorage'
 
 const SMART_FILLS_REMAINING = 3 // from profile
 
-const AUTO_FILL_FIELDS: { key: string; label: string }[] = [
-  { key: 'firstName', label: 'First Name' },
-  { key: 'lastName', label: 'Last Name' },
+const AUTO_FILL_FIELDS: { key: keyof AutoFillData; label: string }[] = [
+  { key: 'name', label: 'Full Name' },
   { key: 'email', label: 'Email' },
   { key: 'phone', label: 'Phone' },
   { key: 'address', label: 'Address' },
@@ -27,23 +27,16 @@ const AUTO_FILL_FIELDS: { key: string; label: string }[] = [
   { key: 'postalCode', label: 'Postal Code' },
 ]
 
-function getAutoFillValue(key: string, data: Partial<AutoFillData>): string {
-  const v = (data as Record<string, unknown>)[key]
-  if (v && typeof v === 'string') return v
-  if (key === 'firstName' && data.name) return data.name.split(' ')[0] ?? ''
-  if (key === 'lastName' && data.name) return data.name.split(' ').slice(1).join(' ') || ''
-  return ''
-}
-
 export default function Profile() {
   const { subscriptionTier, setSubscriptionTier } = useUserEarn()
   const [showPlanModal, setShowPlanModal] = useState(false)
   const [smartFillsRemaining] = useState(SMART_FILLS_REMAINING)
-  const [autoFillData] = useState<Partial<AutoFillData>>({
-    name: 'Jane Doe',
-    email: 'jane@example.com',
-    address: '123 Main St, Toronto ON',
-  })
+  const [autoFillData, setAutoFillData] = useState<AutoFillData>(loadAutoFillData)
+  const [editingAutoFill, setEditingAutoFill] = useState(false)
+  const [draftAutoFill, setDraftAutoFill] = useState<AutoFillData>(autoFillData)
+  const [savedToast, setSavedToast] = useState(false)
+  const [exportToast, setExportToast] = useState(false)
+  const [prefsToast, setPrefsToast] = useState<string | null>(null)
   const [appliedContests] = useState<
     { id: string; title: string; enteredAt: string; prizeValue?: string; daysLeft?: number; ended?: boolean }[]
   >([
@@ -52,8 +45,72 @@ export default function Profile() {
     { id: '3', title: 'Summer Vacation Draw', enteredAt: '2025-02-15', prizeValue: '$4.5K', ended: true },
   ])
 
+  useEffect(() => {
+    if (!savedToast) return
+    const t = setTimeout(() => setSavedToast(false), 2500)
+    return () => clearTimeout(t)
+  }, [savedToast])
+
+  useEffect(() => {
+    if (!exportToast) return
+    const t = setTimeout(() => setExportToast(false), 2500)
+    return () => clearTimeout(t)
+  }, [exportToast])
+
+  useEffect(() => {
+    if (!prefsToast) return
+    const t = setTimeout(() => setPrefsToast(null), 2500)
+    return () => clearTimeout(t)
+  }, [prefsToast])
+
   const isPro = subscriptionTier === 'weekly' || subscriptionTier === 'monthly'
   const planLabel = subscriptionTier === 'weekly' ? 'Bi-Weekly Pro' : subscriptionTier === 'monthly' ? 'Monthly Pro' : 'Free Tier'
+
+  const startEditAutoFill = () => {
+    setDraftAutoFill({ ...autoFillData })
+    setEditingAutoFill(true)
+  }
+
+  const saveEditAutoFill = () => {
+    saveAutoFillData(draftAutoFill)
+    setAutoFillData(draftAutoFill)
+    setEditingAutoFill(false)
+    setSavedToast(true)
+  }
+
+  const handleExport = () => {
+    const payload = {
+      autoFillData,
+      balance: localStorage.getItem('looniewins_balance'),
+      entered: localStorage.getItem('looniewins_entered'),
+      subscriptionTier: localStorage.getItem('looniewins_subscription_tier'),
+      exportedAt: new Date().toISOString(),
+    }
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = 'looniewins-data.json'
+    a.click()
+    URL.revokeObjectURL(url)
+    setExportToast(true)
+  }
+
+  const handleDeleteAccount = () => {
+    const ok = window.confirm('Delete local LoonieWins data on this device? This cannot be undone.')
+    if (!ok) return
+    ;[
+      'looniewins_balance',
+      'looniewins_last_daily_entry_at',
+      'looniewins_subscription_tier',
+      'looniewins_entered',
+      'looniewins_autofill',
+      'loonie_vault_v1',
+    ].forEach((k) => localStorage.removeItem(k))
+    setAutoFillData(loadAutoFillData())
+    setSubscriptionTier('free')
+    setPrefsToast('Local data cleared')
+  }
 
   return (
     <div className="p-4 space-y-6 pb-24">
@@ -68,7 +125,7 @@ export default function Profile() {
         </div>
       </div>
 
-      {/* Current Plan banner – match reference: Current Plan / Free Tier, subtext, Upgrade to Pro (neon green) */}
+      {/* Current Plan banner */}
       <section className="rounded-xl bg-gray-800/80 border border-gray-600/50 p-4">
         <div className="flex items-center justify-between gap-4">
           <div>
@@ -93,7 +150,7 @@ export default function Profile() {
         </div>
       </section>
 
-      {/* Applied Contests – trophy icon, count, cards with green border, checkmark, prize, time, Entered tag, link */}
+      {/* Applied Contests */}
       <section>
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
@@ -145,35 +202,72 @@ export default function Profile() {
         </ul>
       </section>
 
-      {/* Auto-Fill Info – header, 8 fields (label + value or "Not set"), Edit button */}
+      {/* Auto-Fill Info */}
       <section>
         <h2 className="text-sm font-semibold text-white uppercase tracking-wide mb-3">Auto-Fill Info</h2>
         <div className="rounded-xl bg-gray-800/80 border border-gray-600/50 divide-y divide-gray-600/50 overflow-hidden">
           {AUTO_FILL_FIELDS.map(({ key, label }) => {
-            const value = getAutoFillValue(key, autoFillData)
+            const value = autoFillData[key] ?? ''
             return (
-              <div key={key} className="flex items-center justify-between px-4 py-3">
-                <span className="text-sm text-gray-400">{label}</span>
-                <span className="text-sm text-gray-300">{value || 'Not set'}</span>
+              <div key={key} className="flex items-center justify-between gap-3 px-4 py-3">
+                <span className="text-sm text-gray-400 shrink-0">{label}</span>
+                {editingAutoFill ? (
+                  <input
+                    type={key === 'email' ? 'email' : 'text'}
+                    value={draftAutoFill[key] ?? ''}
+                    onChange={(e) =>
+                      setDraftAutoFill((prev) => ({ ...prev, [key]: e.target.value }))
+                    }
+                    className="flex-1 min-w-0 text-right text-sm text-gray-50 bg-gray-900/60 border border-gray-600/50 rounded-lg px-3 py-1.5 focus:outline-none focus:border-win/50"
+                  />
+                ) : (
+                  <span className="text-sm text-gray-300 text-right">{value || 'Not set'}</span>
+                )}
               </div>
             )
           })}
         </div>
-        <button
-          type="button"
-          className="w-full mt-3 py-3 rounded-xl bg-gray-800 border border-gray-600/50 text-white font-medium text-sm hover:bg-gray-700/80 transition-colors"
-        >
-          Edit Auto-Fill Data
-        </button>
+        {editingAutoFill ? (
+          <div className="mt-3 flex gap-2">
+            <button
+              type="button"
+              onClick={saveEditAutoFill}
+              className="flex-1 py-3 rounded-xl bg-win text-gray-900 font-semibold text-sm hover:opacity-90 transition-opacity"
+            >
+              Save Auto-Fill
+            </button>
+            <button
+              type="button"
+              onClick={() => setEditingAutoFill(false)}
+              className="flex-1 py-3 rounded-xl bg-gray-800 border border-gray-600/50 text-white font-medium text-sm hover:bg-gray-700/80 transition-colors"
+            >
+              Cancel
+            </button>
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={startEditAutoFill}
+            className="w-full mt-3 py-3 rounded-xl bg-gray-800 border border-gray-600/50 text-white font-medium text-sm hover:bg-gray-700/80 transition-colors"
+          >
+            Edit Auto-Fill Data
+          </button>
+        )}
+        {savedToast && (
+          <p className="text-sm text-win mt-2" role="status">
+            Auto-fill saved — used when you enter contests.
+          </p>
+        )}
       </section>
 
-      {/* Settings – icon + title + description per row */}
+      {/* Settings */}
       <section>
         <h2 className="text-sm font-semibold text-white uppercase tracking-wide mb-3">Settings</h2>
         <ul className="rounded-xl bg-gray-800/80 border border-gray-600/50 divide-y divide-gray-600/50 overflow-hidden">
           <li>
             <button
               type="button"
+              onClick={() => setPrefsToast('Preferences coming soon — Quebec filter lives on Home for now')}
               className="flex items-center gap-3 w-full text-left px-4 py-3 hover:bg-white/5 transition-colors"
             >
               <Settings className="w-5 h-5 text-gray-400 shrink-0" />
@@ -186,6 +280,7 @@ export default function Profile() {
           <li>
             <button
               type="button"
+              onClick={() => setPrefsToast('Your data stays on this device (localStorage)')}
               className="flex items-center gap-3 w-full text-left px-4 py-3 hover:bg-white/5 transition-colors"
             >
               <Shield className="w-5 h-5 text-gray-400 shrink-0" />
@@ -198,6 +293,7 @@ export default function Profile() {
           <li>
             <button
               type="button"
+              onClick={handleExport}
               className="flex items-center gap-3 w-full text-left px-4 py-3 hover:bg-white/5 transition-colors"
             >
               <Download className="w-5 h-5 text-gray-400 shrink-0" />
@@ -210,6 +306,7 @@ export default function Profile() {
           <li>
             <button
               type="button"
+              onClick={handleDeleteAccount}
               className="flex items-center gap-3 w-full text-left px-4 py-3 hover:bg-white/5 transition-colors"
             >
               <Trash2 className="w-5 h-5 text-red-400 shrink-0" />
@@ -220,6 +317,11 @@ export default function Profile() {
             </button>
           </li>
         </ul>
+        {(exportToast || prefsToast) && (
+          <p className="text-sm text-win mt-2" role="status">
+            {exportToast ? 'Data exported.' : prefsToast}
+          </p>
+        )}
       </section>
 
       <SubscriptionModal
