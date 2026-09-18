@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { fetchRawContests, enrichContest, type Contest } from '../lib/rssFetcher'
 import { toExpiryEndOfDay } from '../lib/utils/expiryDate'
 import { getSeasonalPromos } from '../lib/data/seasonalPromos'
-import { syncToVault, syncToCloud, fetchFromCloud, getLiveContests, isVaultEmpty } from './useContestVault'
+import { syncToVault, fetchFromCloud, getLiveContests, isVaultEmpty } from './useContestVault'
 
 const PHRASES = [
   'Scanning feeds...',

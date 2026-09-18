@@ -6,6 +6,7 @@ import CountryToggle from '../components/CountryToggle'
 import RadarLoader from '../components/RadarLoader'
 import { useContestPipeline } from '../hooks/useContestPipeline'
 import type { AutoFillData } from '../types/profile'
+import { loadAutoFillData } from '../lib/utils/autoFillStorage'
 
 type SortFilter = 'high-value' | 'ending-soon' | 'best-odds' | 'most-popular'
 
@@ -65,11 +66,17 @@ export default function Dashboard() {
   const [enteredIds, setEnteredIdsState] = useState(getEnteredIds)
   const sentinelRef = useRef<HTMLDivElement | null>(null)
   const [overlayContest, setOverlayContest] = useState<Contest | null>(null)
-  const [autoFillData] = useState<AutoFillData>(() => ({
-    name: 'Jane Doe',
-    email: 'jane@example.com',
-    address: '123 Main St, Toronto ON',
-  }))
+  const [autoFillData, setAutoFillData] = useState<AutoFillData>(loadAutoFillData)
+
+  useEffect(() => {
+    const sync = () => setAutoFillData(loadAutoFillData())
+    window.addEventListener('loonie_autofill_updated', sync)
+    window.addEventListener('storage', sync)
+    return () => {
+      window.removeEventListener('loonie_autofill_updated', sync)
+      window.removeEventListener('storage', sync)
+    }
+  }, [])
 
   const markEntered = useCallback((contest: Contest) => {
     const next = new Set(enteredIds)
