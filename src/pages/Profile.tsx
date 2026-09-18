@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
 import {
   User,
   Trophy,
@@ -9,10 +10,15 @@ import {
   Crown,
   ExternalLink,
   Check,
+  FileText,
+  LifeBuoy,
+  Scale,
 } from 'lucide-react'
 import { useUserEarn } from '../contexts/UserEarnContext'
 import SubscriptionModal from '../components/SubscriptionModal'
 import type { AutoFillData } from '../types/profile'
+import { downloadWebDataExport, deleteAccountAndLocalData } from '../lib/account/deleteAccount'
+import { SUPPORT_EMAIL } from '../lib/legal/constants'
 
 const SMART_FILLS_REMAINING = 3 // from profile
 
@@ -36,6 +42,7 @@ function getAutoFillValue(key: string, data: Partial<AutoFillData>): string {
 }
 
 export default function Profile() {
+  const navigate = useNavigate()
   const { subscriptionTier, setSubscriptionTier } = useUserEarn()
   const [showPlanModal, setShowPlanModal] = useState(false)
   const [smartFillsRemaining] = useState(SMART_FILLS_REMAINING)
@@ -51,9 +58,31 @@ export default function Profile() {
     { id: '2', title: 'Tech Bundle Giveaway', enteredAt: '2025-02-20', prizeValue: '$10K', daysLeft: 35 },
     { id: '3', title: 'Summer Vacation Draw', enteredAt: '2025-02-15', prizeValue: '$4.5K', ended: true },
   ])
+  const [deleteOpen, setDeleteOpen] = useState(false)
+  const [deleteBusy, setDeleteBusy] = useState(false)
+  const [deleteMsg, setDeleteMsg] = useState<string | null>(null)
 
   const isPro = subscriptionTier === 'weekly' || subscriptionTier === 'monthly'
   const planLabel = subscriptionTier === 'weekly' ? 'Bi-Weekly Pro' : subscriptionTier === 'monthly' ? 'Monthly Pro' : 'Free Tier'
+
+  const handleDelete = async () => {
+    setDeleteBusy(true)
+    setDeleteMsg(null)
+    try {
+      const result = await deleteAccountAndLocalData()
+      setDeleteMsg(result.message)
+      setSubscriptionTier('free')
+      setTimeout(() => {
+        setDeleteOpen(false)
+        navigate('/')
+        window.location.reload()
+      }, 1200)
+    } catch (err) {
+      setDeleteMsg(err instanceof Error ? err.message : String(err))
+    } finally {
+      setDeleteBusy(false)
+    }
+  }
 
   return (
     <div className="p-4 space-y-6 pb-24">
@@ -184,32 +213,75 @@ export default function Profile() {
             </button>
           </li>
           <li>
-            <button
-              type="button"
+            <Link
+              to="/privacy"
               className="flex items-center gap-3 w-full text-left px-4 py-3 hover:bg-white/5 transition-colors"
             >
               <Shield className="w-5 h-5 text-gray-400 shrink-0" />
               <div>
-                <p className="text-sm font-medium text-white">Privacy</p>
-                <p className="text-xs text-gray-500">Your data stays on your device</p>
+                <p className="text-sm font-medium text-white">Privacy Policy</p>
+                <p className="text-xs text-gray-500">What we collect and how to delete it</p>
               </div>
-            </button>
+            </Link>
+          </li>
+          <li>
+            <Link
+              to="/terms"
+              className="flex items-center gap-3 w-full text-left px-4 py-3 hover:bg-white/5 transition-colors"
+            >
+              <Scale className="w-5 h-5 text-gray-400 shrink-0" />
+              <div>
+                <p className="text-sm font-medium text-white">Terms of Use</p>
+                <p className="text-xs text-gray-500">Contest aggregation &amp; subscriptions</p>
+              </div>
+            </Link>
+          </li>
+          <li>
+            <Link
+              to="/support"
+              className="flex items-center gap-3 w-full text-left px-4 py-3 hover:bg-white/5 transition-colors"
+            >
+              <LifeBuoy className="w-5 h-5 text-gray-400 shrink-0" />
+              <div>
+                <p className="text-sm font-medium text-white">Support</p>
+                <p className="text-xs text-gray-500">{SUPPORT_EMAIL.startsWith('REPLACE_') ? 'Contact & help' : SUPPORT_EMAIL}</p>
+              </div>
+            </Link>
+          </li>
+          <li>
+            <a
+              href="/legal/privacy.html"
+              target="_blank"
+              rel="noreferrer"
+              className="flex items-center gap-3 w-full text-left px-4 py-3 hover:bg-white/5 transition-colors"
+            >
+              <FileText className="w-5 h-5 text-gray-400 shrink-0" />
+              <div>
+                <p className="text-sm font-medium text-white">Hosted legal pages</p>
+                <p className="text-xs text-gray-500">Static URLs for App Store / Play Console</p>
+              </div>
+            </a>
           </li>
           <li>
             <button
               type="button"
+              onClick={() => downloadWebDataExport()}
               className="flex items-center gap-3 w-full text-left px-4 py-3 hover:bg-white/5 transition-colors"
             >
               <Download className="w-5 h-5 text-gray-400 shrink-0" />
               <div>
                 <p className="text-sm font-medium text-white">Export Data</p>
-                <p className="text-xs text-gray-500">Download all your data</p>
+                <p className="text-xs text-gray-500">Download a JSON copy of local data</p>
               </div>
             </button>
           </li>
           <li>
             <button
               type="button"
+              onClick={() => {
+                setDeleteMsg(null)
+                setDeleteOpen(true)
+              }}
               className="flex items-center gap-3 w-full text-left px-4 py-3 hover:bg-white/5 transition-colors"
             >
               <Trash2 className="w-5 h-5 text-red-400 shrink-0" />
@@ -221,6 +293,49 @@ export default function Profile() {
           </li>
         </ul>
       </section>
+
+      {deleteOpen && (
+        <>
+          <div className="fixed inset-0 bg-black/60 z-40" onClick={() => !deleteBusy && setDeleteOpen(false)} aria-hidden />
+          <div
+            className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-50 w-full max-w-sm rounded-2xl bg-gray-900 border border-gray-600/50 p-6 shadow-xl space-y-4"
+            role="dialog"
+            aria-modal
+            aria-labelledby="delete-title"
+          >
+            <h2 id="delete-title" className="text-lg font-bold text-white">
+              Delete account &amp; data?
+            </h2>
+            <p className="text-sm text-gray-400">
+              This clears LoonieWins data on this device and deletes your cloud account if you are signed in.
+              This cannot be undone. Prefer the full page?{' '}
+              <Link to="/delete-account" className="text-win underline" onClick={() => setDeleteOpen(false)}>
+                Open delete account
+              </Link>
+              .
+            </p>
+            {deleteMsg && <p className="text-sm text-win">{deleteMsg}</p>}
+            <div className="flex gap-2">
+              <button
+                type="button"
+                disabled={deleteBusy}
+                onClick={() => setDeleteOpen(false)}
+                className="flex-1 py-2.5 rounded-lg border border-gray-600 text-gray-300 text-sm"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={deleteBusy}
+                onClick={handleDelete}
+                className="flex-1 py-2.5 rounded-lg bg-red-600 text-white font-semibold text-sm disabled:opacity-50"
+              >
+                {deleteBusy ? 'Deleting…' : 'Delete'}
+              </button>
+            </div>
+          </div>
+        </>
+      )}
 
       <SubscriptionModal
         open={showPlanModal}

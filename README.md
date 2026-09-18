@@ -43,9 +43,14 @@ Canadian contest aggregator & offerwall — Win More, Work Less.
 - **Earn:** Tasks/surveys (points), Pro Pass (1000 pts), Subscribe ($4.99/mo).
 - **Winners:** Grid of recent wins.
 - **Profile:** Plan meter (Smart-Fills remaining), Applied Contests, Settings (Auto-Fill Data, Preferences, Export, Delete Account).
+- **Legal / store readiness:** Privacy Policy, Terms, Support, and Delete Account (in-app + `public/legal/*.html` for App Store Connect / Google Play). See Profile → Privacy / Delete Account.
 
 ## RSS sources
 
 - Reddit: `r/contestsofcanada`
 - RedFlagDeals: Contests forum (34)
 - CanadianFreeStuff / ContestScoop: add RSS URLs in `src/lib/rssFetcher.ts` when available.
+
+## Account deletion (Supabase)
+
+After auth is enabled, run `supabase/account_deletion.sql` so `delete_own_account` is available to signed-in clients.
