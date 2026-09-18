@@ -5,7 +5,7 @@
  */
 
 import { toExpiryEndOfDay } from '../utils/expiryDate'
-import { MASTER_SOURCES } from './sources'
+import { getActiveSources, itemMatchesSourceFilter, type Source } from './sources'
 import type { Contest, RawFeedItem, Rss2JsonItem } from './normalizer'
 import { normalizeJsonItem, normalizeXmlItem } from './normalizer'
 import { deepScrape } from './linkResolver'
@@ -37,7 +37,8 @@ async function fetchWithFallback(feedUrl: string): Promise<FetchResult> {
     const resB = await fetch(CORSPROXY_URL + encodedUrl)
     const xml = await resB.text()
     const rawItems = parseFeedXml(xml)
-    if (rawItems.length >= 5) {
+    // Accept any non-empty XML feed (thin sources like ContestCanada.ca still matter)
+    if (rawItems.length >= 1) {
       console.log('Strategy B (corsproxy)', rawItems.length, 'items')
       return { strategy: 'B', data: xml }
     }
@@ -156,20 +157,21 @@ const SAFETY_NET_CONTEST: Contest = {
 /**
  * Fetch one source via fetchWithFallback and push normalized contests into results.
  */
-async function fetchOneSource(
-  source: (typeof MASTER_SOURCES)[0],
-  results: Contest[]
-): Promise<void> {
-  console.log('Fetching source:', source.name)
+async function fetchOneSource(source: Source, results: Contest[]): Promise<void> {
+  console.log('Fetching source:', source.name, `(${source.country})`)
   try {
     const result = await fetchWithFallback(source.url)
     if (result.strategy === 'A') {
       result.data.items.forEach((item, i) => {
+        const body = [item.description ?? '', item.content ?? ''].join(' ')
+        if (!itemMatchesSourceFilter(source, item.title, body)) return
         results.push(normalizeJsonItem(item, source, i))
       })
     } else if (result.strategy === 'B') {
       const rawItems = parseFeedXml(result.data)
       rawItems.forEach((item, i) => {
+        const body = [item.description ?? '', item.contentEncoded ?? '', item.content ?? ''].join(' ')
+        if (!itemMatchesSourceFilter(source, item.title, body)) return
         results.push(normalizeXmlItem(item, source, i))
       })
     }
@@ -188,9 +190,10 @@ export async function fetchAllContests(): Promise<{
   offlineMode: boolean
 }> {
   const results: Contest[] = []
+  const sources = getActiveSources()
 
   const settled = await Promise.allSettled(
-    MASTER_SOURCES.map(async (source) => {
+    sources.map(async (source) => {
       await fetchOneSource(source, results)
     })
   )
@@ -202,7 +205,8 @@ export async function fetchAllContests(): Promise<{
 
   if (failedIndices.length > 0) {
     for (const i of failedIndices) {
-      const source = MASTER_SOURCES[i]
+      const source = sources[i]
+      if (!source) continue
       try {
         await fetchOneSource(source, results)
       } catch (error) {
@@ -256,9 +260,10 @@ export async function fetchRawContests(): Promise<{
   offlineMode: boolean
 }> {
   const results: Contest[] = []
+  const sources = getActiveSources()
 
   const settled = await Promise.allSettled(
-    MASTER_SOURCES.map(async (source) => {
+    sources.map(async (source) => {
       await fetchOneSource(source, results)
     })
   )
@@ -270,7 +275,8 @@ export async function fetchRawContests(): Promise<{
 
   if (failedIndices.length > 0) {
     for (const i of failedIndices) {
-      const source = MASTER_SOURCES[i]
+      const source = sources[i]
+      if (!source) continue
       try {
         await fetchOneSource(source, results)
       } catch (error) {

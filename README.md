@@ -1,6 +1,6 @@
 # LoonieWins
 
-Canadian contest aggregator & offerwall — Win More, Work Less.
+Canadian + American contest aggregator & offerwall — Win More, Work Less.
 
 ## Stack
 
@@ -8,7 +8,7 @@ Canadian contest aggregator & offerwall — Win More, Work Less.
 - Vite
 - Tailwind CSS (glassmorphism dark theme)
 - React Router
-- Supabase (client + schema in `supabase/schema.sql`)
+- Supabase (client + schema in `supabase/schema.sql`; Hive Mind contests in `supabase_schema.sql`)
 
 ## Setup
 
@@ -24,6 +24,7 @@ Canadian contest aggregator & offerwall — Win More, Work Less.
 
    - `VITE_SUPABASE_URL`
    - `VITE_SUPABASE_ANON_KEY`
+   - Optional: `VITE_RSS2JSON_API_KEY` (larger RSS pages)
 
 3. **Run dev server**
 
@@ -33,19 +34,35 @@ Canadian contest aggregator & offerwall — Win More, Work Less.
 
 4. **Database**
 
-   Run `supabase/schema.sql` in your Supabase project SQL editor to create tables and RLS.
+   Run `supabase_schema.sql` (Hive Mind contests) and/or `supabase/schema.sql` in your Supabase SQL editor.
+
+5. **Scheduled ingest (optional but recommended)**
+
+   Deploy the Edge Function and cron (see docs):
+
+   ```bash
+   supabase functions deploy ingest-giveaways
+   ```
+
+   Then schedule every 30 minutes (`supabase/cron_ingest.sql` or GitHub Action `.github/workflows/ingest-giveaways.yml`).
 
 ## Features
 
-- **Dashboard:** Daily Routine (big cards), sticky search, filters, contest feed (thin cards) from real RSS (Reddit, RedFlagDeals). ENTER opens Smart-Fill overlay.
-- **Smart-Fill overlay:** Resolves contest URL, shows auto-fill preview, iframe form, “Auto-Fill Form” button, mark as entered.
-- **Referrals:** Community link list, add link, click-for-karma.
-- **Earn:** Tasks/surveys (points), Pro Pass (1000 pts), Subscribe ($4.99/mo).
-- **Winners:** Grid of recent wins.
-- **Profile:** Plan meter (Smart-Fills remaining), Applied Contests, Settings (Auto-Fill Data, Preferences, Export, Delete Account).
+- **Dashboard:** Daily Routine, geo filter (CA / US / ANY), contest feed from multi-source RSS, ENTER opens Smart-Fill overlay.
+- **Smart-Fill overlay:** Resolves contest URL, auto-fill preview, iframe form, mark as entered.
+- **Referrals / Earn / Winners / Profile:** karma, offerwall, wins grid, plan meter.
 
-## RSS sources
+## RSS / giveaway sources
 
-- Reddit: `r/contestsofcanada`
-- RedFlagDeals: Contests forum (34)
-- CanadianFreeStuff / ContestScoop: add RSS URLs in `src/lib/rssFetcher.ts` when available.
+Canonical list: `src/lib/data/sources.ts` (mirrored in `mobile/`).
+
+Add a feed by appending to `MASTER_SOURCES` with `country: 'CA' | 'US' | 'BOTH'`, `enabled: true`, and optional `includeKeywords` for mixed blogs.
+
+Full inventory + refresh plan: project docs `giveaway-sources.md` (Agent Store) and README section below.
+
+### Active pools (high level)
+
+- **Canada:** RedFlagDeals Contests, Contest Canada (.net), Canadian Free Stuff (contests + daily), ContestScoop, Reddit CA contest subs.
+- **United States:** Sweeties Sweeps, Sweepstakes Bible (+ daily / instant-win), FreebieShark, Hip2Save sweeps, Online Sweepstakes, Contest Bee, Sweepstakes Lovers / Mag, Reddit US giveaway subs.
+
+Refresh: Dashboard mount + every 30 minutes while open; optional Edge Function / GitHub Action for continuous cloud refresh.

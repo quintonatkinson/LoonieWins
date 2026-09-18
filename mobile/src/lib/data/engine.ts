@@ -5,7 +5,7 @@
 
 import { DOMParser } from '@xmldom/xmldom'
 import { toExpiryEndOfDay } from '../utils/expiryDate'
-import { MASTER_SOURCES } from './sources'
+import { getActiveSources, itemMatchesSourceFilter, type Source } from './sources'
 import type { Contest, RawFeedItem, Rss2JsonItem } from './normalizer'
 import { normalizeJsonItem, normalizeXmlItem } from './normalizer'
 import { deepScrape } from './linkResolver'
@@ -33,7 +33,7 @@ async function fetchWithFallback(feedUrl: string): Promise<FetchResult> {
     const resB = await fetch(CORSPROXY_URL + encodedUrl)
     const xml = await resB.text()
     const rawItems = parseFeedXml(xml)
-    if (rawItems.length >= 5) {
+    if (rawItems.length >= 1) {
       return { strategy: 'B', data: xml }
     }
   } catch (_) {}
@@ -114,11 +114,22 @@ const SAFETY_NET_CONTEST: Contest = {
   is_estimated_expiry: true,
 }
 
-async function fetchOneSource(source: (typeof MASTER_SOURCES)[0], results: Contest[]): Promise<void> {
+async function fetchOneSource(source: Source, results: Contest[]): Promise<void> {
   try {
     const result = await fetchWithFallback(source.url)
-    if (result.strategy === 'A') result.data.items.forEach((item, i) => results.push(normalizeJsonItem(item, source, i)))
-    else if (result.strategy === 'B') parseFeedXml(result.data).forEach((item, i) => results.push(normalizeXmlItem(item, source, i)))
+    if (result.strategy === 'A') {
+      result.data.items.forEach((item, i) => {
+        const body = [item.description ?? '', item.content ?? ''].join(' ')
+        if (!itemMatchesSourceFilter(source, item.title, body)) return
+        results.push(normalizeJsonItem(item, source, i))
+      })
+    } else if (result.strategy === 'B') {
+      parseFeedXml(result.data).forEach((item, i) => {
+        const body = [item.description ?? '', item.contentEncoded ?? '', item.content ?? ''].join(' ')
+        if (!itemMatchesSourceFilter(source, item.title, body)) return
+        results.push(normalizeXmlItem(item, source, i))
+      })
+    }
   } catch (error) {
     console.error('Failed source:', source.name, error)
     throw error
@@ -127,11 +138,14 @@ async function fetchOneSource(source: (typeof MASTER_SOURCES)[0], results: Conte
 
 export async function fetchAllContests(): Promise<{ contests: Contest[]; offlineMode: boolean }> {
   const results: Contest[] = []
-  const settled = await Promise.allSettled(MASTER_SOURCES.map((s) => fetchOneSource(s, results)))
+  const sources = getActiveSources()
+  const settled = await Promise.allSettled(sources.map((s) => fetchOneSource(s, results)))
   const failedIndices: number[] = []
   settled.forEach((outcome, i) => { if (outcome.status === 'rejected') failedIndices.push(i) })
   for (const i of failedIndices) {
-    try { await fetchOneSource(MASTER_SOURCES[i], results) } catch (_) {}
+    const source = sources[i]
+    if (!source) continue
+    try { await fetchOneSource(source, results) } catch (_) {}
   }
 
   if (results.length === 0) return { contests: [SAFETY_NET_CONTEST], offlineMode: true }
@@ -156,11 +170,14 @@ export async function fetchAllContests(): Promise<{ contests: Contest[]; offline
 
 export async function fetchRawContests(): Promise<{ contests: Contest[]; offlineMode: boolean }> {
   const results: Contest[] = []
-  const settled = await Promise.allSettled(MASTER_SOURCES.map((s) => fetchOneSource(s, results)))
+  const sources = getActiveSources()
+  const settled = await Promise.allSettled(sources.map((s) => fetchOneSource(s, results)))
   const failedIndices: number[] = []
   settled.forEach((outcome, i) => { if (outcome.status === 'rejected') failedIndices.push(i) })
   for (const i of failedIndices) {
-    try { await fetchOneSource(MASTER_SOURCES[i], results) } catch (_) {}
+    const source = sources[i]
+    if (!source) continue
+    try { await fetchOneSource(source, results) } catch (_) {}
   }
 
   if (results.length === 0) return { contests: [SAFETY_NET_CONTEST], offlineMode: true }
