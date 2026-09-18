@@ -276,11 +276,29 @@ function extractImageFromJsonItem(item: Rss2JsonItem, body: string): string | un
 /**
  * Normalize an item from rss2json (Strategy A) into a Contest.
  */
+/** Prefer text-scanned eligibility; fall back to the feed's declared country. */
+function resolveEligibility(
+  scanned: ReturnType<typeof scanForMetadata>,
+  source: Source
+): Pick<Contest, 'eligibility' | 'eligibilityUnverified'> {
+  if (scanned.eligibility !== 'Unknown') {
+    return {
+      eligibility: scanned.eligibility,
+      eligibilityUnverified: scanned.eligibilityUnverified,
+    }
+  }
+  if (source.country === 'CA' || source.country === 'US') {
+    return { eligibility: source.country, eligibilityUnverified: true }
+  }
+  return { eligibility: 'Unknown', eligibilityUnverified: true }
+}
+
 export function normalizeJsonItem(item: Rss2JsonItem, source: Source, index: number): Contest {
   const title = cleanTitle(item.title)
   const body = [item.description ?? '', item.content ?? ''].join(' ')
   const { tags, restrictions } = autoCategorize(item.title, body)
-  const { eligibility, eligibilityUnverified, requirements } = scanForMetadata(item.title, body)
+  const scanned = scanForMetadata(item.title, body)
+  const { eligibility, eligibilityUnverified } = resolveEligibility(scanned, source)
 
   const imageUrl =
     extractImageFromJsonItem(item, body) ?? SOURCE_FALLBACK_IMAGES[source.id]
@@ -306,7 +324,7 @@ export function normalizeJsonItem(item: Rss2JsonItem, source: Source, index: num
     restrictions,
     eligibility,
     eligibilityUnverified,
-    requirements,
+    requirements: scanned.requirements,
   }
 }
 
@@ -318,7 +336,8 @@ export function normalizeXmlItem(item: RawFeedItem, source: Source, index: numbe
   const title = cleanTitle(item.title)
   const body = [item.description ?? '', item.contentEncoded ?? '', item.content ?? ''].join(' ')
   const { tags, restrictions } = autoCategorize(item.title, body)
-  const { eligibility, eligibilityUnverified, requirements } = scanForMetadata(item.title, body)
+  const scanned = scanForMetadata(item.title, body)
+  const { eligibility, eligibilityUnverified } = resolveEligibility(scanned, source)
 
   const imageUrl =
     extractImage(item) ?? SOURCE_FALLBACK_IMAGES[source.id]
@@ -344,6 +363,6 @@ export function normalizeXmlItem(item: RawFeedItem, source: Source, index: numbe
     restrictions,
     eligibility,
     eligibilityUnverified,
-    requirements,
+    requirements: scanned.requirements,
   }
 }
