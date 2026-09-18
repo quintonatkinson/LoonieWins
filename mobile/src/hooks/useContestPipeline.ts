@@ -4,8 +4,9 @@ import { toExpiryEndOfDay } from '../lib/utils/expiryDate'
 import { getSeasonalPromos } from '../lib/data/seasonalPromos'
 import { syncToVault, syncToCloud, fetchFromCloud, getLiveContests, isVaultEmpty } from './useContestVault'
 
-const PHRASES = ['Scanning feeds...', 'Analyzing 150+ links...', 'Filtering dead contests...', 'Extracting odds...']
+const PHRASES = ['Scanning feeds...', 'Analyzing CA + US sources...', 'Filtering dead contests...', 'Extracting odds...']
 const CONCURRENCY = 3
+const AUTO_REFRESH_MS = 30 * 60 * 1000
 const DEFAULT_ELIGIBILITY: 'CA' | 'US' = 'CA'
 
 function computeQualityScore(c: Contest, defaultEligibility: 'CA' | 'US' = DEFAULT_ELIGIBILITY): number {
@@ -168,6 +169,13 @@ export function useContestPipeline() {
   useEffect(() => {
     runPipeline()
     return () => { abortRef.current = true }
+  }, [runPipeline])
+
+  useEffect(() => {
+    const id = setInterval(() => {
+      if (!abortRef.current) runPipeline()
+    }, AUTO_REFRESH_MS)
+    return () => clearInterval(id)
   }, [runPipeline])
 
   return {
