@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
 import {
   User,
   Trophy,
@@ -9,14 +10,20 @@ import {
   Crown,
   ExternalLink,
   Check,
+  FileText,
+  LifeBuoy,
+  Scale,
+  LogOut,
 } from 'lucide-react'
 import { useUserEarn } from '../contexts/UserEarnContext'
+import { useAuth } from '../contexts/AuthContext'
+import { useContestEntries } from '../hooks/useContestEntries'
 import SubscriptionModal from '../components/SubscriptionModal'
 import type { AutoFillData } from '../types/profile'
+import { downloadWebDataExport, deleteAccountAndLocalData } from '../lib/account/deleteAccount'
+import { SUPPORT_EMAIL } from '../lib/legal/constants'
 
-const SMART_FILLS_REMAINING = 3 // from profile
-
-const AUTO_FILL_FIELDS: { key: string; label: string }[] = [
+const AUTO_FILL_FIELDS: { key: keyof AutoFillData; label: string }[] = [
   { key: 'firstName', label: 'First Name' },
   { key: 'lastName', label: 'Last Name' },
   { key: 'email', label: 'Email' },
@@ -35,40 +42,140 @@ function getAutoFillValue(key: string, data: Partial<AutoFillData>): string {
   return ''
 }
 
-export default function Profile() {
-  const { subscriptionTier, setSubscriptionTier } = useUserEarn()
-  const [showPlanModal, setShowPlanModal] = useState(false)
-  const [smartFillsRemaining] = useState(SMART_FILLS_REMAINING)
-  const [autoFillData] = useState<Partial<AutoFillData>>({
-    name: 'Jane Doe',
-    email: 'jane@example.com',
-    address: '123 Main St, Toronto ON',
-  })
-  const [appliedContests] = useState<
-    { id: string; title: string; enteredAt: string; prizeValue?: string; daysLeft?: number; ended?: boolean }[]
-  >([
-    { id: '1', title: 'Win a $5,000 Home Depot Gift Card', enteredAt: '2025-02-22', prizeValue: '$5K', daysLeft: 18 },
-    { id: '2', title: 'Tech Bundle Giveaway', enteredAt: '2025-02-20', prizeValue: '$10K', daysLeft: 35 },
-    { id: '3', title: 'Summer Vacation Draw', enteredAt: '2025-02-15', prizeValue: '$4.5K', ended: true },
-  ])
+function formatPrize(v: number | null | undefined): string | undefined {
+  if (v == null || Number.isNaN(v)) return undefined
+  if (v >= 1000) return `$${(v / 1000).toFixed(v % 1000 === 0 ? 0 : 1)}K`
+  return `$${Math.round(v)}`
+}
 
+export default function Profile() {
+  const navigate = useNavigate()
+  const { subscriptionTier, setSubscriptionTier } = useUserEarn()
+  const { profile, updateProfile, signOut, user } = useAuth()
+  const { entries } = useContestEntries()
+
+  const [showPlanModal, setShowPlanModal] = useState(false)
+  const [editingAutoFill, setEditingAutoFill] = useState(false)
+  const [draftAutoFill, setDraftAutoFill] = useState<Partial<AutoFillData>>({})
+  const [saveMsg, setSaveMsg] = useState<string | null>(null)
+  const [deleteOpen, setDeleteOpen] = useState(false)
+  const [deleteBusy, setDeleteBusy] = useState(false)
+  const [deleteMsg, setDeleteMsg] = useState<string | null>(null)
+
+  const autoFillData: Partial<AutoFillData> = useMemo(() => {
+    const af = profile?.auto_fill_data ?? {}
+    return {
+      ...af,
+      email: af.email || profile?.email || '',
+      name:
+        af.name ||
+        [af.firstName, af.lastName].filter(Boolean).join(' ') ||
+        profile?.display_name ||
+        '',
+    }
+  }, [profile])
+
+  const appliedContests = useMemo(
+    () =>
+      entries.map((e) => {
+        const daysLeft = null as number | null
+        return {
+          id: e.contest_id,
+          title: e.title || e.contest_id,
+          enteredAt: e.entered_at.slice(0, 10),
+          prizeValue: formatPrize(e.prize_value),
+          daysLeft,
+          ended: e.status === 'expired' || e.status === 'lost',
+          status: e.status,
+          url: e.contest_url,
+        }
+      }),
+    [entries]
+  )
+
+  const smartFillsRemaining = profile?.smart_fills_remaining ?? 3
   const isPro = subscriptionTier === 'weekly' || subscriptionTier === 'monthly'
-  const planLabel = subscriptionTier === 'weekly' ? 'Bi-Weekly Pro' : subscriptionTier === 'monthly' ? 'Monthly Pro' : 'Free Tier'
+  const planLabel =
+    subscriptionTier === 'weekly'
+      ? 'Bi-Weekly Pro'
+      : subscriptionTier === 'monthly'
+        ? 'Monthly Pro'
+        : 'Free Tier'
+
+  const startEditAutoFill = () => {
+    setDraftAutoFill({ ...autoFillData })
+    setEditingAutoFill(true)
+    setSaveMsg(null)
+  }
+
+  const saveAutoFill = async () => {
+    const first = draftAutoFill.firstName?.trim() || ''
+    const last = draftAutoFill.lastName?.trim() || ''
+    const name =
+      draftAutoFill.name?.trim() ||
+      [first, last].filter(Boolean).join(' ') ||
+      profile?.display_name ||
+      ''
+    const next: AutoFillData = {
+      ...draftAutoFill,
+      firstName: first || undefined,
+      lastName: last || undefined,
+      name,
+      email: draftAutoFill.email?.trim() || profile?.email || '',
+    }
+    const { error } = await updateProfile({ auto_fill_data: next })
+    if (error) {
+      setSaveMsg(error)
+      return
+    }
+    setEditingAutoFill(false)
+    setSaveMsg('Saved to your account.')
+  }
+
+  const handleExport = async () => {
+    await downloadWebDataExport()
+  }
+
+  const handleDelete = async () => {
+    setDeleteBusy(true)
+    setDeleteMsg(null)
+    try {
+      const result = await deleteAccountAndLocalData()
+      setDeleteMsg(result.message)
+      setTimeout(() => {
+        setDeleteOpen(false)
+        navigate('/delete-account')
+        window.location.reload()
+      }, 1000)
+    } catch (err) {
+      setDeleteMsg(err instanceof Error ? err.message : String(err))
+    } finally {
+      setDeleteBusy(false)
+    }
+  }
 
   return (
     <div className="p-4 space-y-6 pb-24">
-      {/* Profile header with neon green icon */}
       <div className="flex items-center gap-3">
         <div className="flex items-center justify-center w-10 h-10 rounded-full bg-win/20 border border-win/40">
           <User className="w-5 h-5 text-win" strokeWidth={2.5} />
         </div>
-        <div>
+        <div className="flex-1 min-w-0">
           <h1 className="text-xl font-semibold text-white">Profile</h1>
-          <p className="text-gray-400 text-sm">Plan, history, and settings.</p>
+          <p className="text-gray-400 text-sm truncate">
+            {profile?.email || user?.email || 'Signed in'}
+          </p>
         </div>
+        <button
+          type="button"
+          onClick={() => void signOut()}
+          className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-gray-600/50 text-sm text-gray-300 hover:text-win"
+        >
+          <LogOut className="w-4 h-4" />
+          Log out
+        </button>
       </div>
 
-      {/* Current Plan banner – match reference: Current Plan / Free Tier, subtext, Upgrade to Pro (neon green) */}
       <section className="rounded-xl bg-gray-800/80 border border-gray-600/50 p-4">
         <div className="flex items-center justify-between gap-4">
           <div>
@@ -93,12 +200,13 @@ export default function Profile() {
         </div>
       </section>
 
-      {/* Applied Contests – trophy icon, count, cards with green border, checkmark, prize, time, Entered tag, link */}
       <section>
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
             <Trophy className="w-5 h-5 text-win" />
-            <h2 className="text-sm font-semibold text-white uppercase tracking-wide">Applied Contests</h2>
+            <h2 className="text-sm font-semibold text-white uppercase tracking-wide">
+              Applied Contests
+            </h2>
           </div>
           <span className="text-sm text-gray-400">{appliedContests.length} entered</span>
         </div>
@@ -123,51 +231,92 @@ export default function Profile() {
                     {c.ended ? (
                       <span className="text-xs text-red-400">Ended</span>
                     ) : (
-                      c.daysLeft != null && (
-                        <span className="text-xs text-gray-400">{c.daysLeft}d left</span>
-                      )
+                      <span className="text-xs text-gray-400">{c.enteredAt}</span>
                     )}
                     <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-win/20 text-win">
-                      Entered
+                      {c.status === 'submitted' ? 'Submitted' : 'Entered'}
                     </span>
                   </div>
                 </div>
-                <button
-                  type="button"
-                  className="shrink-0 p-2 rounded-lg text-win hover:bg-win/10 transition-colors"
-                  aria-label="Open contest"
-                >
-                  <ExternalLink className="w-4 h-4" />
-                </button>
+                {c.url && (
+                  <a
+                    href={c.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="shrink-0 p-2 rounded-lg text-win hover:bg-win/10 transition-colors"
+                    aria-label="Open contest"
+                  >
+                    <ExternalLink className="w-4 h-4" />
+                  </a>
+                )}
               </li>
             ))
           )}
         </ul>
       </section>
 
-      {/* Auto-Fill Info – header, 8 fields (label + value or "Not set"), Edit button */}
       <section>
-        <h2 className="text-sm font-semibold text-white uppercase tracking-wide mb-3">Auto-Fill Info</h2>
-        <div className="rounded-xl bg-gray-800/80 border border-gray-600/50 divide-y divide-gray-600/50 overflow-hidden">
-          {AUTO_FILL_FIELDS.map(({ key, label }) => {
-            const value = getAutoFillValue(key, autoFillData)
-            return (
-              <div key={key} className="flex items-center justify-between px-4 py-3">
-                <span className="text-sm text-gray-400">{label}</span>
-                <span className="text-sm text-gray-300">{value || 'Not set'}</span>
-              </div>
-            )
-          })}
-        </div>
-        <button
-          type="button"
-          className="w-full mt-3 py-3 rounded-xl bg-gray-800 border border-gray-600/50 text-white font-medium text-sm hover:bg-gray-700/80 transition-colors"
-        >
-          Edit Auto-Fill Data
-        </button>
+        <h2 className="text-sm font-semibold text-white uppercase tracking-wide mb-3">
+          Auto-Fill Info
+        </h2>
+        {!editingAutoFill ? (
+          <>
+            <div className="rounded-xl bg-gray-800/80 border border-gray-600/50 divide-y divide-gray-600/50 overflow-hidden">
+              {AUTO_FILL_FIELDS.map(({ key, label }) => {
+                const value = getAutoFillValue(key, autoFillData)
+                return (
+                  <div key={key} className="flex items-center justify-between px-4 py-3">
+                    <span className="text-sm text-gray-400">{label}</span>
+                    <span className="text-sm text-gray-300">{value || 'Not set'}</span>
+                  </div>
+                )
+              })}
+            </div>
+            <button
+              type="button"
+              onClick={startEditAutoFill}
+              className="w-full mt-3 py-3 rounded-xl bg-gray-800 border border-gray-600/50 text-white font-medium text-sm hover:bg-gray-700/80 transition-colors"
+            >
+              Edit Auto-Fill Data
+            </button>
+            {saveMsg && <p className="text-sm text-win mt-2">{saveMsg}</p>}
+          </>
+        ) : (
+          <div className="rounded-xl bg-gray-800/80 border border-gray-600/50 p-4 space-y-3">
+            {AUTO_FILL_FIELDS.map(({ key, label }) => (
+              <label key={key} className="block">
+                <span className="text-xs text-gray-400">{label}</span>
+                <input
+                  type="text"
+                  value={getAutoFillValue(key, draftAutoFill)}
+                  onChange={(e) =>
+                    setDraftAutoFill((prev) => ({ ...prev, [key]: e.target.value }))
+                  }
+                  className="mt-1 w-full px-3 py-2 rounded-lg bg-gray-900 border border-gray-600/50 text-white text-sm"
+                />
+              </label>
+            ))}
+            <div className="flex gap-2 pt-1">
+              <button
+                type="button"
+                onClick={() => void saveAutoFill()}
+                className="flex-1 py-2.5 rounded-lg bg-win text-gray-900 font-semibold text-sm"
+              >
+                Save to account
+              </button>
+              <button
+                type="button"
+                onClick={() => setEditingAutoFill(false)}
+                className="px-4 py-2.5 rounded-lg border border-gray-600/50 text-sm text-gray-300"
+              >
+                Cancel
+              </button>
+            </div>
+            {saveMsg && <p className="text-sm text-red-400">{saveMsg}</p>}
+          </div>
+        )}
       </section>
 
-      {/* Settings – icon + title + description per row */}
       <section>
         <h2 className="text-sm font-semibold text-white uppercase tracking-wide mb-3">Settings</h2>
         <ul className="rounded-xl bg-gray-800/80 border border-gray-600/50 divide-y divide-gray-600/50 overflow-hidden">
@@ -184,43 +333,120 @@ export default function Profile() {
             </button>
           </li>
           <li>
-            <button
-              type="button"
+            <Link
+              to="/privacy"
               className="flex items-center gap-3 w-full text-left px-4 py-3 hover:bg-white/5 transition-colors"
             >
               <Shield className="w-5 h-5 text-gray-400 shrink-0" />
               <div>
-                <p className="text-sm font-medium text-white">Privacy</p>
-                <p className="text-xs text-gray-500">Your data stays on your device</p>
+                <p className="text-sm font-medium text-white">Privacy Policy</p>
+                <p className="text-xs text-gray-500">How we handle your data</p>
               </div>
-            </button>
+            </Link>
+          </li>
+          <li>
+            <Link
+              to="/terms"
+              className="flex items-center gap-3 w-full text-left px-4 py-3 hover:bg-white/5 transition-colors"
+            >
+              <Scale className="w-5 h-5 text-gray-400 shrink-0" />
+              <div>
+                <p className="text-sm font-medium text-white">Terms of Use</p>
+                <p className="text-xs text-gray-500">Contest aggregation rules</p>
+              </div>
+            </Link>
+          </li>
+          <li>
+            <Link
+              to="/support"
+              className="flex items-center gap-3 w-full text-left px-4 py-3 hover:bg-white/5 transition-colors"
+            >
+              <LifeBuoy className="w-5 h-5 text-gray-400 shrink-0" />
+              <div>
+                <p className="text-sm font-medium text-white">Support</p>
+                <p className="text-xs text-gray-500">{SUPPORT_EMAIL}</p>
+              </div>
+            </Link>
           </li>
           <li>
             <button
               type="button"
+              onClick={() => void handleExport()}
               className="flex items-center gap-3 w-full text-left px-4 py-3 hover:bg-white/5 transition-colors"
             >
               <Download className="w-5 h-5 text-gray-400 shrink-0" />
               <div>
                 <p className="text-sm font-medium text-white">Export Data</p>
-                <p className="text-xs text-gray-500">Download all your data</p>
+                <p className="text-xs text-gray-500">Download account + local JSON</p>
               </div>
             </button>
           </li>
           <li>
             <button
               type="button"
+              onClick={() => {
+                setDeleteOpen(true)
+                setDeleteMsg(null)
+              }}
               className="flex items-center gap-3 w-full text-left px-4 py-3 hover:bg-white/5 transition-colors"
             >
               <Trash2 className="w-5 h-5 text-red-400 shrink-0" />
               <div>
                 <p className="text-sm font-medium text-red-400">Delete Account</p>
-                <p className="text-xs text-gray-500">Permanently remove your data</p>
+                <p className="text-xs text-gray-500">Permanently remove your cloud account</p>
               </div>
             </button>
           </li>
+          <li>
+            <Link
+              to="/delete-account"
+              className="flex items-center gap-3 w-full text-left px-4 py-3 hover:bg-white/5 transition-colors"
+            >
+              <FileText className="w-5 h-5 text-gray-400 shrink-0" />
+              <div>
+                <p className="text-sm font-medium text-white">Deletion help page</p>
+                <p className="text-xs text-gray-500">Store listing / external URL</p>
+              </div>
+            </Link>
+          </li>
         </ul>
       </section>
+
+      {deleteOpen && (
+        <>
+          <div
+            className="fixed inset-0 bg-black/60 z-40"
+            onClick={() => !deleteBusy && setDeleteOpen(false)}
+            aria-hidden
+          />
+          <div className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-50 w-[min(92vw,400px)] rounded-2xl bg-gray-800 border border-gray-600 p-5 space-y-4">
+            <h3 className="text-lg font-semibold text-white">Delete account?</h3>
+            <p className="text-sm text-gray-400">
+              This calls <code className="text-win">delete_own_account</code> on Supabase (removes
+              auth user + profile, entries, transactions, referrals, wins) and clears local cache.
+            </p>
+            {deleteMsg && <p className="text-sm text-win">{deleteMsg}</p>}
+            <div className="flex gap-2">
+              <button
+                type="button"
+                disabled={deleteBusy}
+                onClick={() => void handleDelete()}
+                className="flex-1 py-2.5 rounded-lg bg-red-600 text-white font-semibold text-sm disabled:opacity-50"
+              >
+                {deleteBusy ? 'Deleting…' : 'Delete forever'}
+              </button>
+              <button
+                type="button"
+                disabled={deleteBusy}
+                onClick={() => setDeleteOpen(false)}
+                className="px-4 py-2.5 rounded-lg border border-gray-600 text-sm text-gray-300"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </>
+      )}
 
       <SubscriptionModal
         open={showPlanModal}

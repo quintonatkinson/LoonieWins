@@ -14,10 +14,7 @@ import ContestCard from '../components/ContestCard'
 import CountryToggle from '../components/CountryToggle'
 import RadarLoader from '../components/RadarLoader'
 import { useContestPipeline } from '../hooks/useContestPipeline'
-import { storage } from '../lib/utils/storage'
-import type { AutoFillData } from '../types/profile'
-
-const STORAGE_ENTERED = 'looniewins_entered'
+import { useContestEntries } from '../hooks/useContestEntries'
 
 type SortFilter = 'high-value' | 'ending-soon' | 'best-odds' | null
 
@@ -55,6 +52,7 @@ interface DashboardProps {
 export default function Dashboard({ onOpenOverlay, onPressUrl }: DashboardProps) {
   const pipeline = useContestPipeline()
   const { liveContests, isScanning, isSyncingCloud, isFinished, offlineMode, phaseMessage, refetch } = pipeline
+  const { enteredIds, markEntered: persistEntered } = useContestEntries()
 
   const [search, setSearch] = useState('')
   const [sortFilter, setSortFilter] = useState<SortFilter>(null)
@@ -62,40 +60,13 @@ export default function Dashboard({ onOpenOverlay, onPressUrl }: DashboardProps)
   const [hideQCExcluded, setHideQCExcluded] = useState(false)
   const [tagFilters, setTagFilters] = useState<Set<string>>(new Set())
   const [geoFilter, setGeoFilter] = useState<'CA' | 'US' | 'ANY'>('CA')
-  const [enteredIds, setEnteredIdsState] = useState<Set<string>>(new Set())
   const [refreshing, setRefreshing] = useState(false)
-  const [autoFillData] = useState<AutoFillData>(() => ({
-    name: 'John Doe',
-    email: 'test@email.com',
-    address: '123 Main St, Toronto ON',
-  }))
-
-  useEffect(() => {
-    let mounted = true
-    storage.getItem(STORAGE_ENTERED).then((raw) => {
-      if (!mounted) return
-      try {
-        const arr = raw ? JSON.parse(raw) : []
-        setEnteredIdsState(new Set(Array.isArray(arr) ? arr : []))
-      } catch {
-        setEnteredIdsState(new Set())
-      }
-    })
-    return () => { mounted = false }
-  }, [])
-
-  const persistEntered = useCallback((ids: Set<string>) => {
-    storage.setItem(STORAGE_ENTERED, JSON.stringify([...ids]))
-  }, [])
 
   const markEntered = useCallback(
     (contest: Contest) => {
-      const next = new Set(enteredIds)
-      next.add(contest.id)
-      setEnteredIdsState(next)
-      persistEntered(next)
+      void persistEntered(contest, 'entered')
     },
-    [enteredIds, persistEntered]
+    [persistEntered]
   )
 
   const routineContests = liveContests.filter((c) => enteredIds.has(c.id)).slice(0, 10)

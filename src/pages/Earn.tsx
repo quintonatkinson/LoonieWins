@@ -44,7 +44,7 @@ export default function Earn() {
       if (loadingId) return
       setLoadingId(task.id)
       setTimeout(() => {
-        addPoints(task.reward)
+        addPoints(task.reward, { type: 'survey', description: task.title })
         setSuccessTask(task)
         setLoadingId(null)
         confetti({ particleCount: 80, spread: 60, origin: { y: 0.7 } })

@@ -4,11 +4,10 @@ Canadian contest aggregator & offerwall — Win More, Work Less.
 
 ## Stack
 
-- React 18 + TypeScript
-- Vite
-- Tailwind CSS (glassmorphism dark theme)
-- React Router
-- Supabase (client + schema in `supabase/schema.sql`)
+- React 18 + TypeScript (web Vite + Expo mobile)
+- Tailwind CSS
+- React Router (web)
+- Supabase Auth + Postgres (multi-schema)
 
 ## Setup
 
@@ -18,34 +17,39 @@ Canadian contest aggregator & offerwall — Win More, Work Less.
    npm install
    ```
 
-2. **Environment (optional for Supabase)**
+2. **Supabase (required for auth + account data)**
 
-   Copy `.env.example` to `.env` and set:
+   - Create a project, then run **`supabase/schema.sql`** in the SQL Editor (full bootstrap).
+   - Expose schemas `public`, `tracking`, `giveaways` under Settings → API.
+   - Enable Email auth; for local testing turn **Confirm email** off.
+   - Add redirect URLs (`http://localhost:5173`, production origin).
+
+3. **Environment**
+
+   Copy `.env.example` → `.env` and set:
 
    - `VITE_SUPABASE_URL`
    - `VITE_SUPABASE_ANON_KEY`
 
-3. **Run dev server**
+   Mobile: `EXPO_PUBLIC_SUPABASE_*` in `mobile/.env`.
+
+4. **Run**
 
    ```bash
    npm run dev
    ```
 
-4. **Database**
-
-   Run `supabase/schema.sql` in your Supabase project SQL editor to create tables and RLS.
+   App launch shows **Create account / Log in**. Session persists across reloads.
 
 ## Features
 
-- **Dashboard:** Daily Routine (big cards), sticky search, filters, contest feed (thin cards) from real RSS (Reddit, RedFlagDeals). ENTER opens Smart-Fill overlay.
-- **Smart-Fill overlay:** Resolves contest URL, shows auto-fill preview, iframe form, “Auto-Fill Form” button, mark as entered.
-- **Referrals:** Community link list, add link, click-for-karma.
-- **Earn:** Tasks/surveys (points), Pro Pass (1000 pts), Subscribe ($4.99/mo).
-- **Winners:** Grid of recent wins.
-- **Profile:** Plan meter (Smart-Fills remaining), Applied Contests, Settings (Auto-Fill Data, Preferences, Export, Delete Account).
+- **Auth:** Sign-up, login, session restore, logout (web + Expo).
+- **Dashboard:** Contest feed + per-account entered tracking (`tracking.contest_entries`).
+- **Profile:** Plan, applied contests, autofill (saved on `profiles`), export, delete account.
+- **Referrals / Winners / Earn:** Backed by `giveaways.*` and `tracking.transactions` (task board still simulates surveys but credits the account ledger).
+- **Legal / store:** `/privacy`, `/terms`, `/support`, `/delete-account` + `public/legal/*.html`.
+- **Account deletion:** `public.delete_own_account()` included in bootstrap (also `supabase/account_deletion.sql`).
 
-## RSS sources
+## Database
 
-- Reddit: `r/contestsofcanada`
-- RedFlagDeals: Contests forum (34)
-- CanadianFreeStuff / ContestScoop: add RSS URLs in `src/lib/rssFetcher.ts` when available.
+Canonical bootstrap: `supabase/schema.sql` (TEXT-id Hive Mind `public.contests` + account/tracking/giveaways tables + RLS + delete RPC).

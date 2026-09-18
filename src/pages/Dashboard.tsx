@@ -1,10 +1,12 @@
-import { useState, useCallback, useEffect, useRef } from 'react'
+import { useState, useCallback, useEffect, useRef, useMemo } from 'react'
 import type { Contest } from '../lib/rssFetcher'
 import ContestBrowser from '../components/ContestBrowser'
 import ContestCard from '../components/ContestCard'
 import CountryToggle from '../components/CountryToggle'
 import RadarLoader from '../components/RadarLoader'
 import { useContestPipeline } from '../hooks/useContestPipeline'
+import { useContestEntries } from '../hooks/useContestEntries'
+import { useAuth } from '../contexts/AuthContext'
 import type { AutoFillData } from '../types/profile'
 
 type SortFilter = 'high-value' | 'ending-soon' | 'best-odds' | 'most-popular'
@@ -36,24 +38,11 @@ const TAG_REQ_FILTERS: { key: string; label: string; match: (c: Contest) => bool
   { key: 'weekly', label: 'Weekly', match: (c) => (c.tags ?? []).includes('Weekly') },
 ]
 
-const STORAGE_ENTERED = 'looniewins_entered'
-
-function getEnteredIds(): Set<string> {
-  try {
-    const raw = localStorage.getItem(STORAGE_ENTERED)
-    return new Set(raw ? JSON.parse(raw) : [])
-  } catch {
-    return new Set()
-  }
-}
-
-function setEnteredIds(ids: Set<string>) {
-  localStorage.setItem(STORAGE_ENTERED, JSON.stringify([...ids]))
-}
-
 export default function Dashboard() {
   const pipeline = useContestPipeline()
   const { liveContests, isScanning, isSyncingCloud, isFinished, offlineMode, phaseMessage, refetch } = pipeline
+  const { profile } = useAuth()
+  const { enteredIds, markEntered: persistEntered } = useContestEntries()
 
   const [search, setSearch] = useState('')
   const [sortFilter, setSortFilter] = useState<SortFilter | null>(null)
@@ -62,21 +51,34 @@ export default function Dashboard() {
   const [tagFilters, setTagFilters] = useState<Set<string>>(new Set())
   const [geoFilter, setGeoFilter] = useState<'CA' | 'US' | 'ANY'>('CA')
   const [visibleCount, setVisibleCount] = useState(75)
-  const [enteredIds, setEnteredIdsState] = useState(getEnteredIds)
   const sentinelRef = useRef<HTMLDivElement | null>(null)
   const [overlayContest, setOverlayContest] = useState<Contest | null>(null)
-  const [autoFillData] = useState<AutoFillData>(() => ({
-    name: 'Jane Doe',
-    email: 'jane@example.com',
-    address: '123 Main St, Toronto ON',
-  }))
 
-  const markEntered = useCallback((contest: Contest) => {
-    const next = new Set(enteredIds)
-    next.add(contest.id)
-    setEnteredIdsState(next)
-    setEnteredIds(next)
-  }, [enteredIds])
+  const autoFillData: AutoFillData = useMemo(() => {
+    const af = profile?.auto_fill_data ?? {}
+    return {
+      name:
+        af.name ||
+        [af.firstName, af.lastName].filter(Boolean).join(' ') ||
+        profile?.display_name ||
+        '',
+      firstName: af.firstName,
+      lastName: af.lastName,
+      email: af.email || profile?.email || '',
+      address: af.address || '',
+      phone: af.phone,
+      city: af.city,
+      province: af.province,
+      postalCode: af.postalCode,
+    }
+  }, [profile])
+
+  const markEntered = useCallback(
+    (contest: Contest) => {
+      void persistEntered(contest, 'entered')
+    },
+    [persistEntered]
+  )
 
   const routineContests = liveContests.filter((c) => enteredIds.has(c.id)).slice(0, 10)
 
