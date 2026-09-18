@@ -7,7 +7,7 @@ import {
   type ReactNode,
 } from 'react'
 import { useAuth, type SubscriptionTier } from './AuthContext'
-import { tracking } from '../lib/supabase'
+import { isSupabaseConfigured, tracking } from '../lib/supabase'
 
 interface UserEarnContextValue {
   balance: number
@@ -32,7 +32,7 @@ export function UserEarnProvider({ children }: { children: ReactNode }) {
 
   // Ensure new accounts start with a small welcome balance once (0 → 1250)
   useEffect(() => {
-    if (!user || !profile || syncing.current) return
+    if (!profile || syncing.current) return
     if (profile.points_balance === 0 && !profile.settings?.welcome_granted) {
       syncing.current = true
       void updateProfile({
@@ -42,7 +42,7 @@ export function UserEarnProvider({ children }: { children: ReactNode }) {
         syncing.current = false
       })
     }
-  }, [user, profile, updateProfile])
+  }, [profile, updateProfile])
 
   const setBalance = useCallback(
     (n: number | ((prev: number) => number)) => {
@@ -72,17 +72,22 @@ export function UserEarnProvider({ children }: { children: ReactNode }) {
 
   const addPoints = useCallback(
     (amount: number, meta?: { type?: string; description?: string }) => {
-      if (!user || !profile) return
+      if (!profile) return
       const next = Math.max(0, profile.points_balance + amount)
       void updateProfile({ points_balance: next })
-      void tracking()
-        .from('transactions')
-        .insert({
-          user_id: user.id,
-          amount,
-          type: meta?.type ?? 'bonus',
-          description: meta?.description ?? 'Points earned',
-        })
+      if (user && isSupabaseConfigured) {
+        void tracking()
+          .from('transactions')
+          .insert({
+            user_id: user.id,
+            amount,
+            type: meta?.type ?? 'bonus',
+            description: meta?.description ?? 'Points earned',
+          })
+          .then(({ error }) => {
+            if (error) console.warn('[Earn] transaction:', error.message)
+          })
+      }
     },
     [user, profile, updateProfile]
   )
@@ -93,18 +98,23 @@ export function UserEarnProvider({ children }: { children: ReactNode }) {
 
   const spendPointsForEntry = useCallback(
     (cost: number): boolean => {
-      if (!user || !profile) return false
+      if (!profile) return false
       if (profile.points_balance < cost) return false
       const next = Math.max(0, profile.points_balance - cost)
       void updateProfile({ points_balance: next })
-      void tracking()
-        .from('transactions')
-        .insert({
-          user_id: user.id,
-          amount: -cost,
-          type: 'entry_spend',
-          description: 'Contest entry',
-        })
+      if (user && isSupabaseConfigured) {
+        void tracking()
+          .from('transactions')
+          .insert({
+            user_id: user.id,
+            amount: -cost,
+            type: 'entry_spend',
+            description: 'Contest entry',
+          })
+          .then(({ error }) => {
+            if (error) console.warn('[Earn] transaction:', error.message)
+          })
+      }
       return true
     },
     [user, profile, updateProfile]

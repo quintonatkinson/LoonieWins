@@ -60,8 +60,28 @@ const TITLE_CLEAN_PATTERNS = [
   /\s*\[Daily\]\s*/gi,
 ]
 
+function decodeHtmlEntities(text: string): string {
+  if (!text.includes('&')) return text
+  try {
+    if (typeof document !== 'undefined') {
+      const el = document.createElement('textarea')
+      el.innerHTML = text
+      return el.value
+    }
+  } catch {
+    /* fall through */
+  }
+  return text
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&apos;/g, "'")
+}
+
 function cleanTitle(title: string): string {
-  let t = title
+  let t = decodeHtmlEntities(title)
   for (const re of TITLE_CLEAN_PATTERNS) {
     t = t.replace(re, ' ')
   }
@@ -117,7 +137,7 @@ const DATE_PREFIX =
  */
 function extractExpiryDate(
   contentText: string,
-  postedAtIso: string | undefined
+  _postedAtIso: string | undefined
 ): { expiryDate?: string; is_estimated_expiry: boolean } {
   const text = contentText.replace(/\s+/g, ' ').trim()
   const now = new Date()

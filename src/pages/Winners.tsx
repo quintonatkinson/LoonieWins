@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Trophy, ExternalLink, ChevronDown, ChevronUp } from 'lucide-react'
-import { giveaways } from '../lib/supabase'
+import { giveaways, isSupabaseConfigured } from '../lib/supabase'
 
 interface WinnerCard {
   id: string
@@ -42,32 +42,45 @@ export default function Winners() {
     let mounted = true
     ;(async () => {
       setLoading(true)
-      const { data, error } = await giveaways()
-        .from('user_wins')
-        .select('*')
-        .order('won_at', { ascending: false })
-        .limit(100)
-      if (!mounted) return
-      if (error) {
-        console.warn('[Winners]', error.message)
-        setWinners([])
-      } else {
-        setWinners(
-          (data ?? []).map((row: Record<string, unknown>) => ({
-            id: String(row.id),
-            contestName: String(row.contest_name || row.prize_description || 'Contest win'),
-            winnerDisplay: String(row.winner_display || 'Anonymous'),
-            prize: String(row.prize_description || 'Prize'),
-            wonAt: String(row.won_at || '').slice(0, 10),
-            prizeValueEstimate: row.prize_value_estimate as number | undefined,
-            contestSource: row.contest_source as string | undefined,
-            contestUrl: row.contest_url as string | undefined,
-            entryMethod: row.entry_method as string | undefined,
-            winnerRegion: row.winner_region as string | undefined,
-          }))
-        )
+      if (!isSupabaseConfigured) {
+        if (mounted) {
+          setWinners([])
+          setLoading(false)
+        }
+        return
       }
-      setLoading(false)
+      try {
+        const { data, error } = await giveaways()
+          .from('user_wins')
+          .select('*')
+          .order('won_at', { ascending: false })
+          .limit(100)
+        if (!mounted) return
+        if (error) {
+          console.warn('[Winners]', error.message)
+          setWinners([])
+        } else {
+          setWinners(
+            (data ?? []).map((row: Record<string, unknown>) => ({
+              id: String(row.id),
+              contestName: String(row.contest_name || row.prize_description || 'Contest win'),
+              winnerDisplay: String(row.winner_display || 'Anonymous'),
+              prize: String(row.prize_description || 'Prize'),
+              wonAt: String(row.won_at || '').slice(0, 10),
+              prizeValueEstimate: row.prize_value_estimate as number | undefined,
+              contestSource: row.contest_source as string | undefined,
+              contestUrl: row.contest_url as string | undefined,
+              entryMethod: row.entry_method as string | undefined,
+              winnerRegion: row.winner_region as string | undefined,
+            }))
+          )
+        }
+      } catch (e) {
+        console.warn('[Winners]', e)
+        if (mounted) setWinners([])
+      } finally {
+        if (mounted) setLoading(false)
+      }
     })()
     return () => {
       mounted = false

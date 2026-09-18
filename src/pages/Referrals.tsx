@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { giveaways } from '../lib/supabase'
+import { giveaways, isSupabaseConfigured } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 
 interface ReferralLink {
@@ -17,21 +17,34 @@ export default function Referrals() {
   const [newTitle, setNewTitle] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
+  const [addedToast, setAddedToast] = useState(false)
 
   const refresh = useCallback(async () => {
-    setLoading(true)
-    const { data, error: err } = await giveaways()
-      .from('referral_pool')
-      .select('id, url, title, referrer_id, clicks_received')
-      .order('created_at', { ascending: false })
-    if (err) {
-      setError(err.message)
+    if (!isSupabaseConfigured) {
       setLinks([])
-    } else {
-      setError(null)
-      setLinks((data ?? []) as ReferralLink[])
+      setLoading(false)
+      setError('Cloud referrals need Supabase configured.')
+      return
     }
-    setLoading(false)
+    setLoading(true)
+    try {
+      const { data, error: err } = await giveaways()
+        .from('referral_pool')
+        .select('id, url, title, referrer_id, clicks_received')
+        .order('created_at', { ascending: false })
+      if (err) {
+        setError(err.message)
+        setLinks([])
+      } else {
+        setError(null)
+        setLinks((data ?? []) as ReferralLink[])
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+      setLinks([])
+    } finally {
+      setLoading(false)
+    }
   }, [])
 
   useEffect(() => {
@@ -45,11 +58,13 @@ export default function Referrals() {
       prev.map((l) => (l.id === link.id ? { ...l, clicks_received: nextClicks } : l))
     )
     // Only the referrer can update under RLS; others still get the open.
-    if (user && link.referrer_id === user.id) {
-      await giveaways()
-        .from('referral_pool')
-        .update({ clicks_received: nextClicks })
-        .eq('id', link.id)
+    if (user && link.referrer_id === user.id && isSupabaseConfigured) {
+      try {
+        await giveaways()
+          .from('referral_pool')
+          .update({ clicks_received: nextClicks })
+          .eq('id', link.id)
+      } catch (_) {}
     }
   }
 
@@ -57,35 +72,45 @@ export default function Referrals() {
     e.preventDefault()
     if (!user || !newUrl.trim()) return
     setError(null)
-    const { data, error: err } = await giveaways()
-      .from('referral_pool')
-      .insert({
-        referrer_id: user.id,
-        url: newUrl.trim(),
-        title: newTitle.trim() || null,
-      })
-      .select('id, url, title, referrer_id, clicks_received')
-      .maybeSingle()
-    if (err) {
-      setError(err.message)
+    if (!isSupabaseConfigured) {
+      setError('Cloud referrals need Supabase configured.')
       return
     }
-    if (data) setLinks((prev) => [data as ReferralLink, ...prev])
-    setNewUrl('')
-    setNewTitle('')
+    try {
+      const { data, error: err } = await giveaways()
+        .from('referral_pool')
+        .insert({
+          referrer_id: user.id,
+          url: newUrl.trim(),
+          title: newTitle.trim() || null,
+        })
+        .select('id, url, title, referrer_id, clicks_received')
+        .maybeSingle()
+      if (err) {
+        setError(err.message)
+        return
+      }
+      if (data) setLinks((prev) => [data as ReferralLink, ...prev])
+      setNewUrl('')
+      setNewTitle('')
+      setAddedToast(true)
+      setTimeout(() => setAddedToast(false), 2500)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+    }
   }
 
   return (
     <div className="p-4 space-y-6">
       <div>
-        <h1 className="text-xl font-semibold">Referrals</h1>
-        <p className="text-white/70 text-sm mt-1">
+        <h1 className="text-xl font-semibold text-gray-50">Referrals</h1>
+        <p className="text-gray-400 text-sm mt-1">
           I click yours, you click mine. Each click = +Karma.
         </p>
       </div>
 
       <form onSubmit={(e) => void handleSubmit(e)} className="glass rounded-xl p-4 space-y-3">
-        <h2 className="text-sm font-medium">Add your link</h2>
+        <h2 className="text-sm font-medium text-gray-50">Add your link</h2>
         <input
           type="url"
           placeholder="https://…"
@@ -105,6 +130,11 @@ export default function Referrals() {
           Add Link
         </button>
         {error && <p className="text-sm text-red-400">{error}</p>}
+        {addedToast && (
+          <p className="text-sm text-win" role="status">
+            Link added to the community list.
+          </p>
+        )}
       </form>
 
       <section>
@@ -117,10 +147,10 @@ export default function Referrals() {
           <ul className="space-y-3">
             {links.map((link) => (
               <li key={link.id} className="glass rounded-xl p-4">
-                <p className="font-medium text-sm line-clamp-1">{link.title || link.url}</p>
-                <p className="text-xs text-white/50 truncate mt-0.5">{link.url}</p>
+                <p className="font-medium text-sm text-gray-50 line-clamp-1">{link.title || link.url}</p>
+                <p className="text-xs text-gray-500 truncate mt-0.5">{link.url}</p>
                 <div className="flex items-center justify-between mt-3">
-                  <span className="text-xs text-white/60">{link.clicks_received} clicks</span>
+                  <span className="text-xs text-gray-400">{link.clicks_received} clicks</span>
                   <button
                     type="button"
                     onClick={() => void handleClick(link)}

@@ -12,9 +12,16 @@ interface ContestCardProps {
   onOpenOverlay: (contest: Contest) => void
   variant: 'routine' | 'feed' | 'ended'
   daysLeft?: number | null
+  entered?: boolean
 }
 
-export default function ContestCard({ contest, onOpenOverlay, variant, daysLeft: daysLeftProp }: ContestCardProps) {
+export default function ContestCard({
+  contest,
+  onOpenOverlay,
+  variant,
+  daysLeft: daysLeftProp,
+  entered = false,
+}: ContestCardProps) {
   const navigate = useNavigate()
   const {
     dailyLimitReached,
@@ -105,6 +112,16 @@ export default function ContestCard({ contest, onOpenOverlay, variant, daysLeft:
   }
 
   const isLocked = contest.isLocked === true
+  const tags = contest.tags ?? []
+  const entryTypeLabel = tags.includes('Daily')
+    ? 'Daily'
+    : tags.includes('Weekly')
+      ? 'Weekly'
+      : tags.includes('Instant Win')
+        ? 'Instant Win'
+        : tags.includes('1 Single Entry')
+          ? 'Single'
+          : 'Contest'
   const button = variant === 'ended' ? (
     <button
       type="button"
@@ -212,7 +229,7 @@ export default function ContestCard({ contest, onOpenOverlay, variant, daysLeft:
               showUnlock ? 'bg-amber-500/20 text-amber-400 border border-amber-500/40' : 'bg-win text-gray-900'
             }`}
           >
-            {variant === 'ended' ? 'Ended' : showUnlock ? `UNLOCK (${entryCostPts} Pts)` : isLocked ? 'View on RFD' : 'Enter'}
+            {showUnlock ? `UNLOCK (${entryCostPts} Pts)` : isLocked ? 'View on RFD' : 'Enter'}
           </span>
         </button>
         {toastEl}
@@ -226,7 +243,14 @@ export default function ContestCard({ contest, onOpenOverlay, variant, daysLeft:
     <>
       <li className="rounded-xl bg-surface border border-gray-600/50 px-4 py-3 flex items-center gap-3">
         <div className="flex-1 min-w-0 flex flex-col gap-1">
-          <span className="text-xs text-gray-500 font-medium">Single</span>
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-gray-500 font-medium">{entryTypeLabel}</span>
+            {entered && (
+              <span className="text-[10px] uppercase tracking-wide font-semibold px-1.5 py-0.5 rounded bg-win/20 text-win border border-win/30">
+                Entered
+              </span>
+            )}
+          </div>
           <p className="font-semibold text-gray-50 text-sm line-clamp-2">{contest.title}</p>
           <div className="flex flex-wrap items-center gap-3 mt-1 text-xs text-gray-400">
             {contest.prizeValue != null && (

@@ -17,11 +17,13 @@ import {
 } from 'lucide-react'
 import { useUserEarn } from '../contexts/UserEarnContext'
 import { useAuth } from '../contexts/AuthContext'
-import { useContestEntries } from '../hooks/useContestEntries'
+import { useContestEntries, type ContestEntryStatus } from '../hooks/useContestEntries'
 import SubscriptionModal from '../components/SubscriptionModal'
 import type { AutoFillData } from '../types/profile'
 import { downloadWebDataExport, deleteAccountAndLocalData } from '../lib/account/deleteAccount'
 import { SUPPORT_EMAIL } from '../lib/legal/constants'
+import { loadAutoFillData, saveAutoFillData } from '../lib/utils/autoFillStorage'
+import { isSupabaseConfigured } from '../lib/supabase'
 
 const AUTO_FILL_FIELDS: { key: keyof AutoFillData; label: string }[] = [
   { key: 'firstName', label: 'First Name' },
@@ -52,7 +54,7 @@ export default function Profile() {
   const navigate = useNavigate()
   const { subscriptionTier, setSubscriptionTier } = useUserEarn()
   const { profile, updateProfile, signOut, user } = useAuth()
-  const { entries } = useContestEntries()
+  const { entries, updateStatus, removeEntry } = useContestEntries()
 
   const [showPlanModal, setShowPlanModal] = useState(false)
   const [editingAutoFill, setEditingAutoFill] = useState(false)
@@ -61,37 +63,40 @@ export default function Profile() {
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [deleteBusy, setDeleteBusy] = useState(false)
   const [deleteMsg, setDeleteMsg] = useState<string | null>(null)
+  const [entryFilter, setEntryFilter] = useState<'all' | ContestEntryStatus>('all')
+  const [entrySearch, setEntrySearch] = useState('')
 
   const autoFillData: Partial<AutoFillData> = useMemo(() => {
-    const af = profile?.auto_fill_data ?? {}
-    return {
-      ...af,
-      email: af.email || profile?.email || '',
-      name:
-        af.name ||
-        [af.firstName, af.lastName].filter(Boolean).join(' ') ||
-        profile?.display_name ||
-        '',
+    const af = profile?.auto_fill_data
+    if (af && (af.email || af.name || af.firstName || af.address)) {
+      return {
+        ...af,
+        email: af.email || profile?.email || '',
+        name:
+          af.name ||
+          [af.firstName, af.lastName].filter(Boolean).join(' ') ||
+          profile?.display_name ||
+          '',
+      }
     }
+    return loadAutoFillData()
   }, [profile])
 
-  const appliedContests = useMemo(
-    () =>
-      entries.map((e) => {
-        const daysLeft = null as number | null
-        return {
-          id: e.contest_id,
-          title: e.title || e.contest_id,
-          enteredAt: e.entered_at.slice(0, 10),
-          prizeValue: formatPrize(e.prize_value),
-          daysLeft,
-          ended: e.status === 'expired' || e.status === 'lost',
-          status: e.status,
-          url: e.contest_url,
-        }
-      }),
-    [entries]
-  )
+  const appliedContests = useMemo(() => {
+    const q = entrySearch.trim().toLowerCase()
+    return entries
+      .filter((e) => (entryFilter === 'all' ? true : e.status === entryFilter))
+      .filter((e) => (!q ? true : (e.title || e.contest_id).toLowerCase().includes(q)))
+      .map((e) => ({
+        id: e.contest_id,
+        title: e.title || e.contest_id,
+        enteredAt: e.entered_at.slice(0, 10),
+        prizeValue: formatPrize(e.prize_value),
+        ended: e.status === 'expired' || e.status === 'lost',
+        status: e.status,
+        url: e.contest_url,
+      }))
+  }, [entries, entryFilter, entrySearch])
 
   const smartFillsRemaining = profile?.smart_fills_remaining ?? 3
   const isPro = subscriptionTier === 'weekly' || subscriptionTier === 'monthly'
@@ -123,13 +128,29 @@ export default function Profile() {
       name,
       email: draftAutoFill.email?.trim() || profile?.email || '',
     }
+    saveAutoFillData(next)
     const { error } = await updateProfile({ auto_fill_data: next })
     if (error) {
       setSaveMsg(error)
       return
     }
     setEditingAutoFill(false)
-    setSaveMsg('Saved to your account.')
+    setSaveMsg(user ? 'Saved to your account.' : 'Saved on this device.')
+  }
+
+  const statusLabel = (s: ContestEntryStatus) => {
+    switch (s) {
+      case 'submitted':
+        return 'Submitted'
+      case 'won':
+        return 'Won'
+      case 'lost':
+        return 'Lost'
+      case 'expired':
+        return 'Expired'
+      default:
+        return 'Entered'
+    }
   }
 
   const handleExport = async () => {
@@ -163,17 +184,19 @@ export default function Profile() {
         <div className="flex-1 min-w-0">
           <h1 className="text-xl font-semibold text-white">Profile</h1>
           <p className="text-gray-400 text-sm truncate">
-            {profile?.email || user?.email || 'Signed in'}
+            {profile?.email || user?.email || (isSupabaseConfigured ? 'Signed in' : 'Guest (local)')}
           </p>
         </div>
-        <button
-          type="button"
-          onClick={() => void signOut()}
-          className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-gray-600/50 text-sm text-gray-300 hover:text-win"
-        >
-          <LogOut className="w-4 h-4" />
-          Log out
-        </button>
+        {user && (
+          <button
+            type="button"
+            onClick={() => void signOut()}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-gray-600/50 text-sm text-gray-300 hover:text-win"
+          >
+            <LogOut className="w-4 h-4" />
+            Log out
+          </button>
+        )}
       </div>
 
       <section className="rounded-xl bg-gray-800/80 border border-gray-600/50 p-4">
@@ -208,47 +231,119 @@ export default function Profile() {
               Applied Contests
             </h2>
           </div>
-          <span className="text-sm text-gray-400">{appliedContests.length} entered</span>
+          <span className="text-sm text-gray-400">{entries.length} tracked</span>
         </div>
+        <div className="flex flex-wrap gap-2 mb-3">
+          {(
+            [
+              ['all', 'All'],
+              ['entered', 'Entered'],
+              ['submitted', 'Submitted'],
+              ['won', 'Won'],
+              ['lost', 'Lost'],
+              ['expired', 'Expired'],
+            ] as const
+          ).map(([key, label]) => (
+            <button
+              key={key}
+              type="button"
+              onClick={() => setEntryFilter(key)}
+              className={`px-3 py-1 rounded-full text-xs font-medium border ${
+                entryFilter === key
+                  ? 'bg-win text-gray-900 border-win'
+                  : 'border-gray-600/50 text-gray-400'
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+        <input
+          type="search"
+          value={entrySearch}
+          onChange={(e) => setEntrySearch(e.target.value)}
+          placeholder="Search your entries…"
+          className="w-full mb-3 px-3 py-2 rounded-lg bg-gray-900 border border-gray-600/50 text-white text-sm"
+        />
         <ul className="space-y-2">
           {appliedContests.length === 0 ? (
-            <li className="text-gray-500 text-sm py-4 text-center">No entries yet.</li>
+            <li className="text-gray-500 text-sm py-4 text-center">
+              No entries yet. Mark contests as entered from Home.
+            </li>
           ) : (
             appliedContests.map((c) => (
               <li
                 key={c.id}
-                className="rounded-xl border-2 border-win/40 bg-gray-800/60 px-4 py-3 flex items-center gap-3"
+                className="rounded-xl border-2 border-win/40 bg-gray-800/60 px-4 py-3 space-y-2"
               >
-                <div className="shrink-0 flex items-center justify-center w-8 h-8 rounded-full bg-win/20">
-                  <Check className="w-4 h-4 text-win" strokeWidth={3} />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-white line-clamp-1">{c.title}</p>
-                  <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-                    {c.prizeValue && (
-                      <span className="text-xs font-semibold text-win">{c.prizeValue}</span>
-                    )}
-                    {c.ended ? (
-                      <span className="text-xs text-red-400">Ended</span>
-                    ) : (
-                      <span className="text-xs text-gray-400">{c.enteredAt}</span>
-                    )}
-                    <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-win/20 text-win">
-                      {c.status === 'submitted' ? 'Submitted' : 'Entered'}
-                    </span>
+                <div className="flex items-center gap-3">
+                  <div className="shrink-0 flex items-center justify-center w-8 h-8 rounded-full bg-win/20">
+                    <Check className="w-4 h-4 text-win" strokeWidth={3} />
                   </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-white line-clamp-1">{c.title}</p>
+                    <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                      {c.prizeValue && (
+                        <span className="text-xs font-semibold text-win">{c.prizeValue}</span>
+                      )}
+                      {c.ended ? (
+                        <span className="text-xs text-red-400">Ended</span>
+                      ) : (
+                        <span className="text-xs text-gray-400">{c.enteredAt}</span>
+                      )}
+                      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-win/20 text-win">
+                        {statusLabel(c.status)}
+                      </span>
+                    </div>
+                  </div>
+                  {c.url && (
+                    <a
+                      href={c.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="shrink-0 p-2 rounded-lg text-win hover:bg-win/10 transition-colors"
+                      aria-label="Open contest"
+                    >
+                      <ExternalLink className="w-4 h-4" />
+                    </a>
+                  )}
                 </div>
-                {c.url && (
-                  <a
-                    href={c.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="shrink-0 p-2 rounded-lg text-win hover:bg-win/10 transition-colors"
-                    aria-label="Open contest"
+                <div className="flex flex-wrap gap-2 pl-11">
+                  {c.status === 'entered' && (
+                    <button
+                      type="button"
+                      onClick={() => void updateStatus(c.id, 'submitted')}
+                      className="text-xs px-2 py-1 rounded border border-win/40 text-win"
+                    >
+                      Mark submitted
+                    </button>
+                  )}
+                  {c.status !== 'won' && (
+                    <button
+                      type="button"
+                      onClick={() => void updateStatus(c.id, 'won')}
+                      className="text-xs px-2 py-1 rounded border border-gray-600/50 text-gray-300"
+                    >
+                      Won
+                    </button>
+                  )}
+                  {c.status !== 'lost' && (
+                    <button
+                      type="button"
+                      onClick={() => void updateStatus(c.id, 'lost')}
+                      className="text-xs px-2 py-1 rounded border border-gray-600/50 text-gray-300"
+                    >
+                      Lost
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => void removeEntry(c.id)}
+                    className="text-xs px-2 py-1 rounded border border-red-500/40 text-red-400"
                   >
-                    <ExternalLink className="w-4 h-4" />
-                  </a>
-                )}
+                    Remove
+                  </button>
+                </div>
               </li>
             ))
           )}
@@ -302,7 +397,7 @@ export default function Profile() {
                 onClick={() => void saveAutoFill()}
                 className="flex-1 py-2.5 rounded-lg bg-win text-gray-900 font-semibold text-sm"
               >
-                Save to account
+                Save
               </button>
               <button
                 type="button"

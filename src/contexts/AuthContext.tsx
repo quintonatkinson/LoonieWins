@@ -8,7 +8,7 @@ import {
   type ReactNode,
 } from 'react'
 import type { Session, User } from '@supabase/supabase-js'
-import { supabase } from '../lib/supabase'
+import { isSupabaseConfigured, supabase } from '../lib/supabase'
 import type { AutoFillData } from '../types/profile'
 
 export type SubscriptionTier = 'free' | 'weekly' | 'monthly'
@@ -70,6 +70,8 @@ function mapProfile(row: Record<string, unknown>): UserProfile {
 }
 
 async function ensureProfile(user: User): Promise<UserProfile | null> {
+  if (!supabase) return null
+
   const { data, error } = await supabase
     .from('profiles')
     .select('*')
@@ -128,6 +130,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     let mounted = true
+    if (!supabase || !isSupabaseConfigured) {
+      // Guest demo profile so earn/autofill/entry limits work offline
+      setProfile({
+        id: 'local-guest',
+        email: null,
+        display_name: 'Guest',
+        is_premium: false,
+        points_balance: 1250,
+        xp: 0,
+        level: 1,
+        streak: 0,
+        auto_fill_data: {},
+        settings: { welcome_granted: true },
+        smart_fills_remaining: 3,
+        last_daily_entry_at: null,
+        subscription_tier: 'free',
+      })
+      setLoading(false)
+      setAuthReady(true)
+      return () => {
+        mounted = false
+      }
+    }
+
     ;(async () => {
       try {
         const { data, error } = await supabase.auth.getSession()
@@ -153,7 +179,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [loadForSession])
 
   const refreshProfile = useCallback(async () => {
-    if (!user) {
+    if (!user || !supabase) {
       setProfile(null)
       return
     }
@@ -163,6 +189,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signUp = useCallback(
     async (email: string, password: string, displayName?: string) => {
+      if (!supabase) return { error: 'Supabase is not configured' }
       setNeedsEmailConfirm(false)
       setPendingEmail(null)
       const { data, error } = await supabase.auth.signUp({
@@ -187,6 +214,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signIn = useCallback(
     async (email: string, password: string) => {
+      if (!supabase) return { error: 'Supabase is not configured' }
       setNeedsEmailConfirm(false)
       const { data, error } = await supabase.auth.signInWithPassword({
         email: email.trim(),
@@ -200,7 +228,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   )
 
   const signOut = useCallback(async () => {
-    await supabase.auth.signOut()
+    if (supabase) await supabase.auth.signOut()
     setSession(null)
     setUser(null)
     setProfile(null)
@@ -208,7 +236,35 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const updateProfile = useCallback(
     async (patch: Partial<UserProfile>) => {
-      if (!user) return { error: 'Not signed in' }
+      // Guest / offline profile lives in memory (+ autofill mirrored to localStorage by callers)
+      if (!user || !supabase) {
+        setProfile((prev) => {
+          const base =
+            prev ??
+            ({
+              id: 'local-guest',
+              email: null,
+              display_name: 'Guest',
+              is_premium: false,
+              points_balance: 1250,
+              xp: 0,
+              level: 1,
+              streak: 0,
+              auto_fill_data: {},
+              settings: {},
+              smart_fills_remaining: 3,
+              last_daily_entry_at: null,
+              subscription_tier: 'free' as const,
+            } satisfies UserProfile)
+          return {
+            ...base,
+            ...patch,
+            auto_fill_data: patch.auto_fill_data ?? base.auto_fill_data,
+            settings: patch.settings ?? base.settings,
+          }
+        })
+        return { error: null }
+      }
       const payload: Record<string, unknown> = {}
       if (patch.display_name !== undefined) payload.display_name = patch.display_name
       if (patch.points_balance !== undefined) payload.points_balance = patch.points_balance

@@ -13,8 +13,30 @@ import Privacy from './pages/Privacy'
 import Terms from './pages/Terms'
 import Support from './pages/Support'
 import DeleteAccount from './pages/DeleteAccount'
+import { isSupabaseConfigured } from './lib/supabase'
 
 const PUBLIC_PATHS = new Set(['/privacy', '/terms', '/support', '/delete-account'])
+
+function MainAppRoutes() {
+  return (
+    <UserEarnProvider>
+      <Layout>
+        <Routes>
+          <Route path="/" element={<Dashboard />} />
+          <Route path="/referrals" element={<Referrals />} />
+          <Route path="/earn" element={<Earn />} />
+          <Route path="/winners" element={<Winners />} />
+          <Route path="/past" element={<PastContests />} />
+          <Route path="/profile" element={<Profile />} />
+          <Route path="/privacy" element={<Privacy />} />
+          <Route path="/terms" element={<Terms />} />
+          <Route path="/support" element={<Support />} />
+          <Route path="/delete-account" element={<DeleteAccount />} />
+        </Routes>
+      </Layout>
+    </UserEarnProvider>
+  )
+}
 
 function AuthenticatedApp() {
   const { session, loading, authReady } = useAuth()
@@ -43,28 +65,12 @@ function AuthenticatedApp() {
     )
   }
 
-  if (!session) {
+  // Local/demo boot without Supabase keys — keep feed usable with local entry tracking.
+  if (!session && isSupabaseConfigured) {
     return <AuthScreen />
   }
 
-  return (
-    <UserEarnProvider>
-      <Layout>
-        <Routes>
-          <Route path="/" element={<Dashboard />} />
-          <Route path="/referrals" element={<Referrals />} />
-          <Route path="/earn" element={<Earn />} />
-          <Route path="/winners" element={<Winners />} />
-          <Route path="/past" element={<PastContests />} />
-          <Route path="/profile" element={<Profile />} />
-          <Route path="/privacy" element={<Privacy />} />
-          <Route path="/terms" element={<Terms />} />
-          <Route path="/support" element={<Support />} />
-          <Route path="/delete-account" element={<DeleteAccount />} />
-        </Routes>
-      </Layout>
-    </UserEarnProvider>
-  )
+  return <MainAppRoutes />
 }
 
 function App() {

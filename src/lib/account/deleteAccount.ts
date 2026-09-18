@@ -1,4 +1,4 @@
-import { supabase, tracking, giveaways } from '../supabase'
+import { isSupabaseConfigured, supabase, tracking, giveaways } from '../supabase'
 
 /** Keys the web app may still write locally (cache / legacy). Cleared on delete. */
 export const WEB_LOCAL_DATA_KEYS = [
@@ -10,6 +10,7 @@ export const WEB_LOCAL_DATA_KEYS = [
   'loonie_vault_v1',
   'looniewins_autofill',
   'looniewins_settings',
+  'looniewins_contest_entries',
 ] as const
 
 export interface DeleteAccountResult {
@@ -66,6 +67,7 @@ export async function exportAccountData(): Promise<Record<string, unknown>> {
   }
 
   try {
+    if (!supabase || !isSupabaseConfigured) return out
     const { data: sessionData } = await supabase.auth.getSession()
     const user = sessionData.session?.user
     if (!user) return out
@@ -105,6 +107,7 @@ export async function downloadWebDataExport(): Promise<void> {
 }
 
 async function wipeUserRowsFallback(userId: string): Promise<void> {
+  if (!supabase) return
   await Promise.all([
     tracking().from('contest_entries').delete().eq('user_id', userId),
     tracking().from('transactions').delete().eq('user_id', userId),
@@ -123,20 +126,22 @@ export async function deleteAccountAndLocalData(): Promise<DeleteAccountResult> 
   let remoteError: string | undefined
 
   try {
-    const { data } = await supabase.auth.getSession()
-    const session = data.session
-    hadSession = Boolean(session?.user)
+    if (supabase && isSupabaseConfigured) {
+      const { data } = await supabase.auth.getSession()
+      const session = data.session
+      hadSession = Boolean(session?.user)
 
-    if (hadSession && session?.user?.id) {
-      const userId = session.user.id
-      const { error: rpcError } = await supabase.rpc('delete_own_account')
-      if (rpcError) {
-        remoteError = rpcError.message
-        await wipeUserRowsFallback(userId)
-        await supabase.auth.signOut()
-      } else {
-        deletedRemoteAccount = true
-        await supabase.auth.signOut()
+      if (hadSession && session?.user?.id) {
+        const userId = session.user.id
+        const { error: rpcError } = await supabase.rpc('delete_own_account')
+        if (rpcError) {
+          remoteError = rpcError.message
+          await wipeUserRowsFallback(userId)
+          await supabase.auth.signOut()
+        } else {
+          deletedRemoteAccount = true
+          await supabase.auth.signOut()
+        }
       }
     }
   } catch (err) {
