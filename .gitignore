@@ -1,0 +1,6 @@
+
+.env
+.env.local
+mobile/.env
+
+node_modules/

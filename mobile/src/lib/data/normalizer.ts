@@ -101,7 +101,7 @@ const DATE_PREFIX =
 
 function extractExpiryDate(
   contentText: string,
-  postedAtIso: string | undefined
+  _postedAtIso: string | undefined
 ): { expiryDate?: string; is_estimated_expiry: boolean } {
   const text = contentText.replace(/\s+/g, ' ').trim()
   const now = new Date()
@@ -227,7 +227,13 @@ export function normalizeJsonItem(item: Rss2JsonItem, source: Source, index: num
   const title = cleanTitle(item.title)
   const body = [item.description ?? '', item.content ?? ''].join(' ')
   const { tags, restrictions } = autoCategorize(item.title, body)
-  const { eligibility, eligibilityUnverified, requirements } = scanForMetadata(item.title, body)
+  const scanned = scanForMetadata(item.title, body)
+  let eligibility = scanned.eligibility
+  let eligibilityUnverified = scanned.eligibilityUnverified
+  if (eligibility === 'Unknown' && (source.country === 'CA' || source.country === 'US')) {
+    eligibility = source.country
+    eligibilityUnverified = true
+  }
   const imageUrl = extractImageFromJsonItem(item, body) ?? SOURCE_FALLBACK_IMAGES[source.id]
   const id = `${source.id}-${index}-${item.link.slice(-50).replace(/\W/g, '')}`
   const postedAtIso = parseDate(item.pubDate)
@@ -248,7 +254,7 @@ export function normalizeJsonItem(item: Rss2JsonItem, source: Source, index: num
     restrictions,
     eligibility,
     eligibilityUnverified,
-    requirements,
+    requirements: scanned.requirements,
   }
 }
 
@@ -256,7 +262,13 @@ export function normalizeXmlItem(item: RawFeedItem, source: Source, index: numbe
   const title = cleanTitle(item.title)
   const body = [item.description ?? '', item.contentEncoded ?? '', item.content ?? ''].join(' ')
   const { tags, restrictions } = autoCategorize(item.title, body)
-  const { eligibility, eligibilityUnverified, requirements } = scanForMetadata(item.title, body)
+  const scanned = scanForMetadata(item.title, body)
+  let eligibility = scanned.eligibility
+  let eligibilityUnverified = scanned.eligibilityUnverified
+  if (eligibility === 'Unknown' && (source.country === 'CA' || source.country === 'US')) {
+    eligibility = source.country
+    eligibilityUnverified = true
+  }
   const imageUrl = extractImage(item) ?? SOURCE_FALLBACK_IMAGES[source.id]
   const id = `${source.id}-${index}-${item.link.slice(-50).replace(/\W/g, '')}`
   const postedAtIso = parseDate(item.pubDate)
@@ -277,6 +289,6 @@ export function normalizeXmlItem(item: RawFeedItem, source: Source, index: numbe
     restrictions,
     eligibility,
     eligibilityUnverified,
-    requirements,
+    requirements: scanned.requirements,
   }
 }

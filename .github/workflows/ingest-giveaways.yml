@@ -1,0 +1,27 @@
+# Continuously refresh the giveaway Hive Mind via the ingest Edge Function.
+# Set repository secrets: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY (or ANON key if function allows).
+name: Ingest giveaways
+
+on:
+  schedule:
+    - cron: '*/30 * * * *'
+  workflow_dispatch:
+
+jobs:
+  ingest:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger ingest-giveaways
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_SERVICE_ROLE_KEY" ]; then
+            echo "Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY secrets — skip."
+            exit 0
+          fi
+          curl -sS -X POST "${SUPABASE_URL}/functions/v1/ingest-giveaways" \
+            -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
+            -H "Content-Type: application/json" \
+            -d '{}' | tee /tmp/ingest.json
+          python3 -c "import json; d=json.load(open('/tmp/ingest.json')); print('upserted', d.get('upserted'), 'ok', d.get('ok')); raise SystemExit(0 if d.get('ok') else 1)"
