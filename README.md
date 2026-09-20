@@ -26,7 +26,7 @@ Canonical inventory: `src/lib/data/sources.ts` (mirrored in `mobile/`).
 - Explicit `country: 'CA' | 'US' | 'BOTH'`
 - `enabled` flag + optional `includeKeywords`, `fetchStrategy: 'rss2json_first'`
 - Purchase / buy-to-enter tagging via `tagger.ts` (+ source `defaultRequirements` for purchase-category feeds)
-- Curated daily/brand promos (Tims, McD Monopoly, Scene+, PCH, RAM hub, …): `src/lib/data/seasonalPromos.ts`
+- Curated daily/brand promos (Tims, McD, Scene+, PCH, OEM/Nike/telecom hubs, …): `src/lib/data/seasonalPromos.ts`
 
 ### Active pools (high level)
 
