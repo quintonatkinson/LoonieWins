@@ -5,12 +5,19 @@ import type { Contest } from '../lib/rssFetcher'
 import { useUserLimits } from '../hooks/useUserLimits'
 import { useUserEarn } from '../contexts/UserEarnContext'
 import SubscriptionModal from './SubscriptionModal'
+import AgeGateModal from './AgeGateModal'
 import CountdownTimer from './CountdownTimer'
 import { daysLeftUntilExpiry } from '../lib/utils/expiryDate'
 import {
   badgeToneClass,
   getRequirementBadges,
 } from '../lib/utils/requirementBadges'
+import {
+  contestRequiresAgeGate,
+  loadAgeConfirmed,
+  saveAgeConfirmed,
+} from '../lib/utils/ageGate'
+import { formatEntriesToday } from '../hooks/useContestSocialProof'
 
 interface ContestCardProps {
   contest: Contest
@@ -21,6 +28,10 @@ interface ContestCardProps {
   variant: 'routine' | 'feed' | 'ended'
   daysLeft?: number | null
   entered?: boolean
+  /** Anonymized entries today for this contest (from Hive Mind aggregate) */
+  entriesToday?: number | null
+  /** Persist age confirm to profile.settings when user confirms */
+  onAgeConfirmed?: () => void
 }
 
 export default function ContestCard({
@@ -31,6 +42,8 @@ export default function ContestCard({
   variant,
   daysLeft: daysLeftProp,
   entered = false,
+  entriesToday = null,
+  onAgeConfirmed,
 }: ContestCardProps) {
   const navigate = useNavigate()
   const {
@@ -48,10 +61,12 @@ export default function ContestCard({
 
   const [showInsufficient, setShowInsufficient] = useState(false)
   const [showSubscription, setShowSubscription] = useState(false)
+  const [showAgeGate, setShowAgeGate] = useState(false)
   const [toast, setToast] = useState(false)
   const { upgradeToPro } = useUserEarn()
 
   const daysLeft = daysLeftProp ?? daysLeftUntilExpiry(contest.expiryDate)
+  const socialLabel = formatEntriesToday(entriesToday)
 
   useEffect(() => {
     if (!toast) return
@@ -67,6 +82,14 @@ export default function ContestCard({
     onOpenOverlay(contest)
   }, [contest, onOneTapEnter, onOpenOverlay])
 
+  const openEntryWithAgeGate = useCallback(() => {
+    if (contestRequiresAgeGate(contest) && !loadAgeConfirmed()) {
+      setShowAgeGate(true)
+      return
+    }
+    openEntry()
+  }, [contest, openEntry])
+
   const handleEnter = useCallback(() => {
     if (contest.id === '__offline_alert__') return
     if (variant === 'ended') {
@@ -78,12 +101,12 @@ export default function ContestCard({
       return
     }
     if (hasUnlimitedEntries) {
-      openEntry()
+      openEntryWithAgeGate()
       return
     }
     if (canEnterFree) {
       // Open first so guest/demo never blocks on bookkeeping
-      openEntry()
+      openEntryWithAgeGate()
       try {
         void useFreeEntry()
       } catch (_) {}
@@ -91,7 +114,7 @@ export default function ContestCard({
     }
     if (weeklyLimitReached && userIsFree) {
       if (balance >= entryCostPts && spendPointsForEntry()) {
-        openEntry()
+        openEntryWithAgeGate()
         setToast(true)
       } else {
         setShowInsufficient(true)
@@ -99,7 +122,7 @@ export default function ContestCard({
       return
     }
     // Fallback: never dead-end the Enter CTA
-    openEntry()
+    openEntryWithAgeGate()
   }, [
     contest,
     variant,
@@ -111,7 +134,7 @@ export default function ContestCard({
     entryCostPts,
     spendPointsForEntry,
     useFreeEntry,
-    openEntry,
+    openEntryWithAgeGate,
   ])
 
   const showUnlock =
@@ -219,6 +242,20 @@ export default function ContestCard({
     />
   )
 
+  const ageGateModal = (
+    <AgeGateModal
+      open={showAgeGate}
+      contestTitle={contest.title}
+      onCancel={() => setShowAgeGate(false)}
+      onConfirm={() => {
+        saveAgeConfirmed(true)
+        onAgeConfirmed?.()
+        setShowAgeGate(false)
+        openEntry()
+      }}
+    />
+  )
+
   const overlayPortal = (el: ReactNode) =>
     typeof document !== 'undefined' && el ? createPortal(el, document.body) : null
 
@@ -239,8 +276,8 @@ export default function ContestCard({
           <button type="button" onClick={handleEnter} className="text-left flex flex-col gap-2 flex-1">
             <div className="flex flex-wrap gap-1">
               {reqBadges
-                .filter((b) => b.costly)
-                .slice(0, 1)
+                .filter((b) => b.costly || b.kind === 'age')
+                .slice(0, 2)
                 .map((b) => (
                   <span
                     key={b.kind}
@@ -252,6 +289,9 @@ export default function ContestCard({
               {contest.expiryDate && <CountdownTimer targetDate={contest.expiryDate} />}
             </div>
             <span className="font-semibold text-gray-50 line-clamp-2 text-sm leading-tight">{contest.title}</span>
+            {socialLabel && (
+              <span className="text-[10px] text-gray-500">{socialLabel}</span>
+            )}
             <span
               className={`mt-auto w-full py-2.5 rounded-lg font-semibold text-sm text-center ${
                 showUnlock ? 'bg-amber-500/20 text-amber-400 border border-amber-500/40' : 'bg-win text-on-win'
@@ -282,6 +322,7 @@ export default function ContestCard({
         {toastEl}
         {insufficientEl}
         {subscriptionModal}
+        {ageGateModal}
       </>
     )
   }
@@ -298,7 +339,7 @@ export default function ContestCard({
               </span>
             )}
             {reqBadges
-              .filter((b) => b.costly)
+              .filter((b) => b.costly || b.kind === 'age')
               .map((b) => (
                 <span
                   key={b.kind}
@@ -325,6 +366,11 @@ export default function ContestCard({
                 {daysLeft}d left
               </span>
             ) : null}
+            {socialLabel && (
+              <span className="text-gray-500" title="Anonymized Hive Mind count">
+                {socialLabel}
+              </span>
+            )}
             <span
               className={`rounded-full px-2 py-0.5 text-xs font-medium shrink-0 ${
                 elig === 'US' ? 'bg-red-500/20 text-red-400 border border-red-500/40' :
@@ -385,6 +431,7 @@ export default function ContestCard({
       {overlayPortal(toastEl)}
       {overlayPortal(insufficientEl)}
       {overlayPortal(subscriptionModal)}
+      {overlayPortal(ageGateModal)}
     </>
   )
 }

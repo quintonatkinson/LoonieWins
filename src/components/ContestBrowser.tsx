@@ -8,10 +8,17 @@ import type { AutoFillData } from '../types/profile'
 import { daysLeftUntilExpiry } from '../lib/utils/expiryDate'
 import { shareContest } from '../lib/utils/shareContest'
 import CountdownTimer from './CountdownTimer'
+import AgeGateModal from './AgeGateModal'
 import {
   badgeToneClass,
   getRequirementBadges,
 } from '../lib/utils/requirementBadges'
+import {
+  contestRequiresAgeGate,
+  loadAgeConfirmed,
+  saveAgeConfirmed,
+} from '../lib/utils/ageGate'
+import { formatEntriesToday } from '../hooks/useContestSocialProof'
 
 interface ContestBrowserProps {
   contest: Contest | null
@@ -25,6 +32,9 @@ interface ContestBrowserProps {
   smartFillsRemaining?: number | null
   /** When true, returning from Open & Enter auto-marks entered (with brief undo). */
   autoMarkOnReturn?: boolean
+  /** Anonymized entries today */
+  entriesToday?: number | null
+  onAgeConfirmed?: () => void
 }
 
 const DEFAULT_AUTOFILL: AutoFillData = {
@@ -132,6 +142,8 @@ export default function ContestBrowser({
   smartFillBlocked = false,
   smartFillsRemaining = null,
   autoMarkOnReturn = false,
+  entriesToday = null,
+  onAgeConfirmed,
 }: ContestBrowserProps) {
   const [resolvedUrl, setResolvedUrl] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
@@ -141,6 +153,8 @@ export default function ContestBrowser({
   const [pendingMark, setPendingMark] = useState(false)
   const [statusMsg, setStatusMsg] = useState<string | null>(null)
   const [awaitingReturn, setAwaitingReturn] = useState(false)
+  const [showAgeGate, setShowAgeGate] = useState(false)
+  const [pendingAgeAction, setPendingAgeAction] = useState<'enter' | 'mark-entered' | 'mark-submitted' | null>(null)
   const iframeRef = useRef<HTMLIFrameElement>(null)
   const isNativeRef = useRef<boolean | null>(null)
   const iframeLoadTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -175,6 +189,11 @@ export default function ContestBrowser({
   const confirmMark = useCallback(
     async (status: 'entered' | 'submitted' = 'entered') => {
       if (!contest || !onMarkEntered) return
+      if (contestRequiresAgeGate(contest) && !loadAgeConfirmed()) {
+        setPendingAgeAction(status === 'submitted' ? 'mark-submitted' : 'mark-entered')
+        setShowAgeGate(true)
+        return
+      }
       await onMarkEntered(contest, status)
       setPendingMark(false)
       setAwaitingReturn(false)
@@ -248,6 +267,11 @@ export default function ContestBrowser({
 
   const handleEnterContest = useCallback(() => {
     if (!resolvedUrl) return
+    if (contest && contestRequiresAgeGate(contest) && !loadAgeConfirmed()) {
+      setPendingAgeAction('enter')
+      setShowAgeGate(true)
+      return
+    }
     skipReturnOnceRef.current = true
     openNativeWebView(resolvedUrl).then((opened) => {
       if (!opened) {
@@ -260,7 +284,51 @@ export default function ContestBrowser({
         }
       }
     })
-  }, [resolvedUrl, openNativeWebView, onMarkEntered, autoMarkOnReturn])
+  }, [resolvedUrl, openNativeWebView, onMarkEntered, autoMarkOnReturn, contest])
+
+  const handleAgeConfirm = useCallback(() => {
+    saveAgeConfirmed(true)
+    onAgeConfirmed?.()
+    setShowAgeGate(false)
+    const action = pendingAgeAction
+    setPendingAgeAction(null)
+    if (action === 'enter') {
+      // Re-run enter without age check (now confirmed)
+      if (!resolvedUrl) return
+      skipReturnOnceRef.current = true
+      void openNativeWebView(resolvedUrl).then((opened) => {
+        if (!opened) {
+          window.open(resolvedUrl, '_blank', 'noopener,noreferrer')
+          if (autoMarkOnReturn && onMarkEntered) {
+            setAwaitingReturn(true)
+            setStatusMsg('Opened — marking entered when you return')
+          } else if (onMarkEntered) {
+            setPendingMark(true)
+          }
+        }
+      })
+      return
+    }
+    if (action === 'mark-entered' || action === 'mark-submitted') {
+      void (async () => {
+        if (!contest || !onMarkEntered) return
+        await onMarkEntered(contest, action === 'mark-submitted' ? 'submitted' : 'entered')
+        setPendingMark(false)
+        setAwaitingReturn(false)
+        setStatusMsg(action === 'mark-submitted' ? 'Marked as submitted' : 'Marked as entered')
+        setTimeout(() => onClose(), 450)
+      })()
+    }
+  }, [
+    pendingAgeAction,
+    resolvedUrl,
+    openNativeWebView,
+    autoMarkOnReturn,
+    onMarkEntered,
+    contest,
+    onClose,
+    onAgeConfirmed,
+  ])
 
   const handleEnterAndTrack = useCallback(() => {
     handleEnterContest()
@@ -313,6 +381,7 @@ export default function ContestBrowser({
 
   const daysLeft = daysLeftUntilExpiry(contest?.expiryDate)
   const reqBadges = contest ? getRequirementBadges(contest) : []
+  const socialLabel = formatEntriesToday(entriesToday)
 
   if (!open) return null
 
@@ -342,6 +411,11 @@ export default function ContestBrowser({
               ) : daysLeft != null ? (
                 <span>{daysLeft > 0 ? `${daysLeft} days left` : 'Ended'}</span>
               ) : null}
+              {socialLabel && (
+                <span className="text-white/50 text-xs" title="Anonymized Hive Mind count">
+                  {socialLabel}
+                </span>
+              )}
             </div>
             {reqBadges.length > 0 && (
               <div className="flex flex-wrap gap-1.5 mt-2">
@@ -578,6 +652,15 @@ export default function ContestBrowser({
           </div>
         )}
       </div>
+      <AgeGateModal
+        open={showAgeGate}
+        contestTitle={contest?.title}
+        onCancel={() => {
+          setShowAgeGate(false)
+          setPendingAgeAction(null)
+        }}
+        onConfirm={handleAgeConfirm}
+      />
     </>
   )
 }

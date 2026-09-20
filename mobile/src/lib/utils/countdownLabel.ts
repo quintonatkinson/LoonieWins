@@ -37,12 +37,16 @@ function preciseFromMs(ms: number): string {
 }
 
 /** Same calendar day as expiry end (America/Toronto) → ending tonight. */
-function endsTonight(dateStr: string, now = new Date()): boolean {
+export function isEndingTonight(dateStr: string, now = new Date()): boolean {
   const end = toExpiryEndOfDay(dateStr)
   if (Number.isNaN(end.getTime())) return false
   const endDay = end.toLocaleDateString('en-CA', { timeZone: 'America/Toronto' })
   const nowDay = now.toLocaleDateString('en-CA', { timeZone: 'America/Toronto' })
   return endDay === nowDay && end.getTime() > now.getTime()
+}
+
+function endsTonight(dateStr: string, now = new Date()): boolean {
+  return isEndingTonight(dateStr, now)
 }
 
 export function getCountdownLabel(dateStr: string): CountdownLabel {

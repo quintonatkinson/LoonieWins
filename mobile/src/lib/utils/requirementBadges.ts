@@ -12,6 +12,7 @@ export type RequirementBadgeKind =
   | 'social'
   | 'newsletter'
   | 'math'
+  | 'age'
   | 'easy'
 
 export interface RequirementBadge {
@@ -60,6 +61,9 @@ export function getRequirementBadges(contest: Contest): RequirementBadge[] {
   }
   if ((contest.tags ?? []).some((t) => /math/i.test(t))) {
     badges.push({ kind: 'math', label: 'Math / skill test', icon: '🧠', costly: false })
+  }
+  if ((contest.tags ?? []).some((t) => /\b18\+|\b21\+|age of majority/i.test(t))) {
+    badges.push({ kind: 'age', label: '18+', icon: '🔞', costly: false })
   }
 
   if (badges.length === 0) {

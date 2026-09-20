@@ -12,6 +12,7 @@ export type RequirementBadgeKind =
   | 'social'
   | 'newsletter'
   | 'math'
+  | 'age'
   | 'easy'
 
 export interface RequirementBadge {
@@ -61,6 +62,9 @@ export function getRequirementBadges(contest: Contest): RequirementBadge[] {
   if ((contest.tags ?? []).some((t) => /math/i.test(t))) {
     badges.push({ kind: 'math', label: 'Math / skill test', icon: '🧠', costly: false })
   }
+  if ((contest.tags ?? []).some((t) => /\b18\+|\b21\+|age of majority/i.test(t))) {
+    badges.push({ kind: 'age', label: '18+', icon: '🔞', costly: false })
+  }
 
   if (badges.length === 0) {
     badges.push({ kind: 'easy', label: 'Easy entry', icon: '⚡', costly: false })
@@ -77,6 +81,9 @@ export function hasCostlyRequirement(contest: Contest): boolean {
 export function badgeToneClass(badge: RequirementBadge): string {
   if (badge.kind === 'purchase') {
     return 'bg-amber-500/25 text-amber-300 border-amber-500/50'
+  }
+  if (badge.kind === 'age') {
+    return 'bg-rose-500/25 text-rose-300 border-rose-500/50'
   }
   if (badge.costly) {
     return 'bg-orange-500/20 text-orange-300 border-orange-500/40'

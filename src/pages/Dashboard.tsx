@@ -10,6 +10,7 @@ import SubscriptionModal from '../components/SubscriptionModal'
 import { useContestPipeline } from '../hooks/useContestPipeline'
 import { useContestEntries } from '../hooks/useContestEntries'
 import { useUserLimits } from '../hooks/useUserLimits'
+import { useContestSocialProof } from '../hooks/useContestSocialProof'
 import { useAuth } from '../contexts/AuthContext'
 import { useUserEarn } from '../contexts/UserEarnContext'
 import type { AutoFillData } from '../types/profile'
@@ -20,13 +21,18 @@ import {
   compareExpiryAscending,
   daysLeftUntilExpiry,
 } from '../lib/utils/expiryDate'
+import { isEndingTonight } from '../lib/utils/countdownLabel'
+import { isDeadLink } from '../lib/utils/linkHealth'
+import { saveAgeConfirmed } from '../lib/utils/ageGate'
 import {
   loadHomeMode,
-  loadQuebecSafe,
+  loadAutoAdvance,
   resolveInitialGeo,
+  resolveInitialQuebecSafe,
   saveGeoFilter,
   saveHomeMode,
   saveQuebecSafe,
+  saveAutoAdvance,
   type HomeMode,
 } from '../lib/utils/feedPrefs'
 import { searchHiveMind } from '../hooks/useContestVault'
@@ -34,6 +40,18 @@ import { shareContest } from '../lib/utils/shareContest'
 import type { GeoFilterValue } from '../components/CountryToggle'
 
 type SortFilter = 'high-value' | 'ending-soon' | 'best-odds' | 'most-popular'
+
+const NEW_RAIL_MS = 48 * 60 * 60 * 1000
+const FREE_RAIL_TEASER = 2
+const PRO_RAIL_LIMIT = 12
+
+function compareCreatedDescending(a?: string | null, b?: string | null): number {
+  const ta = a ? Date.parse(a) : Number.NaN
+  const tb = b ? Date.parse(b) : Number.NaN
+  const va = Number.isFinite(ta) ? ta : 0
+  const vb = Number.isFinite(tb) ? tb : 0
+  return vb - va
+}
 
 /** Filter by tag or requirement — matches contest.tags or contest.requirements */
 const TAG_REQ_FILTERS: { key: string; label: string; match: (c: Contest) => boolean }[] = [
@@ -79,14 +97,22 @@ export default function Dashboard() {
   const { liveContests, isScanning, isSyncingCloud, isFinished, offlineMode, phaseMessage, refetch } = pipeline
   const { profile, updateProfile } = useAuth()
   const { enteredIds, markEntered: persistEntered } = useContestEntries()
-  const { smartFillsBlocked, smartFillsUnlimited, smartFillsRemaining } = useUserLimits()
+  const { smartFillsBlocked, smartFillsUnlimited, smartFillsRemaining, hasNewEndingRails } =
+    useUserLimits()
   const [showSmartFillPaywall, setShowSmartFillPaywall] = useState(false)
+  const [showRailsPaywall, setShowRailsPaywall] = useState(false)
   const { upgradeToPro } = useUserEarn()
+  const social = useContestSocialProof()
 
   const [search, setSearch] = useState('')
   const [sortFilter, setSortFilter] = useState<SortFilter | null>('ending-soon')
   const [hideEntered, setHideEntered] = useState(true)
-  const [quebecSafe, setQuebecSafe] = useState(() => loadQuebecSafe(false))
+  const [quebecSafe, setQuebecSafe] = useState(() =>
+    resolveInitialQuebecSafe({
+      province: profile?.auto_fill_data?.province,
+      settingsQuebecSafe: profile?.settings?.quebecSafe,
+    })
+  )
   const [tagFilters, setTagFilters] = useState<Set<string>>(new Set())
   const [geoFilter, setGeoFilter] = useState<GeoFilterValue>(() =>
     resolveInitialGeo({
@@ -95,6 +121,7 @@ export default function Dashboard() {
     })
   )
   const [homeMode, setHomeMode] = useState<HomeMode>(() => loadHomeMode('routine'))
+  const [autoAdvance, setAutoAdvance] = useState(() => loadAutoAdvance(true))
   const [visibleCount, setVisibleCount] = useState(75)
   const sentinelRef = useRef<HTMLDivElement | null>(null)
   const [overlayContest, setOverlayContest] = useState<Contest | null>(null)
@@ -104,8 +131,11 @@ export default function Dashboard() {
   const [statusToast, setStatusToast] = useState<string | null>(null)
   const pendingAutoMarkRef = useRef<Contest | null>(null)
   const skipAutoMarkOnceRef = useRef(false)
+  const enterNextQueueRef = useRef<Contest[]>([])
+  const autoAdvanceRef = useRef(autoAdvance)
+  const homeModeRef = useRef(homeMode)
 
-  // Re-resolve geo once when profile loads if user never saved a preference
+  // Re-resolve geo + Québec-safe once when profile loads if user never saved a preference
   const geoBootstrapped = useRef(false)
   useEffect(() => {
     if (geoBootstrapped.current) return
@@ -124,7 +154,33 @@ export default function Dashboard() {
       }
       return fromProfile
     })
-  }, [profile])
+    const qc = resolveInitialQuebecSafe({
+      province: profile.auto_fill_data?.province,
+      settingsQuebecSafe: profile.settings?.quebecSafe,
+    })
+    setQuebecSafe((prev) => {
+      try {
+        const saved = localStorage.getItem('looniewins_quebec_safe')
+        if (saved === '1' || saved === '0' || saved === 'true' || saved === 'false') return prev
+      } catch {
+        /* ignore */
+      }
+      if (qc) {
+        saveQuebecSafe(true)
+        void updateProfile({
+          settings: { ...(profile.settings ?? {}), quebecSafe: true },
+        })
+      }
+      return qc
+    })
+  }, [profile, updateProfile])
+
+  useEffect(() => {
+    autoAdvanceRef.current = autoAdvance
+  }, [autoAdvance])
+  useEffect(() => {
+    homeModeRef.current = homeMode
+  }, [homeMode])
 
   useEffect(() => {
     const sync = () => setLocalAutoFill(loadAutoFillData())
@@ -164,12 +220,31 @@ export default function Dashboard() {
     return localAutoFill
   }, [profile, localAutoFill])
 
+  const oneTapEnterRef = useRef<(contest: Contest) => Promise<void>>(async () => {})
+
   const markEntered = useCallback(
     (contest: Contest, status: 'entered' | 'submitted' = 'entered') => {
       void persistEntered(contest, status)
+      void social.refresh()
+      // Enter-next auto-advance: after mark, open the next queued contest
+      if (homeModeRef.current !== 'routine' || !autoAdvanceRef.current) return
+      const queue = enterNextQueueRef.current
+      const next = queue.find((c) => c.id !== contest.id)
+      if (!next) return
+      window.setTimeout(() => {
+        setStatusToast('Next up — opening next contest')
+        void oneTapEnterRef.current(next)
+      }, 600)
     },
-    [persistEntered]
+    [persistEntered, social]
   )
+
+  const handleAgeConfirmed = useCallback(() => {
+    saveAgeConfirmed(true)
+    void updateProfile({
+      settings: { ...(profile?.settings ?? {}), ageConfirmed: true },
+    })
+  }, [profile, updateProfile])
 
   const handleAutoFillUsed = useCallback(() => {
     void (async () => {
@@ -212,7 +287,10 @@ export default function Dashboard() {
   const handleQuebecSafeChange = useCallback((next: boolean) => {
     setQuebecSafe(next)
     saveQuebecSafe(next)
-  }, [])
+    void updateProfile({
+      settings: { ...(profile?.settings ?? {}), quebecSafe: next },
+    })
+  }, [profile, updateProfile])
 
   const handleHomeModeChange = useCallback((mode: HomeMode) => {
     setHomeMode(mode)
@@ -247,6 +325,12 @@ export default function Dashboard() {
     },
     []
   )
+  oneTapEnterRef.current = oneTapEnter
+
+  const handleAutoAdvanceChange = useCallback((next: boolean) => {
+    setAutoAdvance(next)
+    saveAutoAdvance(next)
+  }, [])
 
   // Auto-mark when user returns to the tab after one-tap Enter
   useEffect(() => {
@@ -308,6 +392,7 @@ export default function Dashboard() {
 
   const filterContest = useCallback(
     (c: Contest, opts?: { ignoreEntered?: boolean }) => {
+      if (isDeadLink(c)) return false
       if (!opts?.ignoreEntered && hideEntered && enteredIds.has(c.id)) return false
       if (quebecSafe && c.restrictions?.includes('no_quebec')) return false
       if (!passesGeo(c, geoFilter)) return false
@@ -328,7 +413,15 @@ export default function Dashboard() {
 
   const sortFeed = useCallback(
     (list: Contest[]) => {
-      if (sortFilter === 'high-value' || sortFilter === 'most-popular') {
+      if (sortFilter === 'most-popular') {
+        return [...list].sort((a, b) => {
+          const ca = social.countFor(a.id)
+          const cb = social.countFor(b.id)
+          if (cb !== ca) return cb - ca
+          return (b.prizeValue ?? 0) - (a.prizeValue ?? 0)
+        })
+      }
+      if (sortFilter === 'high-value') {
         return [...list].sort((a, b) => (b.prizeValue ?? 0) - (a.prizeValue ?? 0))
       }
       if (sortFilter === 'ending-soon') {
@@ -336,29 +429,62 @@ export default function Dashboard() {
       }
       return list
     },
-    [sortFilter]
+    [sortFilter, social]
   )
 
-  /** Enter-next queue: not-yet-entered, Quebec/geo aware, ending soon first */
+  /** Enter-next queue: not-yet-entered, Quebec/geo aware, ending soon first; bury dead links */
   const enterNextQueue = useMemo(() => {
     const base = liveContests.filter(
       (c) =>
         !enteredIds.has(c.id) &&
         c.id !== '__offline_alert__' &&
+        !isDeadLink(c) &&
         passesGeo(c, geoFilter) &&
         !(quebecSafe && c.restrictions?.includes('no_quebec'))
     )
     return [...base].sort((a, b) => compareExpiryAscending(a.expiryDate, b.expiryDate)).slice(0, 25)
   }, [liveContests, enteredIds, geoFilter, quebecSafe])
 
+  useEffect(() => {
+    enterNextQueueRef.current = enterNextQueue
+  }, [enterNextQueue])
+
   const nextContest = enterNextQueue[0] ?? null
 
+  const railBase = useMemo(() => {
+    return liveContests.filter(
+      (c) =>
+        c.id !== '__offline_alert__' &&
+        !isDeadLink(c) &&
+        passesGeo(c, geoFilter) &&
+        !(quebecSafe && c.restrictions?.includes('no_quebec'))
+    )
+  }, [liveContests, geoFilter, quebecSafe])
+
+  const newRail = useMemo(() => {
+    const cutoff = Date.now() - NEW_RAIL_MS
+    return [...railBase]
+      .filter((c) => {
+        if (!c.createdAt) return false
+        const t = Date.parse(c.createdAt)
+        return Number.isFinite(t) && t >= cutoff
+      })
+      .sort((a, b) => compareCreatedDescending(a.createdAt, b.createdAt))
+      .slice(0, PRO_RAIL_LIMIT)
+  }, [railBase])
+
+  const endingRail = useMemo(() => {
+    return [...railBase]
+      .filter((c) => c.expiryDate && isEndingTonight(c.expiryDate))
+      .sort((a, b) => compareExpiryAscending(a.expiryDate, b.expiryDate))
+      .slice(0, PRO_RAIL_LIMIT)
+  }, [railBase])
+
   const routineContests = useMemo(() => {
-    // Prefer queued "enter next" cards when in routine mode; else previously entered
     if (homeMode === 'routine') {
       return enterNextQueue.slice(0, 10)
     }
-    return liveContests.filter((c) => enteredIds.has(c.id)).slice(0, 10)
+    return liveContests.filter((c) => enteredIds.has(c.id) && !isDeadLink(c)).slice(0, 10)
   }, [homeMode, enterNextQueue, liveContests, enteredIds])
 
   let feedContests = liveContests.filter((c) => filterContest(c))
@@ -368,7 +494,12 @@ export default function Dashboard() {
     if (!search.trim() || hiveResults.length === 0) return []
     const liveIds = new Set(liveContests.map((c) => c.id))
     const liveUrls = new Set(liveContests.map((c) => c.url.toLowerCase()))
-    return hiveResults.filter((c) => !liveIds.has(c.id) && !liveUrls.has(c.url.toLowerCase()))
+    return hiveResults.filter(
+      (c) =>
+        !isDeadLink(c) &&
+        !liveIds.has(c.id) &&
+        !liveUrls.has(c.url.toLowerCase())
+    )
   }, [search, hiveResults, liveContests])
 
   const daysLeft = (c: Contest) => daysLeftUntilExpiry(c.expiryDate)
@@ -394,6 +525,43 @@ export default function Dashboard() {
     obs.observe(sentinel)
     return () => obs.disconnect()
   }, [hasMore, feedContests.length])
+
+  const renderRailCards = (list: Contest[], locked: boolean) => {
+    const shown = locked ? list.slice(0, FREE_RAIL_TEASER) : list
+    if (shown.length === 0) {
+      return <p className="text-gray-500 text-sm py-3">Nothing here right now.</p>
+    }
+    return (
+      <div className={`flex gap-4 overflow-x-auto pb-2 -mx-4 px-4 ${locked ? 'opacity-60' : ''}`}>
+        {shown.map((c) => (
+          <ContestCard
+            key={c.id}
+            contest={c}
+            onOpenOverlay={locked ? () => setShowRailsPaywall(true) : setOverlayContest}
+            onOneTapEnter={
+              locked ? () => setShowRailsPaywall(true) : (contest) => void oneTapEnter(contest)
+            }
+            onShare={locked ? undefined : (contest) => void handleShare(contest)}
+            variant="routine"
+            entered={enteredIds.has(c.id)}
+            entriesToday={social.countFor(c.id)}
+            onAgeConfirmed={handleAgeConfirmed}
+          />
+        ))}
+        {locked && (
+          <button
+            type="button"
+            onClick={() => setShowRailsPaywall(true)}
+            className="shrink-0 w-44 rounded-xl border border-amber-500/40 bg-amber-500/10 p-4 text-left flex flex-col gap-2"
+          >
+            <span className="text-amber-300 text-xs font-bold uppercase">Pro</span>
+            <span className="text-sm text-gray-50 font-semibold">Unlock full New & Ending rails</span>
+            <span className="text-[11px] text-gray-400">Free shows a teaser only</span>
+          </button>
+        )}
+      </div>
+    )
+  }
 
   return (
     <div className="flex flex-col bg-gray-900">
@@ -452,6 +620,12 @@ export default function Dashboard() {
         ))}
       </div>
 
+      {social.hiveLabel && (
+        <p className="px-4 pb-1 text-xs text-gray-500" title="Anonymized Hive Mind count — no usernames">
+          {social.hiveLabel} across LoonieWins
+        </p>
+      )}
+
       {/* Enter Next / Daily Routine */}
       <section className="px-4 pt-2">
         <div className="flex items-center justify-between gap-2 mb-3">
@@ -460,7 +634,18 @@ export default function Dashboard() {
             {homeMode === 'routine' ? 'Enter next' : 'Your Daily Routine'}
           </h2>
           {homeMode === 'routine' && (
-            <span className="text-xs text-gray-500">{enterNextQueue.length} in queue</span>
+            <div className="flex items-center gap-3">
+              <label className="flex items-center gap-1.5 text-[11px] text-gray-500 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={autoAdvance}
+                  onChange={(e) => handleAutoAdvanceChange(e.target.checked)}
+                  className="rounded border-gray-600"
+                />
+                Auto-next
+              </label>
+              <span className="text-xs text-gray-500">{enterNextQueue.length} in queue</span>
+            </div>
           )}
         </div>
 
@@ -474,6 +659,7 @@ export default function Dashboard() {
             <span className="line-clamp-2 text-left">{nextContest.title}</span>
             <span className="text-xs font-medium opacity-70">
               Opens contest · marks entered when you return
+              {autoAdvance ? ' · then auto-advances' : ''}
             </span>
           </button>
         )}
@@ -495,9 +681,39 @@ export default function Dashboard() {
                 onShare={(contest) => void handleShare(contest)}
                 variant="routine"
                 entered={enteredIds.has(c.id)}
+                entriesToday={social.countFor(c.id)}
+                onAgeConfirmed={handleAgeConfirmed}
               />
             ))
           )}
+        </div>
+      </section>
+
+      {/* Pro-gated New / Ending rails */}
+      <section className="px-4 pt-4 space-y-4">
+        <div>
+          <div className="flex items-center justify-between gap-2 mb-2">
+            <h2 className="text-sm font-bold text-gray-50">
+              New{' '}
+              {!hasNewEndingRails && (
+                <span className="text-[10px] font-semibold uppercase text-amber-400 ml-1">Pro</span>
+              )}
+            </h2>
+            <span className="text-[11px] text-gray-500">Last 48h</span>
+          </div>
+          {renderRailCards(newRail, !hasNewEndingRails)}
+        </div>
+        <div>
+          <div className="flex items-center justify-between gap-2 mb-2">
+            <h2 className="text-sm font-bold text-gray-50">
+              Ending tonight{' '}
+              {!hasNewEndingRails && (
+                <span className="text-[10px] font-semibold uppercase text-amber-400 ml-1">Pro</span>
+              )}
+            </h2>
+            <span className="text-[11px] text-gray-500">Toronto day</span>
+          </div>
+          {renderRailCards(endingRail, !hasNewEndingRails)}
         </div>
       </section>
 
@@ -684,6 +900,8 @@ export default function Dashboard() {
                       variant="feed"
                       daysLeft={daysLeft(c)}
                       entered={enteredIds.has(c.id)}
+                      entriesToday={social.countFor(c.id)}
+                      onAgeConfirmed={handleAgeConfirmed}
                     />
                   ))}
                 </ul>
@@ -697,7 +915,7 @@ export default function Dashboard() {
               <div className="mt-8">
                 <h3 className="text-sm font-bold text-gray-50 mb-2">Hive Mind history</h3>
                 <p className="text-xs text-gray-500 mb-3">
-                  Matches from vault / Supabase outside the current live session list.
+                  Matches from vault / Supabase outside the current live session list. Dead links are buried.
                 </p>
                 <ul className="space-y-2 opacity-90">
                   {hiveOnly.map((c) => (
@@ -710,6 +928,8 @@ export default function Dashboard() {
                       variant="feed"
                       daysLeft={daysLeft(c)}
                       entered={enteredIds.has(c.id)}
+                      entriesToday={social.countFor(c.id)}
+                      onAgeConfirmed={handleAgeConfirmed}
                     />
                   ))}
                 </ul>
@@ -737,12 +957,21 @@ export default function Dashboard() {
         smartFillBlocked={smartFillsBlocked}
         smartFillsRemaining={smartFillsUnlimited ? null : smartFillsRemaining}
         autoMarkOnReturn
+        entriesToday={overlayContest ? social.countFor(overlayContest.id) : null}
+        onAgeConfirmed={handleAgeConfirmed}
       />
 
       <SubscriptionModal
-        open={showSmartFillPaywall}
-        onClose={() => setShowSmartFillPaywall(false)}
-        onSelectPlan={(planId) => void upgradeToPro(planId)}
+        open={showSmartFillPaywall || showRailsPaywall}
+        onClose={() => {
+          setShowSmartFillPaywall(false)
+          setShowRailsPaywall(false)
+        }}
+        onSelectPlan={(planId) => {
+          void upgradeToPro(planId)
+          setShowSmartFillPaywall(false)
+          setShowRailsPaywall(false)
+        }}
         showComparison
       />
     </div>

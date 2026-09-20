@@ -519,6 +519,9 @@ export default function Profile() {
                       const next = !quebecSafe
                       setQuebecSafe(next)
                       saveQuebecSafe(next)
+                      void updateProfile({
+                        settings: { ...(profile?.settings ?? {}), quebecSafe: next },
+                      })
                     }}
                     className={`relative w-11 h-6 rounded-full transition-colors ${
                       quebecSafe ? 'bg-win' : 'bg-gray-600'
@@ -559,7 +562,8 @@ export default function Profile() {
                   </div>
                 </div>
                 <p className="text-xs text-gray-500">
-                  Also available on Home. Province in Smart-Fill sets the default geo filter when none is saved.
+                  Also available on Home. Province in Smart-Fill sets the default geo filter and turns
+                  Québec-safe on when province is QC. Auto-next advances the Enter queue after mark entered.
                 </p>
               </div>
             )}
