@@ -531,8 +531,27 @@ export default function Dashboard() {
 
   const renderRailCards = (list: Contest[], locked: boolean) => {
     const shown = locked ? list.slice(0, FREE_RAIL_TEASER) : list
+    const unlockCard = locked ? (
+      <button
+        type="button"
+        onClick={() => setShowRailsPaywall(true)}
+        className="shrink-0 w-44 rounded-xl border border-amber-500/40 bg-amber-500/10 p-4 text-left flex flex-col gap-2"
+      >
+        <span className="text-amber-300 text-xs font-bold uppercase">Pro</span>
+        <span className="text-sm text-gray-50 font-semibold">Unlock full New & Ending rails</span>
+        <span className="text-[11px] text-gray-400">
+          {shown.length === 0 ? 'Pro unlocks New + Ending Tonight' : 'Free shows a teaser only'}
+        </span>
+      </button>
+    ) : null
+
     if (shown.length === 0) {
-      return <p className="text-gray-500 text-sm py-3">Nothing here right now.</p>
+      return (
+        <div className="flex gap-4 items-start pb-2">
+          <p className="text-gray-500 text-sm py-3 flex-1">Nothing here right now.</p>
+          {unlockCard}
+        </div>
+      )
     }
     return (
       <div className={`flex gap-4 overflow-x-auto pb-2 -mx-4 px-4 ${locked ? 'opacity-60' : ''}`}>
@@ -551,17 +570,7 @@ export default function Dashboard() {
             onAgeConfirmed={handleAgeConfirmed}
           />
         ))}
-        {locked && (
-          <button
-            type="button"
-            onClick={() => setShowRailsPaywall(true)}
-            className="shrink-0 w-44 rounded-xl border border-amber-500/40 bg-amber-500/10 p-4 text-left flex flex-col gap-2"
-          >
-            <span className="text-amber-300 text-xs font-bold uppercase">Pro</span>
-            <span className="text-sm text-gray-50 font-semibold">Unlock full New & Ending rails</span>
-            <span className="text-[11px] text-gray-400">Free shows a teaser only</span>
-          </button>
-        )}
+        {unlockCard}
       </div>
     )
   }
