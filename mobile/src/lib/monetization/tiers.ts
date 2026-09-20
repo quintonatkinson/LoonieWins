@@ -41,6 +41,21 @@ export const PRO_LOCKED_FEATURES = [
     title: 'Priority ending-tonight push',
     detail: 'Higher-urgency alerts when contests expire tonight',
   },
+  {
+    id: 'hide_earn_ads',
+    title: 'Ad-free Earn page',
+    detail: 'Hide promotional slots on Earn — keep the offerwall when you want pts',
+  },
+  {
+    id: 'export_csv',
+    title: 'Export Applied Contests CSV',
+    detail: 'Download your tracked entries as a spreadsheet-ready CSV',
+  },
+  {
+    id: 'multi_device_sync',
+    title: 'Priority multi-device sync',
+    detail: 'Signed-in Pro keeps Applied Contests & prefs synced across devices first',
+  },
 ] as const
 
 export type SubscriptionTier = 'free' | 'weekly' | 'monthly'
@@ -52,8 +67,23 @@ export type PaywallFeatureFlag =
   | 'unlimited_smart_fills'
   | 'priority_sources'
   | 'new_ending_rails'
+  | 'hide_earn_ads'
+  | 'export_csv'
+  | 'multi_device_sync'
 
 export type FeatureFlags = Partial<Record<PaywallFeatureFlag, boolean>>
+
+const PRO_AUTO_FLAGS: PaywallFeatureFlag[] = [
+  'unlimited_entries',
+  'extra_smart_fills',
+  'unlimited_smart_fills',
+  'higher_entry_caps',
+  'priority_sources',
+  'new_ending_rails',
+  'hide_earn_ads',
+  'export_csv',
+  'multi_device_sync',
+]
 
 export function isProTier(
   tier: SubscriptionTier | string | null | undefined,
@@ -68,17 +98,8 @@ export function hasFeature(
   flag: PaywallFeatureFlag,
   opts?: { tier?: SubscriptionTier | string | null; isPremium?: boolean }
 ): boolean {
-  if (isProTier(opts?.tier, opts?.isPremium)) {
-    if (
-      flag === 'unlimited_entries' ||
-      flag === 'extra_smart_fills' ||
-      flag === 'unlimited_smart_fills' ||
-      flag === 'higher_entry_caps' ||
-      flag === 'priority_sources' ||
-      flag === 'new_ending_rails'
-    ) {
-      return true
-    }
+  if (isProTier(opts?.tier, opts?.isPremium) && PRO_AUTO_FLAGS.includes(flag)) {
+    return true
   }
   return Boolean(flags?.[flag])
 }
@@ -124,8 +145,10 @@ export const FREE_TIER_PERKS = [
   'Extra entries: prize-tiered pts (75 Tims → 1000 vehicle)',
   `${FREE_SMART_FILLS_DEFAULT} Smart-Fills (then Pro)`,
   'Earn pts via AdGem offers / rewarded path',
+  'Earn page may show promo slots',
   'Standard push alerts',
   'Main Opportunity feed only',
+  'JSON account export (CSV of Applied Contests is Pro)',
 ] as const
 
 export const PRO_TIER_PERKS = [

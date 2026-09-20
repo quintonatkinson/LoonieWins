@@ -198,6 +198,36 @@ export default function SettingsScreen({ onClose }: SettingsScreenProps) {
           PREFERENCES
         </Text>
 
+        <View
+          style={{
+            backgroundColor: '#14532d33',
+            borderRadius: 12,
+            padding: 12,
+            borderWidth: 1,
+            borderColor: accentColor + '55',
+            marginBottom: 12,
+          }}
+        >
+          <Text style={{ color: '#fff', fontWeight: '700', fontSize: 13 }}>Your feed fingerprint</Text>
+          <Text style={{ color: '#9ca3af', fontSize: 12, marginTop: 4 }}>
+            {[
+              prefs.hidePurchaseRequired ? 'Hide purchase' : null,
+              prefs.hideAdult ? 'Hide 18+' : prefs.adultAlwaysConfirm ? 'Always confirm 18+' : null,
+              prefs.cardDensity === 'compact' ? 'Compact' : null,
+              prefs.sortDefault !== 'ending-soon'
+                ? `Sort: ${SORT_DEFAULT_OPTIONS.find((o) => o.key === prefs.sortDefault)?.label ?? prefs.sortDefault}`
+                : null,
+              prefs.openContestsIn === 'browser' ? 'System browser' : null,
+              quebecSafe ? 'Québec-safe' : null,
+            ]
+              .filter(Boolean)
+              .join(' · ') || 'Defaults — tweak filters below to make Home yours.'}
+          </Text>
+        </View>
+
+        <Text style={{ color: accentColor, fontSize: 11, fontWeight: '700', marginBottom: 6 }}>
+          FEED FILTERS
+        </Text>
         <PrefSwitch
           label="Québec-safe"
           hint="Hide contests that exclude Quebec"
@@ -235,6 +265,9 @@ export default function SettingsScreen({ onClose }: SettingsScreenProps) {
           />
         ) : null}
 
+        <Text style={{ color: accentColor, fontSize: 11, fontWeight: '700', marginTop: 4, marginBottom: 6 }}>
+          LAYOUT & SORT
+        </Text>
         <Text style={{ color: '#9ca3af', fontSize: 12, marginTop: 4, marginBottom: 6 }}>
           Card density
         </Text>
@@ -299,6 +332,9 @@ export default function SettingsScreen({ onClose }: SettingsScreenProps) {
           ))}
         </View>
 
+        <Text style={{ color: accentColor, fontSize: 11, fontWeight: '700', marginTop: 4, marginBottom: 6 }}>
+          HOW CONTESTS OPEN
+        </Text>
         <Text style={{ color: '#9ca3af', fontSize: 12, marginBottom: 6 }}>Open contests in</Text>
         <View style={{ flexDirection: 'row', gap: 8, marginBottom: 16 }}>
           {(

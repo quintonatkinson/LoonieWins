@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import {
   loadHomeMode,
@@ -12,6 +12,7 @@ import {
   saveFeedDisplayPrefsLocal,
   withFeedDisplayPrefs,
   SORT_DEFAULT_OPTIONS,
+  DEFAULT_FEED_DISPLAY_PREFS,
   type CardDensity,
   type FeedDisplayPrefs,
   type OpenContestsIn,
@@ -31,7 +32,7 @@ function SwitchRow({
   onChange: () => void
 }) {
   return (
-    <label className="flex items-center justify-between gap-3 pt-3">
+    <label className="flex items-center justify-between gap-3 pt-2">
       <span className="text-sm text-gray-200">
         {label}
         <span className="block text-xs text-gray-500">{hint}</span>
@@ -55,6 +56,36 @@ function SwitchRow({
   )
 }
 
+function SectionLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <p className="text-[11px] font-semibold uppercase tracking-wider text-win/90 pt-3 first:pt-1">
+      {children}
+    </p>
+  )
+}
+
+function countCustomizations(
+  prefs: FeedDisplayPrefs,
+  quebecSafe: boolean,
+  homeMode: HomeMode
+): string[] {
+  const chips: string[] = []
+  if (prefs.hidePurchaseRequired) chips.push('Hide purchase')
+  if (prefs.hideAdult) chips.push('Hide 18+')
+  else if (prefs.adultAlwaysConfirm) chips.push('Always confirm 18+')
+  if (prefs.cardDensity !== DEFAULT_FEED_DISPLAY_PREFS.cardDensity) chips.push('Compact')
+  if (prefs.sortDefault !== DEFAULT_FEED_DISPLAY_PREFS.sortDefault) {
+    const label = SORT_DEFAULT_OPTIONS.find((o) => o.key === prefs.sortDefault)?.label
+    chips.push(label ? `Sort: ${label}` : 'Custom sort')
+  }
+  if (prefs.openContestsIn !== DEFAULT_FEED_DISPLAY_PREFS.openContestsIn) {
+    chips.push(prefs.openContestsIn === 'browser' ? 'System browser' : 'In-app browser')
+  }
+  if (quebecSafe) chips.push('Québec-safe')
+  if (homeMode !== 'routine') chips.push('Browse home')
+  return chips
+}
+
 /**
  * Profile → Preferences: feed filters, density, sort, open-in, Québec-safe, home mode, referral.
  */
@@ -69,6 +100,11 @@ export default function DisplayPreferences() {
     setPrefs(resolveFeedDisplayPrefs({ settings: profile?.settings }))
   }, [profile?.settings])
 
+  const chips = useMemo(
+    () => countCustomizations(prefs, quebecSafe, homeMode),
+    [prefs, quebecSafe, homeMode]
+  )
+
   const patchPref = (patch: Partial<FeedDisplayPrefs>) => {
     setPrefs((prev) => ({ ...prev, ...patch }))
     saveFeedDisplayPrefsLocal(patch)
@@ -78,7 +114,29 @@ export default function DisplayPreferences() {
   }
 
   return (
-    <div className="px-4 pb-4 space-y-3 border-t border-gray-600/40 bg-gray-900/40">
+    <div className="px-4 pb-4 space-y-1 border-t border-gray-600/40 bg-gray-900/40">
+      <div className="rounded-xl border border-win/25 bg-win/5 p-3 mt-3">
+        <p className="text-sm font-semibold text-white">Your feed fingerprint</p>
+        <p className="text-xs text-gray-400 mt-0.5">
+          {chips.length === 0
+            ? 'Defaults — tweak filters & layout below to make Home yours.'
+            : `${chips.length} custom touch${chips.length === 1 ? '' : 'es'} active`}
+        </p>
+        {chips.length > 0 && (
+          <div className="flex flex-wrap gap-1.5 mt-2">
+            {chips.map((c) => (
+              <span
+                key={c}
+                className="px-2 py-0.5 rounded-md text-[11px] font-medium bg-win/15 text-win border border-win/30"
+              >
+                {c}
+              </span>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <SectionLabel>Feed filters</SectionLabel>
       <SwitchRow
         label="Québec-safe"
         hint="Hide contests that exclude Quebec"
@@ -113,6 +171,7 @@ export default function DisplayPreferences() {
         />
       )}
 
+      <SectionLabel>Layout & sort</SectionLabel>
       <div>
         <p className="text-sm text-gray-200 mb-2 pt-1">Card density</p>
         <div className="flex gap-2">
@@ -139,7 +198,7 @@ export default function DisplayPreferences() {
       </div>
 
       <div>
-        <p className="text-sm text-gray-200 mb-2">Default sort</p>
+        <p className="text-sm text-gray-200 mb-2 pt-2">Default sort</p>
         <div className="flex flex-wrap gap-2">
           {SORT_DEFAULT_OPTIONS.map(({ key, label }) => (
             <button
@@ -158,9 +217,9 @@ export default function DisplayPreferences() {
         </div>
       </div>
 
+      <SectionLabel>How contests open</SectionLabel>
       <div>
-        <p className="text-sm text-gray-200 mb-2">Open contests in</p>
-        <div className="flex gap-2">
+        <div className="flex gap-2 pt-1">
           {(
             [
               ['webview', 'In-app browser'],
@@ -186,42 +245,42 @@ export default function DisplayPreferences() {
         </p>
       </div>
 
-      <div>
-        <p className="text-sm text-gray-200 mb-2">Home screen</p>
-        <div className="flex gap-2">
-          {(
-            [
-              ['routine', 'Daily Routine'],
-              ['browse', 'Browse all'],
-            ] as const
-          ).map(([key, label]) => (
-            <button
-              key={key}
-              type="button"
-              onClick={() => {
-                setHomeMode(key)
-                saveHomeMode(key)
-              }}
-              className={`flex-1 py-2 rounded-lg text-xs font-semibold ${
-                homeMode === key
-                  ? 'bg-win text-on-win'
-                  : 'bg-gray-800 text-gray-400 border border-gray-600/50'
-              }`}
-            >
-              {label}
-            </button>
-          ))}
+      <SectionLabel>Home screen</SectionLabel>
+      <div className="flex gap-2 pt-1">
+        {(
+          [
+            ['routine', 'Daily Routine'],
+            ['browse', 'Browse all'],
+          ] as const
+        ).map(([key, label]) => (
+          <button
+            key={key}
+            type="button"
+            onClick={() => {
+              setHomeMode(key)
+              saveHomeMode(key)
+            }}
+            className={`flex-1 py-2 rounded-lg text-xs font-semibold ${
+              homeMode === key
+                ? 'bg-win text-on-win'
+                : 'bg-gray-800 text-gray-400 border border-gray-600/50'
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      <div className="pt-3 border-t border-gray-600/40 mt-2">
+        <SectionLabel>Invite friends</SectionLabel>
+        <div className="pt-1">
+          <ReferralInviteCard compact />
         </div>
       </div>
 
-      <div className="pt-2 border-t border-gray-600/40">
-        <p className="text-sm text-gray-200 mb-1">Invite friends</p>
-        <ReferralInviteCard compact />
-      </div>
-
-      <p className="text-xs text-gray-500">
+      <p className="text-xs text-gray-500 pt-2">
         Prefs sync to your account when signed in and stick in local storage for guests. Appearance
-        accents stay under Appearance above.
+        accents stay under Appearance above. Quiet hours live under Notifications.
       </p>
     </div>
   )
