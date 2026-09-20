@@ -22,6 +22,7 @@ import { useContestEntries, type ContestEntryStatus } from '../hooks/useContestE
 import { useUserLimits } from '../hooks/useUserLimits'
 import SubscriptionModal from '../components/SubscriptionModal'
 import NotificationPreferences from '../components/NotificationPreferences'
+import AccentPicker from '../components/AccentPicker'
 import type { AutoFillData } from '../types/profile'
 import { downloadWebDataExport, deleteAccountAndLocalData } from '../lib/account/deleteAccount'
 import { SUPPORT_EMAIL } from '../lib/legal/constants'
@@ -234,7 +235,7 @@ export default function Profile() {
             <button
               type="button"
               onClick={() => setShowPlanModal(true)}
-              className="shrink-0 flex items-center gap-2 px-4 py-2.5 rounded-lg bg-win text-gray-900 font-semibold text-sm hover:opacity-90 transition-opacity"
+              className="shrink-0 flex items-center gap-2 px-4 py-2.5 rounded-lg bg-win text-on-win font-semibold text-sm hover:opacity-90 transition-opacity"
             >
               <Crown className="w-4 h-4" />
               Upgrade to Pro
@@ -285,7 +286,7 @@ export default function Profile() {
               onClick={() => setEntryFilter(key)}
               className={`px-3 py-1 rounded-full text-xs font-medium border ${
                 entryFilter === key
-                  ? 'bg-win text-gray-900 border-win'
+                  ? 'bg-win text-on-win border-win'
                   : 'border-gray-600/50 text-gray-400'
               }`}
             >
@@ -430,7 +431,7 @@ export default function Profile() {
               <button
                 type="button"
                 onClick={() => void saveAutoFill()}
-                className="flex-1 py-2.5 rounded-lg bg-win text-gray-900 font-semibold text-sm"
+                className="flex-1 py-2.5 rounded-lg bg-win text-on-win font-semibold text-sm"
               >
                 Save
               </button>
@@ -479,6 +480,12 @@ export default function Profile() {
       </section>
 
       <NotificationPreferences />
+
+      {/* Appearance – accent themes */}
+      <section className="rounded-xl bg-gray-800/80 border border-gray-600/50 p-4">
+        <h2 className="text-sm font-semibold text-white uppercase tracking-wide mb-3">Appearance</h2>
+        <AccentPicker />
+      </section>
 
       <section>
         <h2 className="text-sm font-semibold text-white uppercase tracking-wide mb-3">Settings</h2>
@@ -542,7 +549,7 @@ export default function Profile() {
                         }}
                         className={`flex-1 py-2 rounded-lg text-xs font-semibold ${
                           homeMode === key
-                            ? 'bg-win text-gray-900'
+                            ? 'bg-win text-on-win'
                             : 'bg-gray-800 text-gray-400 border border-gray-600/50'
                         }`}
                       >

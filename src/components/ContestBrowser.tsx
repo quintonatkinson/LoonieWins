@@ -458,7 +458,7 @@ export default function ContestBrowser({
                     <button
                       type="button"
                       onClick={handleEnterContest}
-                      className="shrink-0 px-3 py-1.5 rounded-lg bg-win text-slate-950 font-semibold text-xs"
+                      className="shrink-0 px-3 py-1.5 rounded-lg bg-win text-on-win font-semibold text-xs"
                     >
                       Open in Browser
                     </button>
@@ -470,7 +470,7 @@ export default function ContestBrowser({
                   className={`absolute bottom-16 right-4 px-4 py-2 rounded-xl font-semibold shadow-lg hover:opacity-90 ${
                     smartFillBlocked
                       ? 'bg-amber-500/20 text-amber-400 border border-amber-500/40'
-                      : 'bg-win text-slate-950'
+                      : 'bg-win text-on-win'
                   }`}
                 >
                   {smartFillBlocked
@@ -502,7 +502,7 @@ export default function ContestBrowser({
                   <button
                     type="button"
                     onClick={() => void confirmMark('entered')}
-                    className="flex-1 py-2 rounded-lg bg-win text-gray-900 font-semibold text-sm"
+                    className="flex-1 py-2 rounded-lg bg-win text-on-win font-semibold text-sm"
                   >
                     Yes — Mark Entered
                   </button>
@@ -527,7 +527,7 @@ export default function ContestBrowser({
               <button
                 type="button"
                 onClick={handleEnterAndTrack}
-                className="flex-1 py-2.5 rounded-lg bg-win text-gray-900 font-semibold hover:opacity-90"
+                className="flex-1 py-2.5 rounded-lg bg-win text-on-win font-semibold hover:opacity-90"
               >
                 Open & Enter
               </button>

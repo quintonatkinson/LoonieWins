@@ -16,9 +16,11 @@ import { resolveContestUrl } from '../lib/rssFetcher'
 import ContestCard from '../components/ContestCard'
 import CountryToggle from '../components/CountryToggle'
 import RadarLoader from '../components/RadarLoader'
+import AccentPicker from '../components/AccentPicker'
 import { useContestPipeline } from '../hooks/useContestPipeline'
 import { useContestEntries } from '../hooks/useContestEntries'
 import { useAuth } from '../contexts/AuthContext'
+import { useTheme } from '../contexts/ThemeContext'
 import { compareExpiryAscending, daysLeftUntilExpiry } from '../lib/utils/expiryDate'
 import {
   loadHomeMode,
@@ -82,6 +84,7 @@ interface DashboardProps {
 }
 
 export default function Dashboard({ onOpenOverlay, onPressUrl, enteredIds: enteredIdsProp }: DashboardProps) {
+  const { accentColor } = useTheme()
   const pipeline = useContestPipeline()
   const { liveContests, isScanning, isSyncingCloud, isFinished, offlineMode, phaseMessage, refetch } = pipeline
   const { profile, updateProfile } = useAuth()
@@ -301,6 +304,12 @@ export default function Dashboard({ onOpenOverlay, onPressUrl, enteredIds: enter
       )}
       {!showFullRadar && (
         <>
+          <View className="px-4 pt-3 pb-2">
+            <Text className="text-xs font-semibold text-white uppercase tracking-wide mb-2">
+              Appearance
+            </Text>
+            <AccentPicker />
+          </View>
           <View className="px-4 pt-3 pb-2 flex-row flex-wrap gap-2 items-center">
             <CountryToggle value={geoFilter} onChange={handleGeoChange} />
             <TouchableOpacity
@@ -311,7 +320,7 @@ export default function Dashboard({ onOpenOverlay, onPressUrl, enteredIds: enter
               }}
               className={`px-4 py-2 rounded-full border ${quebecSafe ? 'bg-win border-win' : 'bg-surface border-gray-600/50'}`}
             >
-              <Text className={`text-sm font-medium ${quebecSafe ? 'text-gray-900' : 'text-gray-300'}`}>
+              <Text className={`text-sm font-medium ${quebecSafe ? 'text-on-win' : 'text-gray-300'}`}>
                 Québec-safe
               </Text>
             </TouchableOpacity>
@@ -328,7 +337,7 @@ export default function Dashboard({ onOpenOverlay, onPressUrl, enteredIds: enter
                 className={`flex-1 py-2 rounded-xl ${homeMode === key ? 'bg-win' : 'bg-surface border border-gray-600/50'}`}
               >
                 <Text
-                  className={`text-center text-sm font-semibold ${homeMode === key ? 'text-gray-900' : 'text-gray-400'}`}
+                  className={`text-center text-sm font-semibold ${homeMode === key ? 'text-on-win' : 'text-gray-400'}`}
                 >
                   {key === 'routine' ? 'Daily Routine' : 'Browse all'}
                 </Text>
@@ -347,11 +356,11 @@ export default function Dashboard({ onOpenOverlay, onPressUrl, enteredIds: enter
                 className="mb-3 px-4 py-3.5 rounded-xl bg-win"
                 activeOpacity={0.85}
               >
-                <Text className="text-[10px] uppercase text-gray-900/70 font-bold">Enter next</Text>
-                <Text className="text-gray-900 font-bold text-sm mt-1" numberOfLines={2}>
+                <Text className="text-[10px] uppercase text-on-win/70 font-bold">Enter next</Text>
+                <Text className="text-on-win font-bold text-sm mt-1" numberOfLines={2}>
                   {nextContest.title}
                 </Text>
-                <Text className="text-xs text-gray-900/70 mt-1">
+                <Text className="text-xs text-on-win/70 mt-1">
                   Opens contest · marks entered when you return
                 </Text>
               </TouchableOpacity>
@@ -408,7 +417,7 @@ export default function Dashboard({ onOpenOverlay, onPressUrl, enteredIds: enter
                     onPress={() => setSortFilter(active ? null : key)}
                     className={`px-4 py-2 rounded-full ${active ? 'bg-win' : 'bg-surface border border-gray-600/50'}`}
                   >
-                    <Text className={`text-sm font-medium ${active ? 'text-gray-900' : 'text-gray-300'}`}>
+                    <Text className={`text-sm font-medium ${active ? 'text-on-win' : 'text-gray-300'}`}>
                       {label}
                     </Text>
                   </TouchableOpacity>
@@ -443,7 +452,7 @@ export default function Dashboard({ onOpenOverlay, onPressUrl, enteredIds: enter
                     }}
                     className={`px-3 py-1.5 rounded-full ${active ? 'bg-win' : 'bg-surface border border-gray-600/50'}`}
                   >
-                    <Text className={`text-xs font-medium ${active ? 'text-gray-900' : 'text-gray-400'}`}>
+                    <Text className={`text-xs font-medium ${active ? 'text-on-win' : 'text-gray-400'}`}>
                       {label}
                     </Text>
                   </TouchableOpacity>
@@ -484,7 +493,7 @@ export default function Dashboard({ onOpenOverlay, onPressUrl, enteredIds: enter
       )}
       {statusToast && (
         <View className="mx-4 mb-2 px-3 py-2 rounded-lg bg-win self-center">
-          <Text className="text-gray-900 text-sm font-medium text-center">{statusToast}</Text>
+          <Text className="text-on-win text-sm font-medium text-center">{statusToast}</Text>
         </View>
       )}
     </>
@@ -495,7 +504,7 @@ export default function Dashboard({ onOpenOverlay, onPressUrl, enteredIds: enter
       <ScrollView
         className="flex-1 bg-gray-900"
         contentContainerStyle={{ flexGrow: 1 }}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#39FF14" />}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={accentColor} />}
       >
         {listHeader}
         {isSyncingCloud ? (
@@ -521,7 +530,7 @@ export default function Dashboard({ onOpenOverlay, onPressUrl, enteredIds: enter
         keyExtractor={keyExtractor}
         ListHeaderComponent={listHeader}
         contentContainerStyle={{ paddingBottom: 96 }}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#39FF14" />}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={accentColor} />}
         ListFooterComponent={
           !isFinished && homeMode === 'browse' ? (
             <View className="py-4">

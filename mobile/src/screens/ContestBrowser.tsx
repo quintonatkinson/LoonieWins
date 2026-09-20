@@ -15,6 +15,7 @@ import {
   profileHasAutofill,
   type AutofillReport,
 } from '../lib/autofill/assassin'
+import { useTheme } from '../contexts/ThemeContext'
 import type { AutoFillData } from '../types/profile'
 import type { Contest } from '../lib/rssFetcher'
 
@@ -181,6 +182,7 @@ export default function ContestBrowser({
   onMarkEntered,
   onAutoFillUsed,
 }: ContestBrowserProps) {
+  const { accentColor } = useTheme()
   const webRef = useRef<WebView>(null)
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
@@ -276,7 +278,7 @@ export default function ContestBrowser({
             className="px-3 py-2 rounded-lg bg-win"
             activeOpacity={0.8}
           >
-            <Text className="text-gray-900 font-semibold text-xs">Auto-Fill</Text>
+            <Text className="text-on-win font-semibold text-xs">Auto-Fill</Text>
           </TouchableOpacity>
         </View>
 
@@ -338,7 +340,7 @@ export default function ContestBrowser({
             startInLoadingState
             renderLoading={() => (
               <View className="absolute inset-0 items-center justify-center bg-gray-900">
-                <ActivityIndicator size="large" color="#39FF14" />
+                <ActivityIndicator size="large" color={accentColor} />
                 <Text className="mt-3 text-gray-400">Loading contest…</Text>
               </View>
             )}
@@ -362,7 +364,7 @@ export default function ContestBrowser({
                   className="flex-1 py-2.5 rounded-lg bg-win items-center"
                   activeOpacity={0.85}
                 >
-                  <Text className="text-gray-900 font-semibold text-sm">Yes — Mark Entered</Text>
+                  <Text className="text-on-win font-semibold text-sm">Yes — Mark Entered</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   onPress={() => void confirmMark('submitted')}
@@ -385,7 +387,7 @@ export default function ContestBrowser({
                 className="flex-1 py-2.5 rounded-lg bg-win items-center"
                 activeOpacity={0.85}
               >
-                <Text className="text-gray-900 font-semibold text-sm">Mark Entered</Text>
+                <Text className="text-on-win font-semibold text-sm">Mark Entered</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 onPress={() => void confirmMark('submitted')}

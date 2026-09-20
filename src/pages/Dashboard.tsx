@@ -547,7 +547,7 @@ export default function Dashboard() {
             onClick={() => setSortFilter(sortFilter === key ? null : key)}
             className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
               sortFilter === key
-                ? 'bg-win text-gray-900'
+                ? 'bg-win text-on-win'
                 : 'bg-surface border border-gray-600/50 text-gray-300 hover:text-gray-50'
             }`}
           >
@@ -592,7 +592,7 @@ export default function Dashboard() {
             }}
             className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
               tagFilters.has(key)
-                ? 'bg-win text-gray-900'
+                ? 'bg-win text-on-win'
                 : 'bg-surface border border-gray-600/50 text-gray-400 hover:text-gray-50'
             }`}
           >
@@ -655,7 +655,7 @@ export default function Dashboard() {
                 <button
                   type="button"
                   onClick={refetch}
-                  className="px-5 py-2.5 rounded-lg bg-win text-gray-900 font-semibold"
+                  className="px-5 py-2.5 rounded-lg bg-win text-on-win font-semibold"
                 >
                   Retry Fetch
                 </button>
@@ -666,7 +666,7 @@ export default function Dashboard() {
                 <button
                   type="button"
                   onClick={() => { setTagFilters(new Set()); setSearch('') }}
-                  className="px-5 py-2.5 rounded-lg bg-win text-gray-900 font-semibold"
+                  className="px-5 py-2.5 rounded-lg bg-win text-on-win font-semibold"
                 >
                   Clear filters
                 </button>
