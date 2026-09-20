@@ -23,24 +23,24 @@ const PUBLIC_PATHS = new Set(['/privacy', '/terms', '/support', '/delete-account
 function MainAppRoutes() {
   return (
     <ThemeProvider>
-    <UserEarnProvider>
-      <Layout>
-        <Routes>
-          <Route path="/" element={<Dashboard />} />
-          <Route path="/referrals" element={<Referrals />} />
-          <Route path="/earn" element={<Earn />} />
-          <Route path="/winners" element={<Winners />} />
-          <Route path="/past" element={<PastContests />} />
-          <Route path="/profile" element={<Profile />} />
-          <Route path="/submit" element={<SubmitContest />} />
-          <Route path="/moderate" element={<ModerateContests />} />
-          <Route path="/privacy" element={<Privacy />} />
-          <Route path="/terms" element={<Terms />} />
-          <Route path="/support" element={<Support />} />
-          <Route path="/delete-account" element={<DeleteAccount />} />
-        </Routes>
-      </Layout>
-    </UserEarnProvider>
+      <UserEarnProvider>
+        <Layout>
+          <Routes>
+            <Route path="/" element={<Dashboard />} />
+            <Route path="/referrals" element={<Referrals />} />
+            <Route path="/earn" element={<Earn />} />
+            <Route path="/winners" element={<Winners />} />
+            <Route path="/past" element={<PastContests />} />
+            <Route path="/profile" element={<Profile />} />
+            <Route path="/submit" element={<SubmitContest />} />
+            <Route path="/moderate" element={<ModerateContests />} />
+            <Route path="/privacy" element={<Privacy />} />
+            <Route path="/terms" element={<Terms />} />
+            <Route path="/support" element={<Support />} />
+            <Route path="/delete-account" element={<DeleteAccount />} />
+          </Routes>
+        </Layout>
+      </UserEarnProvider>
     </ThemeProvider>
   )
 }

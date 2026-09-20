@@ -589,7 +589,7 @@ export default function Dashboard() {
             onClick={() => handleQuebecSafeChange(!quebecSafe)}
             className={`px-4 py-2 rounded-full text-sm font-medium border transition-colors ${
               quebecSafe
-                ? 'bg-win text-gray-900 border-win'
+                ? 'bg-win text-on-win border-win'
                 : 'bg-surface border-gray-600/50 text-gray-300 hover:text-gray-50'
             }`}
             title="Hide contests that exclude Quebec"
@@ -620,7 +620,7 @@ export default function Dashboard() {
             onClick={() => handleHomeModeChange(key)}
             className={`flex-1 py-2 rounded-xl text-sm font-semibold transition-colors ${
               homeMode === key
-                ? 'bg-win text-gray-900'
+                ? 'bg-win text-on-win'
                 : 'bg-surface border border-gray-600/50 text-gray-400'
             }`}
           >
@@ -662,7 +662,7 @@ export default function Dashboard() {
           <button
             type="button"
             onClick={() => void oneTapEnter(nextContest)}
-            className="w-full mb-3 px-4 py-3.5 rounded-xl bg-win text-gray-900 font-bold text-sm flex flex-col items-start gap-1 hover:opacity-90"
+            className="w-full mb-3 px-4 py-3.5 rounded-xl bg-win text-on-win font-bold text-sm flex flex-col items-start gap-1 hover:opacity-90"
           >
             <span className="uppercase tracking-wide text-[10px] opacity-80">Enter next</span>
             <span className="line-clamp-2 text-left">{nextContest.title}</span>
@@ -951,7 +951,7 @@ export default function Dashboard() {
       </section>
 
       {statusToast && (
-        <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-50 max-w-sm px-4 py-2 rounded-lg bg-win text-gray-900 font-medium text-sm shadow-lg text-center">
+        <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-50 max-w-sm px-4 py-2 rounded-lg bg-win text-on-win font-medium text-sm shadow-lg text-center">
           {statusToast}
         </div>
       )}
