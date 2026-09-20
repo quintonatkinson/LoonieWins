@@ -1,6 +1,7 @@
 import { Routes, Route, useLocation } from 'react-router-dom'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
 import { UserEarnProvider } from './contexts/UserEarnContext'
+import { ThemeProvider } from './contexts/ThemeContext'
 import AuthScreen from './components/AuthScreen'
 import Layout from './components/Layout'
 import Dashboard from './pages/Dashboard'
@@ -21,6 +22,7 @@ const PUBLIC_PATHS = new Set(['/privacy', '/terms', '/support', '/delete-account
 
 function MainAppRoutes() {
   return (
+    <ThemeProvider>
     <UserEarnProvider>
       <Layout>
         <Routes>
@@ -39,6 +41,7 @@ function MainAppRoutes() {
         </Routes>
       </Layout>
     </UserEarnProvider>
+    </ThemeProvider>
   )
 }
 

@@ -181,7 +181,7 @@ export default function Referrals() {
           onChange={(e) => setInviteCode(e.target.value)}
           className="w-full px-4 py-2 rounded-lg bg-white/10 border border-white/20 text-white placeholder-white/50"
         />
-        <button type="submit" className="w-full py-2 rounded-lg bg-win text-slate-950 font-semibold">
+        <button type="submit" className="w-full py-2 rounded-lg bg-win text-on-win font-semibold">
           Claim signup bonus
         </button>
       </form>
@@ -203,7 +203,7 @@ export default function Referrals() {
           onChange={(e) => setNewTitle(e.target.value)}
           className="w-full px-4 py-2 rounded-lg bg-white/10 border border-white/20 text-white placeholder-white/50"
         />
-        <button type="submit" className="w-full py-2 rounded-lg bg-win text-slate-950 font-semibold">
+        <button type="submit" className="w-full py-2 rounded-lg bg-win text-on-win font-semibold">
           Add Link
         </button>
         {error && <p className="text-sm text-red-400">{error}</p>}
@@ -239,7 +239,7 @@ export default function Referrals() {
                   <button
                     type="button"
                     onClick={() => void handleClick(link)}
-                    className="px-4 py-2 rounded-lg bg-win text-slate-950 font-semibold text-sm"
+                    className="px-4 py-2 rounded-lg bg-win text-on-win font-semibold text-sm"
                   >
                     Click for points
                   </button>
