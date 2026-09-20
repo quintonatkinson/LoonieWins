@@ -1,5 +1,5 @@
-import { useState, useCallback } from 'react'
-import { View, Text, TouchableOpacity } from 'react-native'
+import { useCallback } from 'react'
+import { View, Text, TouchableOpacity, Alert } from 'react-native'
 import type { Contest } from '../lib/rssFetcher'
 import { useUserLimits } from '../hooks/useUserLimits'
 import CountdownTimer from './CountdownTimer'
@@ -15,6 +15,10 @@ interface ContestCardProps {
   onOneTapEnter?: (contest: Contest) => void
   onShare?: (contest: Contest) => void
   onPressUrl?: (url: string) => void
+  /** When capped without pts — navigate to Earn / offerwall if available */
+  onNeedEarn?: (entryCostPts: number) => void
+  /** Open Pro upgrade when user chooses subscribe path */
+  onNeedSubscribe?: () => void
   variant: 'routine' | 'feed' | 'ended'
   daysLeft?: number | null
   entered?: boolean
@@ -28,6 +32,8 @@ export default function ContestCard({
   onOneTapEnter,
   onShare,
   onPressUrl,
+  onNeedEarn,
+  onNeedSubscribe,
   variant,
   daysLeft: daysLeftProp,
   entered = false,
@@ -39,11 +45,15 @@ export default function ContestCard({
     canEnterFree,
     hasUnlimitedEntries,
     balance,
-    entryCostPts,
+    getEntryCost,
     spendPointsForEntry,
     useFreeEntry,
+    weeklyEntriesUsed,
+    weeklyEntryCap,
   } = useUserLimits()
 
+  const entryCostPts = getEntryCost(contest)
+  const canAffordEntry = balance >= entryCostPts
   const daysLeft = daysLeftProp ?? daysLeftUntilExpiry(contest.expiryDate)
   const reqBadges = getRequirementBadges(contest)
   const costly = hasCostlyRequirement(contest)
@@ -55,6 +65,30 @@ export default function ContestCard({
     }
     onOpenOverlay(contest)
   }, [contest, onOneTapEnter, onOpenOverlay])
+
+  const promptEarnOrSubscribe = useCallback(() => {
+    Alert.alert(
+      'Weekly free entries used',
+      `Free: ${weeklyEntriesUsed}/${weeklyEntryCap ?? '∞'} this week. This contest costs ${entryCostPts} pts (prize-tiered). You have ${balance} pts.\n\n1) Earn pts via offers\n2) Spend to enter\n3) Or go Pro to skip the grind`,
+      [
+        {
+          text: 'Earn pts',
+          onPress: () => onNeedEarn?.(entryCostPts),
+        },
+        ...(onNeedSubscribe
+          ? [{ text: 'Subscribe (Pro)', onPress: () => onNeedSubscribe() }]
+          : []),
+        { text: 'Cancel', style: 'cancel' as const },
+      ]
+    )
+  }, [
+    weeklyEntriesUsed,
+    weeklyEntryCap,
+    entryCostPts,
+    balance,
+    onNeedEarn,
+    onNeedSubscribe,
+  ])
 
   const handleEnter = useCallback(() => {
     if (contest.id === '__offline_alert__') return
@@ -71,7 +105,6 @@ export default function ContestCard({
       return
     }
     if (canEnterFree) {
-      // Open first so guest/demo never blocks on bookkeeping
       openEntry()
       try {
         void useFreeEntry()
@@ -79,9 +112,15 @@ export default function ContestCard({
       return
     }
     if (weeklyLimitReached && userIsFree) {
-      if (balance >= entryCostPts && spendPointsForEntry()) {
+      if (canAffordEntry && spendPointsForEntry(entryCostPts)) {
         openEntry()
+        return
       }
+      if (onNeedEarn && !canAffordEntry) {
+        onNeedEarn(entryCostPts)
+        return
+      }
+      promptEarnOrSubscribe()
       return
     }
     openEntry()
@@ -92,16 +131,22 @@ export default function ContestCard({
     canEnterFree,
     weeklyLimitReached,
     userIsFree,
-    balance,
+    canAffordEntry,
     entryCostPts,
     spendPointsForEntry,
     useFreeEntry,
     openEntry,
     onPressUrl,
+    onNeedEarn,
+    promptEarnOrSubscribe,
   ])
 
   const showUnlock =
     contest.id !== '__offline_alert__' && weeklyLimitReached && userIsFree && !hasUnlimitedEntries
+  const needEarnFirst = showUnlock && !canAffordEntry
+  const unlockLabel = needEarnFirst
+    ? `Earn ${entryCostPts} Pts`
+    : `UNLOCK (${entryCostPts} Pts)`
 
   const isLocked = contest.isLocked === true
   const elig = contest.eligibility ?? 'Unknown'
@@ -148,7 +193,7 @@ export default function ContestCard({
             <Text
               className={`text-center font-semibold text-sm ${showUnlock ? 'text-amber-400' : 'text-on-win'}`}
             >
-              {showUnlock ? `UNLOCK (${entryCostPts} Pts)` : isLocked ? 'View on RFD' : 'Enter'}
+              {showUnlock ? unlockLabel : isLocked ? 'View on RFD' : 'Enter'}
             </Text>
           </View>
         </TouchableOpacity>
@@ -269,7 +314,7 @@ export default function ContestCard({
             variant === 'ended' ? 'text-gray-400' : showUnlock ? 'text-amber-400' : 'text-on-win'
           }`}
         >
-          {variant === 'ended' ? 'Ended' : showUnlock ? `UNLOCK (${entryCostPts} Pts)` : isLocked ? 'View on RFD' : 'Enter'}
+          {variant === 'ended' ? 'Ended' : showUnlock ? unlockLabel : isLocked ? 'View on RFD' : 'Enter'}
         </Text>
       </TouchableOpacity>
     </View>

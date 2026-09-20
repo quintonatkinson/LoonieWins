@@ -58,7 +58,7 @@ export default function ContestCard({
     canEnterFree,
     hasUnlimitedEntries,
     balance,
-    entryCostPts,
+    getEntryCost,
     spendPointsForEntry,
     useFreeEntry,
     weeklyEntriesUsed,
@@ -71,6 +71,8 @@ export default function ContestCard({
   const [toast, setToast] = useState(false)
   const { upgradeToPro } = useUserEarn()
 
+  const entryCostPts = getEntryCost(contest)
+  const canAffordEntry = balance >= entryCostPts
   const daysLeft = daysLeftProp ?? daysLeftUntilExpiry(contest.expiryDate)
   const socialLabel = formatEntriesToday(entriesToday)
 
@@ -119,7 +121,8 @@ export default function ContestCard({
       return
     }
     if (weeklyLimitReached && userIsFree) {
-      if (balance >= entryCostPts && spendPointsForEntry()) {
+      // Cap hit: spend prize-tiered pts, or push Earn → then return to enter
+      if (canAffordEntry && spendPointsForEntry(entryCostPts)) {
         openEntryWithAgeGate()
         setToast(true)
       } else {
@@ -136,7 +139,7 @@ export default function ContestCard({
     canEnterFree,
     weeklyLimitReached,
     userIsFree,
-    balance,
+    canAffordEntry,
     entryCostPts,
     spendPointsForEntry,
     useFreeEntry,
@@ -145,11 +148,17 @@ export default function ContestCard({
 
   const showUnlock =
     contest.id !== '__offline_alert__' && weeklyLimitReached && userIsFree && !hasUnlimitedEntries
+  /** When capped without enough pts, primary CTA is Earn (not a dead UNLOCK). */
+  const needEarnFirst = showUnlock && !canAffordEntry
 
   const goToEarn = useCallback(() => {
     setShowInsufficient(false)
-    navigate('/earn')
-  }, [navigate])
+    navigate('/earn', { state: { returnToContestId: contest.id, entryCostPts } })
+  }, [navigate, contest.id, entryCostPts])
+
+  const unlockLabel = needEarnFirst
+    ? `Earn ${entryCostPts} Pts`
+    : `UNLOCK (${entryCostPts} Pts)`
 
   if (contest.id === '__offline_alert__') {
     if (variant === 'routine') return null
@@ -184,10 +193,10 @@ export default function ContestCard({
   ) : showUnlock ? (
     <button
       type="button"
-      onClick={handleEnter}
+      onClick={needEarnFirst ? goToEarn : handleEnter}
       className="shrink-0 px-4 py-2.5 rounded-lg bg-amber-500/20 text-amber-400 font-semibold text-sm border border-amber-500/40 hover:bg-amber-500/30"
     >
-      UNLOCK ({entryCostPts} Pts)
+      {unlockLabel}
     </button>
   ) : (
     <button
@@ -215,22 +224,49 @@ export default function ContestCard({
       >
         <p className="text-gray-50 font-medium">Weekly free entries used</p>
         <p className="text-gray-400 text-sm mt-2">
-          Free tier: {weeklyEntriesUsed}/{weeklyEntryCap ?? '∞'} entries this week. Spend{' '}
-          {entryCostPts} pts for another, earn more on Earn, or go Pro for unlimited.
+          Free: {weeklyEntriesUsed}/{weeklyEntryCap ?? '∞'} this week. This contest costs{' '}
+          <span className="text-amber-400 font-semibold">{entryCostPts} pts</span> (prize-tiered —
+          bigger prizes cost more). You have {balance.toLocaleString()} pts.
         </p>
+        <ol className="mt-3 text-xs text-gray-400 space-y-1 list-decimal list-inside">
+          <li>
+            <span className="text-gray-300">Earn</span> pts via AdGem offers
+          </li>
+          <li>
+            Come back and <span className="text-gray-300">spend</span> {entryCostPts} pts to enter
+          </li>
+          <li>
+            Or go <span className="text-gray-300">Pro</span> and skip the grind
+          </li>
+        </ol>
         <button
           type="button"
           onClick={goToEarn}
           className="mt-4 w-full py-2.5 rounded-lg bg-amber-500/20 text-amber-400 font-semibold border border-amber-500/40"
         >
-          Go to Earn
+          Earn pts on AdGem / offers
         </button>
+        {canAffordEntry && (
+          <button
+            type="button"
+            onClick={() => {
+              setShowInsufficient(false)
+              if (spendPointsForEntry(entryCostPts)) {
+                openEntryWithAgeGate()
+                setToast(true)
+              }
+            }}
+            className="mt-2 w-full py-2.5 rounded-lg bg-win text-on-win font-semibold text-sm"
+          >
+            Spend {entryCostPts} pts &amp; enter
+          </button>
+        )}
         <button
           type="button"
           onClick={() => { setShowInsufficient(false); setShowSubscription(true); }}
           className="mt-2 w-full py-2 text-amber-400/90 text-sm font-medium"
         >
-          Subscribe for unlimited
+          Subscribe for unlimited (skip pts)
         </button>
         <button type="button" onClick={() => setShowInsufficient(false)} className="mt-1 w-full py-2 text-gray-400 text-sm">
           Cancel
@@ -279,7 +315,7 @@ export default function ContestCard({
     return (
       <>
         <div className="shrink-0 w-52 rounded-xl bg-surface border border-gray-600/50 p-4 text-left flex flex-col gap-3">
-          <button type="button" onClick={handleEnter} className="text-left flex flex-col gap-2 flex-1">
+          <button type="button" onClick={needEarnFirst ? goToEarn : handleEnter} className="text-left flex flex-col gap-2 flex-1">
             <div className="flex flex-wrap gap-1">
               {reqBadges
                 .filter((b) => b.costly || b.kind === 'age')
@@ -303,7 +339,7 @@ export default function ContestCard({
                 showUnlock ? 'bg-amber-500/20 text-amber-400 border border-amber-500/40' : 'bg-win text-on-win'
               }`}
             >
-              {showUnlock ? `UNLOCK (${entryCostPts} Pts)` : isLocked ? 'View on RFD' : 'Enter'}
+              {showUnlock ? unlockLabel : isLocked ? 'View on RFD' : 'Enter'}
             </span>
           </button>
           <div className="flex gap-2">
