@@ -1,8 +1,11 @@
 import { NavLink } from 'react-router-dom'
-import { Coins, History } from 'lucide-react'
+import { Coins, History, LogOut } from 'lucide-react'
+import { useAuth } from '../contexts/AuthContext'
+import { isSupabaseConfigured } from '../lib/supabase'
 
 const ROUTES = [
   { path: '/', label: 'Home', icon: '🏠' },
+  { path: '/submit', label: 'Submit', icon: '➕' },
   { path: '/referrals', label: 'Referrals', icon: '🔗' },
   { path: '/earn', label: 'Earn', icon: 'earn' as const },
   { path: '/winners', label: 'Winners', icon: '🏆' },
@@ -11,7 +14,10 @@ const ROUTES = [
 ] as const
 
 export default function Layout({ children }: { children?: React.ReactNode }) {
-  const displayName = 'Contester' // TODO: from profile
+  const { profile, signOut, session } = useAuth()
+  // Guest demo (no Supabase) still needs bottom nav + profile access
+  const showAppChrome = Boolean(session) || !isSupabaseConfigured || Boolean(profile)
+  const displayName = profile?.display_name || profile?.email?.split('@')[0] || 'Contester'
   const greeting = (() => {
     const h = new Date().getHours()
     if (h < 12) return 'Good Morning'
@@ -20,36 +26,60 @@ export default function Layout({ children }: { children?: React.ReactNode }) {
   })()
 
   return (
-    <div className="min-h-screen flex flex-col pb-20 bg-gray-900">
-      {/* Header */}
+    <div className={`min-h-screen flex flex-col bg-gray-900 ${showAppChrome ? 'pb-20' : ''}`}>
       <header className="sticky top-0 z-30 px-4 py-3 flex items-center justify-between bg-gray-900/95 border-b border-gray-700/50">
         <div>
-          <h1 className="text-xl font-bold text-gray-50">
-            {greeting}, <span className="text-win font-bold"> {displayName}</span>
-          </h1>
-          <p className="text-sm text-gray-400 flex items-center gap-1 mt-0.5">
-            Win More, Work Less
-            <span className="text-base" aria-hidden>🍁</span>
-          </p>
+          {showAppChrome ? (
+            <>
+              <h1 className="text-xl font-bold text-gray-50">
+                {greeting}, <span className="text-win font-bold"> {displayName}</span>
+              </h1>
+              <p className="text-sm text-gray-400 flex items-center gap-1 mt-0.5">
+                Win More, Work Less
+                <span className="text-base" aria-hidden>
+                  🍁
+                </span>
+                {!session && !isSupabaseConfigured && (
+                  <span className="ml-2 text-[10px] uppercase tracking-wide text-amber-400/90">Guest</span>
+                )}
+              </p>
+            </>
+          ) : (
+            <>
+              <h1 className="text-xl font-bold text-win">LoonieWins</h1>
+              <p className="text-sm text-gray-400 mt-0.5">Win More, Work Less</p>
+            </>
+          )}
         </div>
-        {/* Stats row: streak, level, XP, complete */}
         <div className="flex items-center gap-3">
-          <span className="flex items-center gap-1 text-sm text-gray-300" title="Streak">
-            🔥 <span>5</span>
-          </span>
-          <span className="flex items-center gap-1 text-sm text-gray-300">
-            🏆 <span>Lv.3</span> <span className="text-gray-50">420 XP</span>
-          </span>
-          <span className="text-xs font-medium text-win">0/3 Complete</span>
+          {showAppChrome && (
+            <>
+              <span className="flex items-center gap-1 text-sm text-gray-300" title="Streak">
+                🔥 <span>{profile?.streak ?? 0}</span>
+              </span>
+              <span className="flex items-center gap-1 text-sm text-gray-300">
+                🏆 <span>Lv.{profile?.level ?? 1}</span>{' '}
+                <span className="text-gray-50">{profile?.xp ?? 0} XP</span>
+              </span>
+              {session && (
+                <button
+                  type="button"
+                  onClick={() => void signOut()}
+                  className="p-2 rounded-lg text-gray-400 hover:text-win hover:bg-gray-800"
+                  title="Log out"
+                  aria-label="Log out"
+                >
+                  <LogOut className="w-4 h-4" />
+                </button>
+              )}
+            </>
+          )}
         </div>
       </header>
 
-      {/* Main content */}
-      <main className="flex-1">
-        {children}
-      </main>
+      <main className="flex-1">{children}</main>
 
-      {/* Bottom nav */}
+      {showAppChrome && (
       <nav
         className="fixed bottom-0 left-0 right-0 bg-surface border-t border-gray-600/50 px-2 py-2 flex justify-around items-center"
         aria-label="Main navigation"
@@ -60,10 +90,8 @@ export default function Layout({ children }: { children?: React.ReactNode }) {
             to={path}
             end={path === '/'}
             className={({ isActive }) =>
-              `flex flex-col items-center gap-0.5 py-1 px-3 rounded-lg text-xs transition-colors ${
-                isActive
-                  ? 'text-win bg-gray-700/50'
-                  : 'text-gray-400 hover:text-gray-50'
+              `flex flex-col items-center gap-1.5 py-1 px-3 rounded-lg text-xs transition-colors ${
+                isActive ? 'text-win bg-gray-700/50' : 'text-gray-400 hover:text-gray-50'
               }`
             }
           >
@@ -78,6 +106,7 @@ export default function Layout({ children }: { children?: React.ReactNode }) {
           </NavLink>
         ))}
       </nav>
+      )}
     </div>
   )
 }

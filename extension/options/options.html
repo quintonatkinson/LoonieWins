@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>LoonieWins Autofill — Options</title>
+    <link rel="stylesheet" href="options.css" />
+  </head>
+  <body>
+    <main>
+      <h1>LoonieWins Autofill</h1>
+      <p class="lede">
+        Configure how the extension syncs your giveaway profile. Use the
+        <strong>anon</strong> (publishable) Supabase key only — never
+        <code>service_role</code>.
+      </p>
+
+      <section>
+        <h2>Supabase (optional)</h2>
+        <p>
+          When you are signed into LoonieWins, the extension can copy your
+          session from the app tab and fetch <code>profiles.auto_fill_data</code>
+          with RLS. Without auth, sync from localStorage
+          (<code>looniewins_autofill</code>) still works.
+        </p>
+        <form id="options-form">
+          <label>
+            Project URL
+            <input
+              name="supabaseUrl"
+              placeholder="https://YOUR_PROJECT.supabase.co"
+              autocomplete="off"
+            />
+          </label>
+          <label>
+            Anon key
+            <textarea
+              name="supabaseAnonKey"
+              rows="4"
+              placeholder="eyJ… (anon / public role only)"
+              spellcheck="false"
+            ></textarea>
+          </label>
+          <p id="status" class="status" role="status"></p>
+          <div class="actions">
+            <button type="submit" class="primary">Save</button>
+            <button type="button" id="clear-session">Clear stored session tokens</button>
+          </div>
+        </form>
+      </section>
+
+      <section>
+        <h2>Install &amp; use</h2>
+        <ol>
+          <li>Open <code>chrome://extensions</code> (or Edge equivalent).</li>
+          <li>Enable Developer mode → Load unpacked → select this <code>extension/</code> folder.</li>
+          <li>Run LoonieWins locally, save Profile autofill (key <code>looniewins_autofill</code>), then click <em>Sync from LoonieWins tab</em>.</li>
+          <li>Open a giveaway form → click the extension → <em>Fill this page</em> (or Alt+Shift+L / right-click menu).</li>
+        </ol>
+        <p>
+          To sync from a hosted LoonieWins origin, add that host under the extension’s
+          site access (Chrome → Extension details → Site access) or extend
+          <code>content_scripts.matches</code> in <code>manifest.json</code>.
+        </p>
+      </section>
+
+      <section class="warn">
+        <h2>Security</h2>
+        <ul>
+          <li>This extension rejects keys whose JWT <code>role</code> is <code>service_role</code>.</li>
+          <li>Only the anon key + your user access token are stored in <code>chrome.storage.local</code>.</li>
+          <li>Password fields are never autofilled.</li>
+          <li>Fill runs only when you trigger it (popup, shortcut, or context menu) via <code>activeTab</code>.</li>
+        </ul>
+      </section>
+    </main>
+    <script type="module" src="options.js"></script>
+  </body>
+</html>

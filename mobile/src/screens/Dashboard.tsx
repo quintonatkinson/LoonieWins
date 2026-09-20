@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback, useEffect, useMemo, useRef } from 'react'
 import {
   View,
   Text,
@@ -8,16 +8,48 @@ import {
   ScrollView,
   RefreshControl,
   Keyboard,
+  AppState,
+  type AppStateStatus,
 } from 'react-native'
 import type { Contest } from '../lib/rssFetcher'
+import { resolveContestUrl } from '../lib/rssFetcher'
 import ContestCard from '../components/ContestCard'
 import CountryToggle from '../components/CountryToggle'
 import RadarLoader from '../components/RadarLoader'
+import AccentPicker from '../components/AccentPicker'
 import { useContestPipeline } from '../hooks/useContestPipeline'
-import { storage } from '../lib/utils/storage'
-import type { AutoFillData } from '../types/profile'
+import { useContestEntries } from '../hooks/useContestEntries'
+import { useContestSocialProof } from '../hooks/useContestSocialProof'
+import { useUserLimits } from '../hooks/useUserLimits'
+import { useAuth } from '../contexts/AuthContext'
+import { useTheme } from '../contexts/ThemeContext'
+import { compareExpiryAscending, daysLeftUntilExpiry } from '../lib/utils/expiryDate'
+import { isEndingTonight } from '../lib/utils/countdownLabel'
+import { isDeadLink } from '../lib/utils/linkHealth'
+import {
+  loadHomeMode,
+  loadAutoAdvance,
+  resolveInitialGeo,
+  resolveInitialQuebecSafe,
+  saveGeoFilter,
+  saveHomeMode,
+  saveQuebecSafe,
+  saveAutoAdvance,
+  type GeoFilterValue,
+  type HomeMode,
+} from '../lib/utils/feedPrefs'
+import { searchHiveMind } from '../hooks/useContestVault'
+import { shareContest } from '../lib/utils/shareContest'
+import { Alert, Linking } from 'react-native'
+import {
+  contestRequiresAgeGate,
+  loadAgeConfirmed,
+  saveAgeConfirmed,
+} from '../lib/utils/ageGate'
 
-const STORAGE_ENTERED = 'looniewins_entered'
+const NEW_RAIL_MS = 48 * 60 * 60 * 1000
+const FREE_RAIL_TEASER = 2
+const PRO_RAIL_LIMIT = 12
 
 type SortFilter = 'high-value' | 'ending-soon' | 'best-odds' | null
 
@@ -47,70 +79,268 @@ const TAG_REQ_FILTERS: { key: string; label: string; match: (c: Contest) => bool
   { key: 'weekly', label: 'Weekly', match: (c) => (c.tags ?? []).includes('Weekly') },
 ]
 
+function passesGeo(c: Contest, geoFilter: GeoFilterValue): boolean {
+  if (geoFilter === 'CA') {
+    const elig = c.eligibility ?? 'Unknown'
+    if (elig === 'US') return false
+  }
+  if (geoFilter === 'US') {
+    const elig = c.eligibility ?? 'Unknown'
+    if (elig === 'CA') return false
+  }
+  return true
+}
+
 interface DashboardProps {
   onOpenOverlay: (contest: Contest) => void
   onPressUrl: (url: string) => void
+  /** Shared from App so ContestBrowser mark-entered updates feed badges immediately */
+  enteredIds?: Set<string>
 }
 
-export default function Dashboard({ onOpenOverlay, onPressUrl }: DashboardProps) {
+export default function Dashboard({ onOpenOverlay, onPressUrl, enteredIds: enteredIdsProp }: DashboardProps) {
+  const { accentColor } = useTheme()
   const pipeline = useContestPipeline()
   const { liveContests, isScanning, isSyncingCloud, isFinished, offlineMode, phaseMessage, refetch } = pipeline
+  const { profile, updateProfile } = useAuth()
+  const localEntries = useContestEntries()
+  const enteredIds = enteredIdsProp ?? localEntries.enteredIds
+  const persistEntered = localEntries.markEntered
+  const { hasNewEndingRails } = useUserLimits()
+  const social = useContestSocialProof()
 
   const [search, setSearch] = useState('')
-  const [sortFilter, setSortFilter] = useState<SortFilter>(null)
-  const [hideEntered, setHideEntered] = useState(false)
-  const [hideQCExcluded, setHideQCExcluded] = useState(false)
+  const [sortFilter, setSortFilter] = useState<SortFilter>('ending-soon')
+  const [hideEntered, setHideEntered] = useState(true)
+  const [quebecSafe, setQuebecSafe] = useState(false)
   const [tagFilters, setTagFilters] = useState<Set<string>>(new Set())
-  const [geoFilter, setGeoFilter] = useState<'CA' | 'US' | 'ANY'>('CA')
-  const [enteredIds, setEnteredIdsState] = useState<Set<string>>(new Set())
+  const [geoFilter, setGeoFilter] = useState<GeoFilterValue>('CA')
+  const [homeMode, setHomeMode] = useState<HomeMode>('routine')
+  const [autoAdvance, setAutoAdvance] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
-  const [autoFillData] = useState<AutoFillData>(() => ({
-    name: 'John Doe',
-    email: 'test@email.com',
-    address: '123 Main St, Toronto ON',
-  }))
+  const [hiveResults, setHiveResults] = useState<Contest[]>([])
+  const [statusToast, setStatusToast] = useState<string | null>(null)
+  const pendingAutoMarkRef = useRef<Contest | null>(null)
+  const enterNextQueueRef = useRef<Contest[]>([])
+  const autoAdvanceRef = useRef(true)
+  const homeModeRef = useRef<HomeMode>('routine')
+  const oneTapEnterRef = useRef<(contest: Contest) => Promise<void>>(async () => {})
+  const prefsReady = useRef(false)
 
   useEffect(() => {
-    let mounted = true
-    storage.getItem(STORAGE_ENTERED).then((raw) => {
-      if (!mounted) return
-      try {
-        const arr = raw ? JSON.parse(raw) : []
-        setEnteredIdsState(new Set(Array.isArray(arr) ? arr : []))
-      } catch {
-        setEnteredIdsState(new Set())
+    let cancelled = false
+    ;(async () => {
+      const [geo, qc, mode, advance] = await Promise.all([
+        resolveInitialGeo({
+          province: profile?.auto_fill_data?.province,
+          settingsGeo: profile?.settings?.geoFilter,
+        }),
+        resolveInitialQuebecSafe({
+          province: profile?.auto_fill_data?.province,
+          settingsQuebecSafe: profile?.settings?.quebecSafe,
+        }),
+        loadHomeMode('routine'),
+        loadAutoAdvance(true),
+      ])
+      if (cancelled) return
+      setGeoFilter(geo)
+      setQuebecSafe(qc)
+      setHomeMode(mode)
+      setAutoAdvance(advance)
+      if (qc) {
+        void saveQuebecSafe(true)
+        void updateProfile({
+          settings: { ...(profile?.settings ?? {}), quebecSafe: true },
+        })
       }
-    })
-    return () => { mounted = false }
-  }, [])
+      prefsReady.current = true
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [profile?.auto_fill_data?.province, profile?.settings?.geoFilter, profile?.settings?.quebecSafe])
 
-  const persistEntered = useCallback((ids: Set<string>) => {
-    storage.setItem(STORAGE_ENTERED, JSON.stringify([...ids]))
-  }, [])
+  useEffect(() => {
+    autoAdvanceRef.current = autoAdvance
+  }, [autoAdvance])
+  useEffect(() => {
+    homeModeRef.current = homeMode
+  }, [homeMode])
+
+  useEffect(() => {
+    if (!statusToast) return
+    const t = setTimeout(() => setStatusToast(null), 3000)
+    return () => clearTimeout(t)
+  }, [statusToast])
 
   const markEntered = useCallback(
-    (contest: Contest) => {
-      const next = new Set(enteredIds)
-      next.add(contest.id)
-      setEnteredIdsState(next)
-      persistEntered(next)
+    (contest: Contest, status: 'entered' | 'submitted' = 'entered') => {
+      void persistEntered(contest, status)
+      void social.refresh()
+      if (homeModeRef.current !== 'routine' || !autoAdvanceRef.current) return
+      const next = enterNextQueueRef.current.find((c) => c.id !== contest.id)
+      if (!next) return
+      setTimeout(() => {
+        setStatusToast('Next up — opening next contest')
+        void oneTapEnterRef.current(next)
+      }, 600)
     },
-    [enteredIds, persistEntered]
+    [persistEntered, social]
   )
 
-  const routineContests = liveContests.filter((c) => enteredIds.has(c.id)).slice(0, 10)
+  const ensureAgeOk = useCallback(async (contest: Contest): Promise<boolean> => {
+    if (!contestRequiresAgeGate(contest)) return true
+    if (await loadAgeConfirmed()) return true
+    return new Promise((resolve) => {
+      Alert.alert(
+        '18+ required',
+        'This contest is marked 18+. Confirm you are of legal age to continue.',
+        [
+          { text: 'Cancel', style: 'cancel', onPress: () => resolve(false) },
+          {
+            text: 'I am 18+',
+            onPress: () => {
+              void saveAgeConfirmed(true)
+              void updateProfile({
+                settings: { ...(profile?.settings ?? {}), ageConfirmed: true },
+              })
+              resolve(true)
+            },
+          },
+        ]
+      )
+    })
+  }, [profile, updateProfile])
+
+  // Auto-mark when app returns to foreground after one-tap Enter
+  useEffect(() => {
+    const onChange = (state: AppStateStatus) => {
+      if (state !== 'active') return
+      const pending = pendingAutoMarkRef.current
+      if (!pending) return
+      pendingAutoMarkRef.current = null
+      markEntered(pending, 'entered')
+      setStatusToast('Marked entered')
+    }
+    const sub = AppState.addEventListener('change', onChange)
+    return () => sub.remove()
+  }, [markEntered])
+
+  const oneTapEnter = useCallback(
+    async (contest: Contest) => {
+      if (!(await ensureAgeOk(contest))) return
+      pendingAutoMarkRef.current = contest
+      try {
+        const url = await resolveContestUrl(
+          contest.url,
+          contest.contentSnippet ?? contest.description
+        )
+        await Linking.openURL(url)
+        setStatusToast('Opened — marks entered when you return')
+      } catch {
+        pendingAutoMarkRef.current = contest
+        onPressUrl(contest.url)
+        setStatusToast('Opened — marks entered when you return')
+      }
+    },
+    [onPressUrl, ensureAgeOk]
+  )
+  oneTapEnterRef.current = oneTapEnter
+
+  const handleGeoChange = useCallback(
+    (val: GeoFilterValue) => {
+      setGeoFilter(val)
+      void saveGeoFilter(val)
+      void updateProfile({
+        settings: { ...(profile?.settings ?? {}), geoFilter: val },
+      })
+    },
+    [profile, updateProfile]
+  )
+
+  const handleShare = useCallback(async (contest: Contest) => {
+    const result = await shareContest(contest)
+    if (result === 'shared') setStatusToast('Shared')
+    else setStatusToast('Could not share')
+  }, [])
+
+  useEffect(() => {
+    const q = search.trim()
+    if (q.length < 2) {
+      setHiveResults([])
+      return
+    }
+    let cancelled = false
+    const t = setTimeout(() => {
+      void searchHiveMind(q).then((rows) => {
+        if (!cancelled) setHiveResults(rows)
+      })
+    }, 280)
+    return () => {
+      cancelled = true
+      clearTimeout(t)
+    }
+  }, [search])
+
+  const enterNextQueue = useMemo(() => {
+    const base = liveContests.filter(
+      (c) =>
+        !enteredIds.has(c.id) &&
+        c.id !== '__offline_alert__' &&
+        !isDeadLink(c) &&
+        passesGeo(c, geoFilter) &&
+        !(quebecSafe && c.restrictions?.includes('no_quebec'))
+    )
+    return [...base].sort((a, b) => compareExpiryAscending(a.expiryDate, b.expiryDate)).slice(0, 25)
+  }, [liveContests, enteredIds, geoFilter, quebecSafe])
+
+  useEffect(() => {
+    enterNextQueueRef.current = enterNextQueue
+  }, [enterNextQueue])
+
+  const nextContest = enterNextQueue[0] ?? null
+
+  const railBase = useMemo(
+    () =>
+      liveContests.filter(
+        (c) =>
+          c.id !== '__offline_alert__' &&
+          !isDeadLink(c) &&
+          passesGeo(c, geoFilter) &&
+          !(quebecSafe && c.restrictions?.includes('no_quebec'))
+      ),
+    [liveContests, geoFilter, quebecSafe]
+  )
+
+  const newRail = useMemo(() => {
+    const cutoff = Date.now() - NEW_RAIL_MS
+    return [...railBase]
+      .filter((c) => {
+        if (!c.createdAt) return false
+        const t = Date.parse(c.createdAt)
+        return Number.isFinite(t) && t >= cutoff
+      })
+      .sort((a, b) => Date.parse(b.createdAt!) - Date.parse(a.createdAt!))
+      .slice(0, hasNewEndingRails ? PRO_RAIL_LIMIT : FREE_RAIL_TEASER)
+  }, [railBase, hasNewEndingRails])
+
+  const endingRail = useMemo(() => {
+    return [...railBase]
+      .filter((c) => c.expiryDate && isEndingTonight(c.expiryDate))
+      .sort((a, b) => compareExpiryAscending(a.expiryDate, b.expiryDate))
+      .slice(0, hasNewEndingRails ? PRO_RAIL_LIMIT : FREE_RAIL_TEASER)
+  }, [railBase, hasNewEndingRails])
+
+  const routineContests = useMemo(() => {
+    if (homeMode === 'routine') return enterNextQueue.slice(0, 10)
+    return liveContests.filter((c) => enteredIds.has(c.id) && !isDeadLink(c)).slice(0, 10)
+  }, [homeMode, enterNextQueue, liveContests, enteredIds])
 
   let feedContests = liveContests.filter((c) => {
+    if (isDeadLink(c)) return false
     if (hideEntered && enteredIds.has(c.id)) return false
-    if (hideQCExcluded && c.restrictions?.includes('no_quebec')) return false
-    if (geoFilter === 'CA') {
-      const elig = c.eligibility ?? 'Unknown'
-      if (elig === 'US') return false
-    }
-    if (geoFilter === 'US') {
-      const elig = c.eligibility ?? 'Unknown'
-      if (elig === 'CA') return false
-    }
+    if (quebecSafe && c.restrictions?.includes('no_quebec')) return false
+    if (!passesGeo(c, geoFilter)) return false
     if (search.trim()) {
       const q = search.toLowerCase()
       if (!c.title.toLowerCase().includes(q)) return false
@@ -125,17 +355,18 @@ export default function Dashboard({ onOpenOverlay, onPressUrl }: DashboardProps)
   if (sortFilter === 'high-value') {
     feedContests = [...feedContests].sort((a, b) => (b.prizeValue ?? 0) - (a.prizeValue ?? 0))
   } else if (sortFilter === 'ending-soon') {
-    feedContests = [...feedContests].sort((a, b) => {
-      const da = a.expiryDate ? new Date(a.expiryDate).getTime() : Infinity
-      const db = b.expiryDate ? new Date(b.expiryDate).getTime() : Infinity
-      return da - db
-    })
+    feedContests = [...feedContests].sort((a, b) =>
+      compareExpiryAscending(a.expiryDate, b.expiryDate)
+    )
   }
 
-  const daysLeft = (c: Contest) =>
-    c.expiryDate
-      ? Math.max(0, Math.ceil((new Date(c.expiryDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24)))
-      : null
+  const hiveOnly = useMemo(() => {
+    if (!search.trim() || hiveResults.length === 0) return []
+    const liveIds = new Set(liveContests.map((c) => c.id))
+    return hiveResults.filter((c) => !liveIds.has(c.id) && !isDeadLink(c))
+  }, [search, hiveResults, liveContests])
+
+  const daysLeft = (c: Contest) => daysLeftUntilExpiry(c.expiryDate)
 
   const showFullRadar = (isScanning || isSyncingCloud) && liveContests.length === 0
 
@@ -147,23 +378,30 @@ export default function Dashboard({ onOpenOverlay, onPressUrl }: DashboardProps)
 
   const handleOpenOverlay = useCallback(
     (contest: Contest) => {
-      markEntered(contest)
       onOpenOverlay(contest)
     },
-    [markEntered, onOpenOverlay]
+    [onOpenOverlay]
   )
+
+  const listData = useMemo(() => {
+    if (homeMode === 'routine' && !search.trim()) return [] as Contest[]
+    return [...feedContests, ...hiveOnly.map((c) => ({ ...c, id: `hive-${c.id}` }))]
+  }, [homeMode, search, feedContests, hiveOnly])
 
   const renderItem = useCallback(
     ({ item: c }: { item: Contest }) => (
       <ContestCard
         contest={c}
         onOpenOverlay={handleOpenOverlay}
+        onOneTapEnter={(contest) => void oneTapEnter(contest)}
+        onShare={(contest) => void handleShare(contest)}
         onPressUrl={onPressUrl}
         variant="feed"
         daysLeft={daysLeft(c)}
+        entered={enteredIds.has(c.id.replace(/^hive-/, ''))}
       />
     ),
-    [handleOpenOverlay, onPressUrl]
+    [handleOpenOverlay, onPressUrl, oneTapEnter, handleShare, enteredIds]
   )
 
   const keyExtractor = useCallback((c: Contest) => c.id, [])
@@ -178,35 +416,174 @@ export default function Dashboard({ onOpenOverlay, onPressUrl }: DashboardProps)
       {!showFullRadar && (
         <>
           <View className="px-4 pt-3 pb-2">
-            <CountryToggle value={geoFilter} onChange={setGeoFilter} />
-          </View>
-          <View className="px-4 pt-4">
-            <Text className="text-base font-bold text-gray-50 mb-3 flex-row items-center gap-2">
-              <Text className="text-win">⚡</Text> Your Daily Routine
+            <Text className="text-xs font-semibold text-white uppercase tracking-wide mb-2">
+              Appearance
             </Text>
+            <AccentPicker />
+          </View>
+          <View className="px-4 pt-3 pb-2 flex-row flex-wrap gap-2 items-center">
+            <CountryToggle value={geoFilter} onChange={handleGeoChange} />
+            <TouchableOpacity
+              onPress={() => {
+                const next = !quebecSafe
+                setQuebecSafe(next)
+                void saveQuebecSafe(next)
+                void updateProfile({
+                  settings: { ...(profile?.settings ?? {}), quebecSafe: next },
+                })
+              }}
+              className={`px-4 py-2 rounded-full border ${quebecSafe ? 'bg-win border-win' : 'bg-surface border-gray-600/50'}`}
+            >
+              <Text className={`text-sm font-medium ${quebecSafe ? 'text-on-win' : 'text-gray-300'}`}>
+                Québec-safe
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          {social.hiveLabel ? (
+            <Text className="px-4 pb-1 text-xs text-gray-500">{social.hiveLabel} across LoonieWins</Text>
+          ) : null}
+
+          <View className="px-4 pb-2 flex-row gap-2">
+            {(['routine', 'browse'] as const).map((key) => (
+              <TouchableOpacity
+                key={key}
+                onPress={() => {
+                  setHomeMode(key)
+                  void saveHomeMode(key)
+                }}
+                className={`flex-1 py-2 rounded-xl ${homeMode === key ? 'bg-win' : 'bg-surface border border-gray-600/50'}`}
+              >
+                <Text
+                  className={`text-center text-sm font-semibold ${homeMode === key ? 'text-on-win' : 'text-gray-400'}`}
+                >
+                  {key === 'routine' ? 'Daily Routine' : 'Browse all'}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+
+          <View className="px-4 pt-2">
+            <View className="flex-row items-center justify-between mb-3">
+              <Text className="text-base font-bold text-gray-50">
+                <Text className="text-win">⚡</Text>{' '}
+                {homeMode === 'routine' ? 'Enter next' : 'Your Daily Routine'}
+              </Text>
+              {homeMode === 'routine' && (
+                <TouchableOpacity
+                  onPress={() => {
+                    const next = !autoAdvance
+                    setAutoAdvance(next)
+                    void saveAutoAdvance(next)
+                  }}
+                >
+                  <Text className="text-[11px] text-gray-500">
+                    Auto-next {autoAdvance ? 'ON' : 'OFF'}
+                  </Text>
+                </TouchableOpacity>
+              )}
+            </View>
+            {homeMode === 'routine' && nextContest && (
+              <TouchableOpacity
+                onPress={() => void oneTapEnter(nextContest)}
+                className="mb-3 px-4 py-3.5 rounded-xl bg-win"
+                activeOpacity={0.85}
+              >
+                <Text className="text-[10px] uppercase text-on-win/70 font-bold">Enter next</Text>
+                <Text className="text-on-win font-bold text-sm mt-1" numberOfLines={2}>
+                  {nextContest.title}
+                </Text>
+                <Text className="text-xs text-on-win/70 mt-1">
+                  Opens contest · marks entered when you return
+                  {autoAdvance ? ' · then auto-advances' : ''}
+                </Text>
+              </TouchableOpacity>
+            )}
             <ScrollView horizontal showsHorizontalScrollIndicator={false} className="-mx-4 px-4 pb-2">
               {routineContests.length === 0 ? (
-                <Text className="text-gray-500 text-sm py-4">Enter contests to see them here.</Text>
+                <Text className="text-gray-500 text-sm py-4">
+                  {homeMode === 'routine' ? 'Queue clear.' : 'Enter contests to see them here.'}
+                </Text>
               ) : (
                 routineContests.map((c) => (
                   <ContestCard
                     key={c.id}
                     contest={c}
                     onOpenOverlay={handleOpenOverlay}
+                    onOneTapEnter={(contest) => void oneTapEnter(contest)}
+                    onShare={(contest) => void handleShare(contest)}
                     onPressUrl={onPressUrl}
                     variant="routine"
                     daysLeft={daysLeft(c)}
+                    entered={enteredIds.has(c.id)}
                   />
                 ))
               )}
             </ScrollView>
           </View>
+
+          <View className="px-4 pt-3">
+            <Text className="text-sm font-bold text-gray-50 mb-2">
+              New {!hasNewEndingRails ? <Text className="text-amber-400 text-[10px]"> PRO</Text> : null}
+            </Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} className="-mx-4 px-4 pb-2">
+              {newRail.length === 0 ? (
+                <Text className="text-gray-500 text-sm py-2">Nothing new right now.</Text>
+              ) : (
+                newRail.map((c) => (
+                  <ContestCard
+                    key={`new-${c.id}`}
+                    contest={c}
+                    onOpenOverlay={hasNewEndingRails ? handleOpenOverlay : () => setStatusToast('Upgrade to Pro for New rails')}
+                    onOneTapEnter={
+                      hasNewEndingRails
+                        ? (contest) => void oneTapEnter(contest)
+                        : () => setStatusToast('Upgrade to Pro for New rails')
+                    }
+                    onShare={hasNewEndingRails ? (contest) => void handleShare(contest) : undefined}
+                    onPressUrl={onPressUrl}
+                    variant="routine"
+                    daysLeft={daysLeft(c)}
+                    entered={enteredIds.has(c.id)}
+                  />
+                ))
+              )}
+            </ScrollView>
+            <Text className="text-sm font-bold text-gray-50 mb-2 mt-2">
+              Ending tonight{' '}
+              {!hasNewEndingRails ? <Text className="text-amber-400 text-[10px]">PRO</Text> : null}
+            </Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} className="-mx-4 px-4 pb-2">
+              {endingRail.length === 0 ? (
+                <Text className="text-gray-500 text-sm py-2">Nothing ending tonight.</Text>
+              ) : (
+                endingRail.map((c) => (
+                  <ContestCard
+                    key={`end-${c.id}`}
+                    contest={c}
+                    onOpenOverlay={hasNewEndingRails ? handleOpenOverlay : () => setStatusToast('Upgrade to Pro for Ending rails')}
+                    onOneTapEnter={
+                      hasNewEndingRails
+                        ? (contest) => void oneTapEnter(contest)
+                        : () => setStatusToast('Upgrade to Pro for Ending rails')
+                    }
+                    onShare={hasNewEndingRails ? (contest) => void handleShare(contest) : undefined}
+                    onPressUrl={onPressUrl}
+                    variant="routine"
+                    daysLeft={daysLeft(c)}
+                    entered={enteredIds.has(c.id)}
+                  />
+                ))
+              )}
+            </ScrollView>
+          </View>
+
           <View className="px-4 py-3 border-t border-b border-gray-700/50 bg-gray-900">
             <View className="flex-row items-center gap-2 rounded-xl bg-surface border border-gray-600/50 px-3 py-2.5">
               <Text className="text-gray-500">🔍</Text>
               <TextInput
-                className="flex-1 text-gray-50 placeholder-gray-500 text-sm"
-                placeholder="Search contests..."
+                className="flex-1 text-gray-50 text-sm"
+                placeholder="Search Hive Mind history…"
                 placeholderTextColor="#9ca3af"
                 value={search}
                 onChangeText={setSearch}
@@ -217,73 +594,97 @@ export default function Dashboard({ onOpenOverlay, onPressUrl }: DashboardProps)
               </TouchableOpacity>
             </View>
           </View>
-          <View className="px-4 py-3 flex-row flex-wrap gap-2 items-center">
-            {(['high-value', 'ending-soon', 'best-odds'] as const).map((key) => {
-              const label = key === 'high-value' ? 'High Value' : key === 'ending-soon' ? 'Ending Soon' : 'Best Odds'
-              const active = sortFilter === key
-              return (
-                <TouchableOpacity
-                  key={key}
-                  onPress={() => setSortFilter(active ? null : key)}
-                  className={`px-4 py-2 rounded-full ${active ? 'bg-win' : 'bg-surface border border-gray-600/50'}`}
-                >
-                  <Text className={`text-sm font-medium ${active ? 'text-gray-900' : 'text-gray-300'}`}>{label}</Text>
-                </TouchableOpacity>
-              )
-            })}
-            <TouchableOpacity
-              onPress={() => setHideEntered((v) => !v)}
-              className={`px-4 py-2 rounded-full border ${hideEntered ? 'bg-gray-700 border-gray-500' : 'bg-surface border-gray-600/50'}`}
-            >
-              <Text className={`text-sm font-medium ${hideEntered ? 'text-gray-50' : 'text-gray-400'}`}>
-                Hide Entered
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              onPress={() => setHideQCExcluded((v) => !v)}
-              className={`px-4 py-2 rounded-full border ${hideQCExcluded ? 'bg-gray-700 border-gray-500' : 'bg-surface border-gray-600/50'}`}
-            >
-              <Text className={`text-sm font-medium ${hideQCExcluded ? 'text-gray-50' : 'text-gray-400'}`}>
-                Hide QC Excluded
-              </Text>
-            </TouchableOpacity>
-          </View>
-          <View className="px-4 py-2 flex-row flex-wrap gap-2 items-center">
-            <Text className="text-xs text-gray-500 font-medium">Filter:</Text>
-            {tagFilters.size > 0 && (
-              <TouchableOpacity onPress={() => setTagFilters(new Set())} className="px-3 py-1.5 rounded-full">
-                <Text className="text-xs font-medium text-gray-400">Clear filters</Text>
+
+          {(homeMode === 'browse' || search.trim().length > 0) && (
+            <View className="px-4 py-3 flex-row flex-wrap gap-2 items-center">
+              {(['high-value', 'ending-soon', 'best-odds'] as const).map((key) => {
+                const label =
+                  key === 'high-value' ? 'High Value' : key === 'ending-soon' ? 'Ending Soon' : 'Best Odds'
+                const active = sortFilter === key
+                return (
+                  <TouchableOpacity
+                    key={key}
+                    onPress={() => setSortFilter(active ? null : key)}
+                    className={`px-4 py-2 rounded-full ${active ? 'bg-win' : 'bg-surface border border-gray-600/50'}`}
+                  >
+                    <Text className={`text-sm font-medium ${active ? 'text-on-win' : 'text-gray-300'}`}>
+                      {label}
+                    </Text>
+                  </TouchableOpacity>
+                )
+              })}
+              <TouchableOpacity
+                onPress={() => setHideEntered((v) => !v)}
+                className={`px-4 py-2 rounded-full border ${hideEntered ? 'bg-gray-700 border-gray-500' : 'bg-surface border-gray-600/50'}`}
+              >
+                <Text className={`text-sm font-medium ${hideEntered ? 'text-gray-50' : 'text-gray-400'}`}>
+                  Hide Entered
+                </Text>
               </TouchableOpacity>
-            )}
-            {TAG_REQ_FILTERS.map(({ key, label }) => {
-              const active = tagFilters.has(key)
-              return (
-                <TouchableOpacity
-                  key={key}
-                  onPress={() => {
-                    setTagFilters((prev) => {
-                      const next = new Set(prev)
-                      if (next.has(key)) next.delete(key)
-                      else next.add(key)
-                      return next
-                    })
-                  }}
-                  className={`px-3 py-1.5 rounded-full ${active ? 'bg-win' : 'bg-surface border border-gray-600/50'}`}
-                >
-                  <Text className={`text-xs font-medium ${active ? 'text-gray-900' : 'text-gray-400'}`}>{label}</Text>
-                </TouchableOpacity>
-              )
-            })}
-          </View>
-          <View className="flex-row items-center justify-between px-4 mb-3">
-            <Text className="text-base font-bold text-gray-50">Opportunity List</Text>
-            {liveContests.length > 0 && (
-              <Text className="text-lg font-semibold text-gray-300">
-                {feedContests.length >= 100 ? `${feedContests.length}+` : feedContests.length} contests
+            </View>
+          )}
+
+          {homeMode === 'browse' && (
+            <View className="px-4 py-2 flex-row flex-wrap gap-2 items-center">
+              <Text className="text-xs text-gray-500 font-medium">Filter:</Text>
+              {TAG_REQ_FILTERS.map(({ key, label }) => {
+                const active = tagFilters.has(key)
+                return (
+                  <TouchableOpacity
+                    key={key}
+                    onPress={() => {
+                      setTagFilters((prev) => {
+                        const next = new Set(prev)
+                        if (next.has(key)) next.delete(key)
+                        else next.add(key)
+                        return next
+                      })
+                    }}
+                    className={`px-3 py-1.5 rounded-full ${active ? 'bg-win' : 'bg-surface border border-gray-600/50'}`}
+                  >
+                    <Text className={`text-xs font-medium ${active ? 'text-on-win' : 'text-gray-400'}`}>
+                      {label}
+                    </Text>
+                  </TouchableOpacity>
+                )
+              })}
+            </View>
+          )}
+
+          {homeMode === 'browse' || search.trim() ? (
+            <View className="flex-row items-center justify-between px-4 mb-3">
+              <Text className="text-base font-bold text-gray-50">
+                {search.trim() ? 'Search results' : 'Opportunity List'}
               </Text>
-            )}
-          </View>
+              {liveContests.length > 0 && (
+                <Text className="text-lg font-semibold text-gray-300">
+                  {feedContests.length >= 100 ? `${feedContests.length}+` : feedContests.length} contests
+                </Text>
+              )}
+            </View>
+          ) : (
+            <View className="mx-4 mb-4 rounded-xl bg-surface border border-gray-600/50 p-4">
+              <Text className="text-sm text-gray-400">
+                Daily Routine is your home screen. Tap Enter next to open the soonest-ending contest — we mark it
+                entered when you come back.
+              </Text>
+              <TouchableOpacity
+                onPress={() => {
+                  setHomeMode('browse')
+                  void saveHomeMode('browse')
+                }}
+                className="mt-2"
+              >
+                <Text className="text-win font-medium">Browse full Opportunity List →</Text>
+              </TouchableOpacity>
+            </View>
+          )}
         </>
+      )}
+      {statusToast && (
+        <View className="mx-4 mb-2 px-3 py-2 rounded-lg bg-win self-center">
+          <Text className="text-on-win text-sm font-medium text-center">{statusToast}</Text>
+        </View>
       )}
     </>
   )
@@ -293,7 +694,7 @@ export default function Dashboard({ onOpenOverlay, onPressUrl }: DashboardProps)
       <ScrollView
         className="flex-1 bg-gray-900"
         contentContainerStyle={{ flexGrow: 1 }}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#39FF14" />}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={accentColor} />}
       >
         {listHeader}
         {isSyncingCloud ? (
@@ -311,62 +712,26 @@ export default function Dashboard({ onOpenOverlay, onPressUrl }: DashboardProps)
     )
   }
 
-  if (liveContests.length === 0) {
-    return (
-      <ScrollView
-        className="flex-1 bg-gray-900"
-        contentContainerStyle={{ flexGrow: 1, padding: 16 }}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#39FF14" />}
-      >
-        {listHeader}
-        <View className="rounded-xl bg-surface border border-gray-600/50 p-6 items-center gap-4 mt-4">
-          <Text className="text-gray-300 text-center">No contests found. Pull to refresh.</Text>
-          <TouchableOpacity onPress={refetch} className="px-5 py-2.5 rounded-lg bg-win">
-            <Text className="text-gray-900 font-semibold">Retry Fetch</Text>
-          </TouchableOpacity>
-        </View>
-      </ScrollView>
-    )
-  }
-
-  if (feedContests.length === 0) {
-    return (
-      <ScrollView
-        className="flex-1 bg-gray-900"
-        contentContainerStyle={{ flexGrow: 1, padding: 16 }}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#39FF14" />}
-      >
-        {listHeader}
-        <View className="rounded-xl bg-surface border border-gray-600/50 p-6 items-center gap-4 mt-4">
-          <Text className="text-gray-300 text-center">No contests match your filters.</Text>
-          <TouchableOpacity
-            onPress={() => {
-              setTagFilters(new Set())
-              setSearch('')
-            }}
-            className="px-5 py-2.5 rounded-lg bg-win"
-          >
-            <Text className="text-gray-900 font-semibold">Clear filters</Text>
-          </TouchableOpacity>
-        </View>
-      </ScrollView>
-    )
-  }
-
   return (
     <View className="flex-1 bg-gray-900">
       <FlatList
-        data={feedContests}
+        data={listData}
         renderItem={renderItem}
         keyExtractor={keyExtractor}
         ListHeaderComponent={listHeader}
         contentContainerStyle={{ paddingBottom: 96 }}
-        stickyHeaderIndices={[]}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#39FF14" />}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={accentColor} />}
         ListFooterComponent={
-          !isFinished ? (
+          !isFinished && homeMode === 'browse' ? (
             <View className="py-4">
               <RadarLoader mini phaseMessage={phaseMessage} liveCount={liveContests.length} />
+            </View>
+          ) : null
+        }
+        ListEmptyComponent={
+          homeMode === 'browse' && liveContests.length === 0 ? (
+            <View className="mx-4 rounded-xl bg-surface border border-gray-600/50 p-6 items-center gap-4">
+              <Text className="text-gray-300 text-center">No contests found. Pull to refresh.</Text>
             </View>
           ) : null
         }
