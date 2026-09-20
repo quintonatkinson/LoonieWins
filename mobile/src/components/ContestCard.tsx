@@ -28,7 +28,7 @@ export default function ContestCard({
   daysLeft: daysLeftProp,
 }: ContestCardProps) {
   const {
-    dailyLimitReached,
+    weeklyLimitReached,
     userIsFree,
     canEnterFree,
     hasUnlimitedEntries,
@@ -59,11 +59,11 @@ export default function ContestCard({
       return
     }
     if (canEnterFree) {
-      useFreeEntry()
       onOpenOverlay(contest)
+      void useFreeEntry()
       return
     }
-    if (dailyLimitReached && userIsFree) {
+    if (weeklyLimitReached && userIsFree) {
       if (balance >= entryCostPts && spendPointsForEntry()) {
         onOpenOverlay(contest)
       }
@@ -73,7 +73,7 @@ export default function ContestCard({
     variant,
     hasUnlimitedEntries,
     canEnterFree,
-    dailyLimitReached,
+    weeklyLimitReached,
     userIsFree,
     balance,
     entryCostPts,
@@ -84,7 +84,7 @@ export default function ContestCard({
   ])
 
   const showUnlock =
-    contest.id !== '__offline_alert__' && dailyLimitReached && userIsFree && !hasUnlimitedEntries
+    contest.id !== '__offline_alert__' && weeklyLimitReached && userIsFree && !hasUnlimitedEntries
 
   const isLocked = contest.isLocked === true
   const elig = contest.eligibility ?? 'Unknown'

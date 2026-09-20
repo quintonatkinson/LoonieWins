@@ -5,11 +5,16 @@ import ContestBrowser from '../components/ContestBrowser'
 import ContestCard from '../components/ContestCard'
 import CountryToggle from '../components/CountryToggle'
 import RadarLoader from '../components/RadarLoader'
+import SubscriptionModal from '../components/SubscriptionModal'
 import { useContestPipeline } from '../hooks/useContestPipeline'
 import { useContestEntries } from '../hooks/useContestEntries'
+import { useUserLimits } from '../hooks/useUserLimits'
 import { useAuth } from '../contexts/AuthContext'
+import { useUserEarn } from '../contexts/UserEarnContext'
 import type { AutoFillData } from '../types/profile'
 import { loadAutoFillData } from '../lib/utils/autoFillStorage'
+import { rpcConsumeSmartFill } from '../lib/monetization/progression'
+import { isSupabaseConfigured } from '../lib/supabase'
 
 type SortFilter = 'high-value' | 'ending-soon' | 'best-odds' | 'most-popular'
 
@@ -45,6 +50,9 @@ export default function Dashboard() {
   const { liveContests, isScanning, isSyncingCloud, isFinished, offlineMode, phaseMessage, refetch } = pipeline
   const { profile, updateProfile } = useAuth()
   const { enteredIds, markEntered: persistEntered } = useContestEntries()
+  const { smartFillsBlocked, smartFillsUnlimited, smartFillsRemaining } = useUserLimits()
+  const [showSmartFillPaywall, setShowSmartFillPaywall] = useState(false)
+  const { upgradeToPro } = useUserEarn()
 
   const [search, setSearch] = useState('')
   const [sortFilter, setSortFilter] = useState<SortFilter | null>(null)
@@ -97,11 +105,34 @@ export default function Dashboard() {
   )
 
   const handleAutoFillUsed = useCallback(() => {
-    const remaining = profile?.smart_fills_remaining
-    if (remaining == null) return
-    if (remaining <= 0) return
-    void updateProfile({ smart_fills_remaining: Math.max(0, remaining - 1) })
-  }, [profile, updateProfile])
+    void (async () => {
+      if (smartFillsUnlimited) return
+      if (smartFillsBlocked) {
+        setShowSmartFillPaywall(true)
+        return
+      }
+      if (profile && isSupabaseConfigured) {
+        const res = await rpcConsumeSmartFill()
+        if (res.ok && !res.local) {
+          if (res.remaining != null) {
+            await updateProfile({ smart_fills_remaining: res.remaining })
+          }
+          return
+        }
+        if (res.reason === 'smart_fills_exhausted') {
+          setShowSmartFillPaywall(true)
+          return
+        }
+      }
+      const remaining = profile?.smart_fills_remaining
+      if (remaining == null) return
+      if (remaining <= 0) {
+        setShowSmartFillPaywall(true)
+        return
+      }
+      void updateProfile({ smart_fills_remaining: Math.max(0, remaining - 1) })
+    })()
+  }, [profile, updateProfile, smartFillsBlocked, smartFillsUnlimited])
 
   const routineContests = liveContests.filter((c) => enteredIds.has(c.id)).slice(0, 10)
 
@@ -392,6 +423,15 @@ export default function Dashboard() {
         onMarkEntered={markEntered}
         autoFillData={autoFillData}
         onAutoFillUsed={handleAutoFillUsed}
+        smartFillBlocked={smartFillsBlocked}
+        smartFillsRemaining={smartFillsUnlimited ? null : smartFillsRemaining}
+      />
+
+      <SubscriptionModal
+        open={showSmartFillPaywall}
+        onClose={() => setShowSmartFillPaywall(false)}
+        onSelectPlan={(planId) => void upgradeToPro(planId)}
+        showComparison
       />
     </div>
   )

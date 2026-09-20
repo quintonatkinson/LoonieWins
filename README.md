@@ -61,6 +61,7 @@ Canadian + American contest aggregator & offerwall — Win More, Work Less.
 - **Profile:** Plan, applied contests with status actions, autofill, export, delete account.
 - **Submit a contest (moderated UGC):** `/submit` — title, URL, country eligibility, optional expiry. Mods approve via `/moderate` → Hive Mind `contests` (`source = user-submitted`). SQL: `supabase/migrations/20260920_user_contest_submissions.sql`.
 - **Push notifications:** Profile prefs (`newContestsCA` / `newContestsUS` / `endingTonight`) + Expo token registration; Edge Function `send-push-alerts`. SQL: `supabase/migrations/20260920_push_notifications.sql`.
+- **Freemium / earn:** Weekly entry caps, Smart-Fill paywall, AdGem offerwall (sandbox without keys), XP/streak on enter/submit, paid referrals. SQL: `supabase/migrations/20260320000000_freemium_monetization.sql`.
 - **Referrals / Winners / Earn:** Backed by `giveaways.*` and `tracking.transactions`.
 - **Legal / store:** `/privacy`, `/terms`, `/support`, `/delete-account` + `public/legal/*.html`.
 - **Account deletion:** `public.delete_own_account()` in bootstrap (also `supabase/account_deletion.sql`).

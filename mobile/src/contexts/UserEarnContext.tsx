@@ -8,26 +8,44 @@ import {
 } from 'react'
 import { useAuth, type SubscriptionTier } from './AuthContext'
 import { tracking } from '../lib/supabase'
+import {
+  FREE_WEEKLY_ENTRY_CAP,
+  isProTier,
+  weeklyEntryCap,
+} from '../lib/monetization/tiers'
+import {
+  localConsumeWeeklyEntry,
+  rpcConsumeFreeEntry,
+} from '../lib/monetization/progression'
+import { purchaseSubscription, type BillingPlanId } from '../lib/billing/iap'
 
 interface UserEarnContextValue {
   balance: number
   lastDailyEntryAt: string | null
   subscriptionTier: SubscriptionTier
+  weeklyEntriesUsed: number
+  weeklyEntryCapValue: number | null
   setBalance: (n: number | ((prev: number) => number)) => void
   setLastDailyEntryAt: (iso: string | null) => void
   setSubscriptionTier: (tier: SubscriptionTier) => void
   addPoints: (amount: number, meta?: { type?: string; description?: string }) => void
-  useFreeEntry: () => void
+  useFreeEntry: () => Promise<boolean>
   spendPointsForEntry: (cost: number) => boolean
+  upgradeToPro: (planId: BillingPlanId) => Promise<void>
 }
 
 const UserEarnContext = createContext<UserEarnContextValue | null>(null)
 
 export function UserEarnProvider({ children }: { children: ReactNode }) {
-  const { user, profile, updateProfile } = useAuth()
+  const { user, profile, updateProfile, refreshProfile } = useAuth()
   const balance = profile?.points_balance ?? 0
   const lastDailyEntryAt = profile?.last_daily_entry_at ?? null
   const subscriptionTier = profile?.subscription_tier ?? 'free'
+  const weeklyEntriesUsed = profile?.weekly_entries_used ?? 0
+  const weeklyEntryCapValue = weeklyEntryCap(profile?.feature_flags, {
+    tier: subscriptionTier,
+    isPremium: profile?.is_premium,
+  })
   const syncing = useRef(false)
 
   useEffect(() => {
@@ -69,6 +87,14 @@ export function UserEarnProvider({ children }: { children: ReactNode }) {
     [updateProfile]
   )
 
+  const upgradeToPro = useCallback(
+    async (planId: BillingPlanId) => {
+      await purchaseSubscription(planId)
+      setSubscriptionTier(planId)
+    },
+    [setSubscriptionTier]
+  )
+
   const addPoints = useCallback(
     (amount: number, meta?: { type?: string; description?: string }) => {
       if (!user || !profile) return
@@ -85,9 +111,33 @@ export function UserEarnProvider({ children }: { children: ReactNode }) {
     [user, profile, updateProfile]
   )
 
-  const useFreeEntry = useCallback(() => {
-    void updateProfile({ last_daily_entry_at: new Date().toISOString() })
-  }, [updateProfile])
+  const useFreeEntry = useCallback(async (): Promise<boolean> => {
+    if (!profile) return false
+    if (isProTier(profile.subscription_tier, profile.is_premium)) {
+      void updateProfile({ last_daily_entry_at: new Date().toISOString() })
+      return true
+    }
+    const cap = weeklyEntryCapValue ?? FREE_WEEKLY_ENTRY_CAP
+    if (user) {
+      const res = await rpcConsumeFreeEntry(cap)
+      if (!res.local) {
+        await refreshProfile()
+        return Boolean(res.ok)
+      }
+    }
+    const local = localConsumeWeeklyEntry(
+      profile.weekly_entries_used ?? 0,
+      profile.weekly_entries_reset_at,
+      cap
+    )
+    if (!local.ok) return false
+    await updateProfile({
+      weekly_entries_used: local.weekly_used,
+      weekly_entries_reset_at: local.weekly_entries_reset_at,
+      last_daily_entry_at: new Date().toISOString(),
+    })
+    return true
+  }, [profile, user, weeklyEntryCapValue, updateProfile, refreshProfile])
 
   const spendPointsForEntry = useCallback(
     (cost: number): boolean => {
@@ -112,12 +162,15 @@ export function UserEarnProvider({ children }: { children: ReactNode }) {
         balance,
         lastDailyEntryAt,
         subscriptionTier,
+        weeklyEntriesUsed,
+        weeklyEntryCapValue,
         setBalance,
         setLastDailyEntryAt,
         setSubscriptionTier,
         addPoints,
         useFreeEntry,
         spendPointsForEntry,
+        upgradeToPro,
       }}
     >
       {children}

@@ -24,7 +24,7 @@ export default function ContestCard({
 }: ContestCardProps) {
   const navigate = useNavigate()
   const {
-    dailyLimitReached,
+    weeklyLimitReached,
     userIsFree,
     canEnterFree,
     hasUnlimitedEntries,
@@ -32,12 +32,14 @@ export default function ContestCard({
     entryCostPts,
     spendPointsForEntry,
     useFreeEntry,
+    weeklyEntriesUsed,
+    weeklyEntryCap,
   } = useUserLimits()
 
   const [showInsufficient, setShowInsufficient] = useState(false)
   const [showSubscription, setShowSubscription] = useState(false)
   const [toast, setToast] = useState(false)
-  const { setSubscriptionTier } = useUserEarn()
+  const { upgradeToPro } = useUserEarn()
 
   const daysLeft =
     daysLeftProp ??
@@ -68,12 +70,10 @@ export default function ContestCard({
     if (canEnterFree) {
       // Open first so guest/demo never blocks on bookkeeping
       onOpenOverlay(contest)
-      try {
-        useFreeEntry()
-      } catch (_) {}
+      void useFreeEntry()
       return
     }
-    if (dailyLimitReached && userIsFree) {
+    if (weeklyLimitReached && userIsFree) {
       if (balance >= entryCostPts && spendPointsForEntry()) {
         onOpenOverlay(contest)
         setToast(true)
@@ -89,7 +89,7 @@ export default function ContestCard({
     variant,
     hasUnlimitedEntries,
     canEnterFree,
-    dailyLimitReached,
+    weeklyLimitReached,
     userIsFree,
     balance,
     entryCostPts,
@@ -99,7 +99,7 @@ export default function ContestCard({
   ])
 
   const showUnlock =
-    contest.id !== '__offline_alert__' && dailyLimitReached && userIsFree && !hasUnlimitedEntries
+    contest.id !== '__offline_alert__' && weeklyLimitReached && userIsFree && !hasUnlimitedEntries
 
   const goToEarn = useCallback(() => {
     setShowInsufficient(false)
@@ -168,9 +168,10 @@ export default function ContestCard({
         role="dialog"
         aria-modal
       >
-        <p className="text-gray-50 font-medium">Insufficient Funds</p>
+        <p className="text-gray-50 font-medium">Weekly free entries used</p>
         <p className="text-gray-400 text-sm mt-2">
-          Not enough points. Do 1 Survey to unlock 2.5 Entries!
+          Free tier: {weeklyEntriesUsed}/{weeklyEntryCap ?? '∞'} entries this week. Spend{' '}
+          {entryCostPts} pts for another, earn more on Earn, or go Pro for unlimited.
         </p>
         <button
           type="button"
@@ -197,7 +198,8 @@ export default function ContestCard({
     <SubscriptionModal
       open={showSubscription}
       onClose={() => setShowSubscription(false)}
-      onSelectPlan={(planId) => setSubscriptionTier(planId)}
+      onSelectPlan={(planId) => void upgradeToPro(planId)}
+      showComparison
     />
   )
 

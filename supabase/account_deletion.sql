@@ -27,6 +27,10 @@ begin
     delete from public.push_tokens where user_id = uid;
   exception when undefined_table then null;
   end;
+  begin
+    delete from giveaways.referral_click_credits where clicker_id = uid or referrer_id = uid;
+  exception when undefined_table then null;
+  end;
   delete from tracking.contest_entries where user_id = uid;
   delete from tracking.transactions where user_id = uid;
   delete from giveaways.user_wins where user_id = uid;

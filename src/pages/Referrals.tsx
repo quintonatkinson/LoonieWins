@@ -1,6 +1,17 @@
 import { useCallback, useEffect, useState } from 'react'
 import { giveaways, isSupabaseConfigured } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
+import { useUserEarn } from '../contexts/UserEarnContext'
+import {
+  REFERRAL_CLICK_POINTS,
+  REFERRAL_SIGNUP_REFEREE_POINTS,
+  REFERRAL_SIGNUP_REFERRER_POINTS,
+} from '../lib/monetization/tiers'
+import {
+  rpcApplyReferralCode,
+  rpcCreditReferralClick,
+  rpcEnsureReferralCode,
+} from '../lib/monetization/progression'
 
 interface ReferralLink {
   id: string
@@ -11,11 +22,15 @@ interface ReferralLink {
 }
 
 export default function Referrals() {
-  const { user } = useAuth()
+  const { user, profile, refreshProfile } = useAuth()
+  const { balance } = useUserEarn()
   const [links, setLinks] = useState<ReferralLink[]>([])
   const [newUrl, setNewUrl] = useState('')
   const [newTitle, setNewTitle] = useState('')
+  const [inviteCode, setInviteCode] = useState('')
+  const [myCode, setMyCode] = useState<string | null>(profile?.referral_code ?? null)
   const [error, setError] = useState<string | null>(null)
+  const [statusMsg, setStatusMsg] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [addedToast, setAddedToast] = useState(false)
 
@@ -51,20 +66,42 @@ export default function Referrals() {
     void refresh()
   }, [refresh])
 
+  useEffect(() => {
+    if (!user || !isSupabaseConfigured) return
+    void (async () => {
+      const code = await rpcEnsureReferralCode()
+      if (code) setMyCode(code)
+      else if (profile?.referral_code) setMyCode(profile.referral_code)
+    })()
+  }, [user, profile?.referral_code])
+
   const handleClick = async (link: ReferralLink) => {
     window.open(link.url, '_blank', 'noopener,noreferrer')
-    const nextClicks = (link.clicks_received ?? 0) + 1
-    setLinks((prev) =>
-      prev.map((l) => (l.id === link.id ? { ...l, clicks_received: nextClicks } : l))
-    )
-    // Only the referrer can update under RLS; others still get the open.
-    if (user && link.referrer_id === user.id && isSupabaseConfigured) {
-      try {
-        await giveaways()
-          .from('referral_pool')
-          .update({ clicks_received: nextClicks })
-          .eq('id', link.id)
-      } catch (_) {}
+    setStatusMsg(null)
+
+    if (!user || !isSupabaseConfigured) {
+      setStatusMsg('Sign in to credit the referrer with points.')
+      return
+    }
+
+    const res = await rpcCreditReferralClick(link.id)
+    if (res.ok) {
+      setLinks((prev) =>
+        prev.map((l) =>
+          l.id === link.id ? { ...l, clicks_received: (l.clicks_received ?? 0) + 1 } : l
+        )
+      )
+      setStatusMsg(`Referrer credited +${res.points_awarded ?? REFERRAL_CLICK_POINTS} pts.`)
+      await refreshProfile()
+      return
+    }
+
+    if (res.reason === 'self_click') {
+      setStatusMsg('Self-clicks do not pay points.')
+    } else if (res.reason === 'already_credited') {
+      setStatusMsg('You already credited this link (one payout per friend per link).')
+    } else {
+      setStatusMsg(res.reason || 'Could not credit referral.')
     }
   }
 
@@ -100,17 +137,57 @@ export default function Referrals() {
     }
   }
 
+  const handleApplyCode = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setStatusMsg(null)
+    const res = await rpcApplyReferralCode(inviteCode)
+    if (res.ok) {
+      setStatusMsg(
+        `Welcome bonus +${res.referee_points ?? REFERRAL_SIGNUP_REFEREE_POINTS} pts applied. Friend earned +${res.referrer_points ?? REFERRAL_SIGNUP_REFERRER_POINTS}.`
+      )
+      setInviteCode('')
+      await refreshProfile()
+      return
+    }
+    setStatusMsg(res.reason || 'Invalid code')
+  }
+
   return (
-    <div className="p-4 space-y-6">
+    <div className="p-4 space-y-6 pb-24">
       <div>
         <h1 className="text-xl font-semibold text-gray-50">Referrals</h1>
         <p className="text-gray-400 text-sm mt-1">
-          I click yours, you click mine. Each click = +Karma.
+          Real points, not karma. Click credit = +{REFERRAL_CLICK_POINTS} pts to the link owner
+          (once per friend). Invite code: you +{REFERRAL_SIGNUP_REFEREE_POINTS}, friend +
+          {REFERRAL_SIGNUP_REFERRER_POINTS}.
         </p>
+        <p className="text-amber-400 text-sm mt-2">Balance: {balance.toLocaleString()} Pts</p>
       </div>
 
+      {myCode && (
+        <div className="glass rounded-xl p-4">
+          <p className="text-xs text-gray-500 uppercase tracking-wide">Your invite code</p>
+          <p className="text-lg font-mono font-bold text-win mt-1">{myCode}</p>
+          <p className="text-xs text-gray-500 mt-1">Share so new signups can apply it once.</p>
+        </div>
+      )}
+
+      <form onSubmit={(e) => void handleApplyCode(e)} className="glass rounded-xl p-4 space-y-3">
+        <h2 className="text-sm font-medium text-gray-50">Have an invite code?</h2>
+        <input
+          type="text"
+          placeholder="Enter code"
+          value={inviteCode}
+          onChange={(e) => setInviteCode(e.target.value)}
+          className="w-full px-4 py-2 rounded-lg bg-white/10 border border-white/20 text-white placeholder-white/50"
+        />
+        <button type="submit" className="w-full py-2 rounded-lg bg-win text-slate-950 font-semibold">
+          Claim signup bonus
+        </button>
+      </form>
+
       <form onSubmit={(e) => void handleSubmit(e)} className="glass rounded-xl p-4 space-y-3">
-        <h2 className="text-sm font-medium text-gray-50">Add your link</h2>
+        <h2 className="text-sm font-medium text-gray-50">Add your contest link</h2>
         <input
           type="url"
           placeholder="https://…"
@@ -132,10 +209,16 @@ export default function Referrals() {
         {error && <p className="text-sm text-red-400">{error}</p>}
         {addedToast && (
           <p className="text-sm text-win" role="status">
-            Link added to the community list.
+            Link added. Friends who click earn you +{REFERRAL_CLICK_POINTS} pts (once each).
           </p>
         )}
       </form>
+
+      {statusMsg && (
+        <p className="text-sm text-amber-300" role="status">
+          {statusMsg}
+        </p>
+      )}
 
       <section>
         <h2 className="text-sm font-medium text-white/80 mb-3">Community links</h2>
@@ -150,13 +233,15 @@ export default function Referrals() {
                 <p className="font-medium text-sm text-gray-50 line-clamp-1">{link.title || link.url}</p>
                 <p className="text-xs text-gray-500 truncate mt-0.5">{link.url}</p>
                 <div className="flex items-center justify-between mt-3">
-                  <span className="text-xs text-gray-400">{link.clicks_received} clicks</span>
+                  <span className="text-xs text-gray-400">
+                    {link.clicks_received} paid clicks · +{REFERRAL_CLICK_POINTS} pts each
+                  </span>
                   <button
                     type="button"
                     onClick={() => void handleClick(link)}
                     className="px-4 py-2 rounded-lg bg-win text-slate-950 font-semibold text-sm"
                   >
-                    Click for Karma
+                    Click for points
                   </button>
                 </div>
               </li>

@@ -1,3 +1,6 @@
+import { FREE_TIER_PERKS, PRO_TIER_PERKS } from '../lib/monetization/tiers'
+import { billingStubNotice } from '../lib/billing/iap'
+
 interface SubscriptionModalProps {
   open: boolean
   onClose: () => void
@@ -6,7 +9,12 @@ interface SubscriptionModalProps {
   showComparison?: boolean
 }
 
-export default function SubscriptionModal({ open, onClose, onSelectPlan, showComparison = false }: SubscriptionModalProps) {
+export default function SubscriptionModal({
+  open,
+  onClose,
+  onSelectPlan,
+  showComparison = true,
+}: SubscriptionModalProps) {
   if (!open) return null
 
   const handleSelect = (planId: 'weekly' | 'monthly') => {
@@ -24,30 +32,32 @@ export default function SubscriptionModal({ open, onClose, onSelectPlan, showCom
         aria-labelledby="subscription-title"
       >
         <h2 id="subscription-title" className="text-lg font-bold text-gray-50">
-          Tired of grinding points?
+          Tired of weekly caps?
         </h2>
         <p className="text-sm text-gray-400 mt-2 mb-4">
-          Unlimited Entries. No Points Needed.
+          Unlimited Entries. Unlimited Smart-Fills. No Points Needed.
         </p>
 
         {showComparison && (
           <div className="mb-4 space-y-3 rounded-xl border border-gray-600/50 p-4 bg-gray-900/50">
             <div>
-              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Free Plan</p>
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">
+                Free Plan
+              </p>
               <ul className="text-sm text-gray-400 space-y-0.5">
-                <li>1 free contest entry per day</li>
-                <li>Extra entries: 200 pts each</li>
-                <li>Earn points via surveys & tasks</li>
-                <li>3 Smart-Fills per day</li>
+                {FREE_TIER_PERKS.map((line) => (
+                  <li key={line}>{line}</li>
+                ))}
               </ul>
             </div>
             <div>
-              <p className="text-xs font-semibold text-amber-400 uppercase tracking-wide mb-1">Pro Plan</p>
+              <p className="text-xs font-semibold text-amber-400 uppercase tracking-wide mb-1">
+                Pro Plan
+              </p>
               <ul className="text-sm text-gray-300 space-y-0.5">
-                <li>Unlimited contest entries</li>
-                <li>No points required</li>
-                <li>Unlimited Smart-Fills</li>
-                <li>Support development</li>
+                {PRO_TIER_PERKS.map((line) => (
+                  <li key={line}>{line}</li>
+                ))}
               </ul>
               <p className="text-amber-400 text-sm mt-2 font-medium">From $1.49/week or $4.99/mo</p>
             </div>
@@ -72,6 +82,8 @@ export default function SubscriptionModal({ open, onClose, onSelectPlan, showCom
             <p className="text-amber-400 text-sm mt-0.5">$4.99 / mo</p>
           </button>
         </div>
+
+        <p className="mt-3 text-[11px] text-gray-500 leading-snug">{billingStubNotice()}</p>
 
         <button
           type="button"

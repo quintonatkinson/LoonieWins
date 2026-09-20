@@ -18,6 +18,7 @@ import {
 import { useUserEarn } from '../contexts/UserEarnContext'
 import { useAuth } from '../contexts/AuthContext'
 import { useContestEntries, type ContestEntryStatus } from '../hooks/useContestEntries'
+import { useUserLimits } from '../hooks/useUserLimits'
 import SubscriptionModal from '../components/SubscriptionModal'
 import NotificationPreferences from '../components/NotificationPreferences'
 import type { AutoFillData } from '../types/profile'
@@ -53,9 +54,11 @@ function formatPrize(v: number | null | undefined): string | undefined {
 
 export default function Profile() {
   const navigate = useNavigate()
-  const { subscriptionTier, setSubscriptionTier } = useUserEarn()
+  const { subscriptionTier, upgradeToPro, weeklyEntriesUsed } = useUserEarn()
   const { profile, updateProfile, signOut, user } = useAuth()
   const { entries, updateStatus, removeEntry } = useContestEntries()
+  const { smartFillsRemaining, smartFillsUnlimited, weeklyEntryCap, weeklyLimitReached } =
+    useUserLimits()
 
   const [showPlanModal, setShowPlanModal] = useState(false)
   const [editingAutoFill, setEditingAutoFill] = useState(false)
@@ -99,7 +102,9 @@ export default function Profile() {
       }))
   }, [entries, entryFilter, entrySearch])
 
-  const smartFillsRemaining = profile?.smart_fills_remaining ?? 3
+  const smartFillsLabel = smartFillsUnlimited
+    ? 'Unlimited Smart-Fills'
+    : `${smartFillsRemaining} Smart-Fills remaining`
   const isPro = subscriptionTier === 'weekly' || subscriptionTier === 'monthly'
   const planLabel =
     subscriptionTier === 'weekly'
@@ -107,6 +112,13 @@ export default function Profile() {
       : subscriptionTier === 'monthly'
         ? 'Monthly Pro'
         : 'Free Tier'
+  const entryCapLabel = isPro
+    ? 'Unlimited entries · No points needed'
+    : weeklyEntryCap != null
+      ? `${weeklyEntriesUsed}/${weeklyEntryCap} free entries this week${
+          weeklyLimitReached ? ' — cap reached (pts or Pro for more)' : ''
+        } · ${smartFillsLabel}`
+      : smartFillsLabel
 
   const startEditAutoFill = () => {
     setDraftAutoFill({ ...autoFillData })
@@ -205,11 +217,7 @@ export default function Profile() {
           <div>
             <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Current Plan</p>
             <p className="text-lg font-bold text-white mt-0.5">{planLabel}</p>
-            <p className="text-sm text-gray-400 mt-1">
-              {isPro
-                ? 'Unlimited entries · No points needed'
-                : `${smartFillsRemaining} Smart-Fills remaining today — Unlock unlimited with Pro`}
-            </p>
+            <p className="text-sm text-gray-400 mt-1">{entryCapLabel}</p>
           </div>
           {!isPro && (
             <button
@@ -221,6 +229,21 @@ export default function Profile() {
               Upgrade to Pro
             </button>
           )}
+        </div>
+      </section>
+
+      <section className="rounded-xl bg-gray-800/80 border border-gray-600/50 p-4 grid grid-cols-3 gap-3 text-center">
+        <div>
+          <p className="text-xs text-gray-500 uppercase">XP</p>
+          <p className="text-lg font-bold text-win">{profile?.xp ?? 0}</p>
+        </div>
+        <div>
+          <p className="text-xs text-gray-500 uppercase">Level</p>
+          <p className="text-lg font-bold text-white">{profile?.level ?? 1}</p>
+        </div>
+        <div>
+          <p className="text-xs text-gray-500 uppercase">Streak</p>
+          <p className="text-lg font-bold text-amber-400">{profile?.streak ?? 0}d</p>
         </div>
       </section>
 
@@ -568,7 +591,7 @@ export default function Profile() {
       <SubscriptionModal
         open={showPlanModal}
         onClose={() => setShowPlanModal(false)}
-        onSelectPlan={(planId) => setSubscriptionTier(planId)}
+        onSelectPlan={(planId) => void upgradeToPro(planId)}
         showComparison
       />
     </div>
