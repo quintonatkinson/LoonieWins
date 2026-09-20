@@ -1,0 +1,6 @@
+# Supabase project config for LoonieWins scheduled ingest.
+# After `supabase functions deploy ingest-giveaways`, enable the cron job below
+# (Dashboard → Database → Extensions → pg_cron, or Edge Function Schedules).
+
+[functions.ingest-giveaways]
+verify_jwt = false
