@@ -34,6 +34,10 @@ export interface UserProfile {
   weekly_entries_used: number
   weekly_entries_reset_at: string | null
   last_streak_at: string | null
+  streak_grace_available: boolean
+  last_comeback_bonus_at: string | null
+  iap_product_id: string | null
+  iap_expires_at: string | null
   feature_flags: FeatureFlags
 }
 
@@ -79,6 +83,10 @@ function mapProfile(row: Record<string, unknown>): UserProfile {
     weekly_entries_used: Number(row.weekly_entries_used ?? 0),
     weekly_entries_reset_at: (row.weekly_entries_reset_at as string | null) ?? null,
     last_streak_at: (row.last_streak_at as string | null) ?? null,
+    streak_grace_available: row.streak_grace_available !== false,
+    last_comeback_bonus_at: (row.last_comeback_bonus_at as string | null) ?? null,
+    iap_product_id: (row.iap_product_id as string | null) ?? null,
+    iap_expires_at: (row.iap_expires_at as string | null) ?? null,
     feature_flags: (row.feature_flags as FeatureFlags) ?? {},
   }
 }
@@ -103,6 +111,10 @@ function guestProfile(): UserProfile {
     weekly_entries_used: 0,
     weekly_entries_reset_at: null,
     last_streak_at: null,
+    streak_grace_available: true,
+    last_comeback_bonus_at: null,
+    iap_product_id: null,
+    iap_expires_at: null,
     feature_flags: {},
   }
 }
@@ -296,6 +308,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (patch.weekly_entries_reset_at !== undefined)
         payload.weekly_entries_reset_at = patch.weekly_entries_reset_at
       if (patch.last_streak_at !== undefined) payload.last_streak_at = patch.last_streak_at
+      if (patch.streak_grace_available !== undefined)
+        payload.streak_grace_available = patch.streak_grace_available
+      if (patch.last_comeback_bonus_at !== undefined)
+        payload.last_comeback_bonus_at = patch.last_comeback_bonus_at
+      if (patch.iap_product_id !== undefined) payload.iap_product_id = patch.iap_product_id
+      if (patch.iap_expires_at !== undefined) payload.iap_expires_at = patch.iap_expires_at
       if (patch.feature_flags !== undefined) payload.feature_flags = patch.feature_flags
 
       const { data, error } = await supabase

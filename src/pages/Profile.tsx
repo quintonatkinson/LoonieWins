@@ -255,6 +255,11 @@ export default function Profile() {
         <div>
           <p className="text-xs text-gray-500 uppercase">Streak</p>
           <p className="text-lg font-bold text-amber-400">{profile?.streak ?? 0}d</p>
+          <p className="text-[10px] text-gray-500 mt-0.5">
+            {profile?.streak_grace_available === false
+              ? 'Grace used — don’t miss tomorrow'
+              : '1-day grace miss available'}
+          </p>
         </div>
       </section>
 

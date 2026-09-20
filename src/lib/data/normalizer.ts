@@ -28,6 +28,8 @@ export interface Contest {
   linkStatus?: number
   /** Hive Mind / feed created timestamp (ISO) — used for New rails */
   createdAt?: string
+  /** ISO publish time from RSS when available — also powers Pro New rail */
+  postedAt?: string
 }
 
 export interface RawFeedItem {
@@ -352,6 +354,8 @@ export function normalizeJsonItem(item: Rss2JsonItem, source: Source, index: num
     eligibility,
     eligibilityUnverified,
     requirements,
+    postedAt: postedAtIso,
+    createdAt: postedAtIso,
   }
 }
 
@@ -396,5 +400,7 @@ export function normalizeXmlItem(item: RawFeedItem, source: Source, index: numbe
     eligibility,
     eligibilityUnverified,
     requirements,
+    postedAt: postedAtIso,
+    createdAt: postedAtIso,
   }
 }

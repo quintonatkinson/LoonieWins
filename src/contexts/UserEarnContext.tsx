@@ -32,7 +32,7 @@ interface UserEarnContextValue {
   /** Consume one free weekly slot (RPC when signed in). Returns false if paywalled. */
   useFreeEntry: () => Promise<boolean>
   spendPointsForEntry: (cost: number) => boolean
-  /** Stubbed IAP → flips subscription_tier / is_premium */
+  /** StoreKit/Play via RevenueCat (or QA stub) → flips subscription_tier / is_premium */
   upgradeToPro: (planId: BillingPlanId) => Promise<void>
 }
 
@@ -92,11 +92,24 @@ export function UserEarnProvider({ children }: { children: ReactNode }) {
 
   const upgradeToPro = useCallback(
     async (planId: BillingPlanId) => {
-      // Wire StoreKit/Play later — stub always succeeds for paywall UX testing
-      await purchaseSubscription(planId)
-      setSubscriptionTier(planId)
+      const result = await purchaseSubscription(planId, { appUserId: user?.id })
+      if (!result.ok) {
+        if (result.cancelled) return
+        throw new Error(result.message)
+      }
+      await updateProfile({
+        subscription_tier: planId,
+        is_premium: true,
+        feature_flags: {
+          ...(profile?.feature_flags ?? {}),
+          unlimited_entries: true,
+          unlimited_smart_fills: true,
+          priority_sources: true,
+        },
+        ...(result.productId ? { iap_product_id: result.productId } : {}),
+      })
     },
-    [setSubscriptionTier]
+    [user?.id, profile?.feature_flags, updateProfile]
   )
 
   const addPoints = useCallback(
