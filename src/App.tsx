@@ -7,6 +7,8 @@ import Earn from './pages/Earn'
 import Winners from './pages/Winners'
 import PastContests from './pages/PastContests'
 import Profile from './pages/Profile'
+import SubmitContest from './pages/SubmitContest'
+import ModerateContests from './pages/ModerateContests'
 
 function App() {
   return (
@@ -19,6 +21,8 @@ function App() {
         <Route path="/winners" element={<Winners />} />
         <Route path="/past" element={<PastContests />} />
         <Route path="/profile" element={<Profile />} />
+        <Route path="/submit" element={<SubmitContest />} />
+        <Route path="/moderate" element={<ModerateContests />} />
       </Routes>
     </Layout>
     </UserEarnProvider>
