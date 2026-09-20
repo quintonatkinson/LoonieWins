@@ -7,7 +7,8 @@
  * mid / default tier used in Earn copy and as the standard band.
  */
 
-export const ENTRY_COST_PTS = 200
+/** Default / standard-tier entry cost after free weekly cap. */
+export const ENTRY_COST_PTS = 250
 export const FREE_WEEKLY_ENTRY_CAP = 7
 export const FREE_SMART_FILLS_DEFAULT = 3
 export const XP_ENTERED = 15
@@ -30,7 +31,7 @@ export const PRO_LOCKED_FEATURES = [
   {
     id: 'skip_point_grind',
     title: 'Skip the point grind',
-    detail: 'Prize-tiered entry costs (75–1000 pts) do not apply to Pro',
+    detail: 'Prize-tiered entry costs (50–3000 pts) do not apply to Pro',
   },
   {
     id: 'unlimited_smart_fills',
@@ -152,7 +153,7 @@ export function levelForXp(xp: number): number {
 /** Copy for paywall / comparison UI */
 export const FREE_TIER_PERKS = [
   `${FREE_WEEKLY_ENTRY_CAP} free contest entries per week`,
-  'Extra entries: prize-tiered pts (75 Tims → 1000 vehicle)',
+  'Extra entries: prize-tiered pts (50 Tims → 3000 vehicle)',
   `${FREE_SMART_FILLS_DEFAULT} Smart-Fills (then Pro)`,
   'Earn pts via AdGem offers / rewarded path',
   'Earn page may show promo slots',
