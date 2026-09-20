@@ -1,8 +1,7 @@
 import './global.css'
 import { useState, useCallback } from 'react'
 import { StatusBar } from 'expo-status-bar'
-import { View, ActivityIndicator, TouchableOpacity, Text } from 'react-native'
-import { Linking } from 'react-native'
+import { View, ActivityIndicator, TouchableOpacity, Text, Linking } from 'react-native'
 import type { Contest } from './src/lib/rssFetcher'
 import { resolveContestUrl } from './src/lib/rssFetcher'
 import { AuthProvider, useAuth } from './src/contexts/AuthContext'
@@ -11,19 +10,18 @@ import AuthScreen from './src/components/AuthScreen'
 import Dashboard from './src/screens/Dashboard'
 import ContestBrowser from './src/screens/ContestBrowser'
 import SettingsScreen from './src/screens/SettingsScreen'
+import { useContestEntries } from './src/hooks/useContestEntries'
 
 function AppContent() {
   const { session, loading, authReady, profile } = useAuth()
+  const { markEntered } = useContestEntries()
   const [overlayContest, setOverlayContest] = useState<Contest | null>(null)
   const [resolvedUrl, setResolvedUrl] = useState<string | null>(null)
   const [resolving, setResolving] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
 
   const autoFillData = {
-    name:
-      profile?.auto_fill_data?.name ||
-      profile?.display_name ||
-      '',
+    name: profile?.auto_fill_data?.name || profile?.display_name || '',
     email: profile?.auto_fill_data?.email || profile?.email || '',
     address: profile?.auto_fill_data?.address || '',
     phone: profile?.auto_fill_data?.phone,
@@ -43,7 +41,7 @@ function AppContent() {
   }, [])
 
   const handlePressUrl = useCallback((url: string) => {
-    Linking.openURL(url)
+    void Linking.openURL(url)
   }, [])
 
   const handleCloseOverlay = useCallback(() => {
@@ -108,7 +106,14 @@ function AppContent() {
           </View>
         )}
         {showBrowser && (
-          <ContestBrowser url={resolvedUrl} onClose={handleCloseOverlay} autoFillData={autoFillData} />
+          <ContestBrowser
+            url={resolvedUrl}
+            contest={overlayContest}
+            onClose={handleCloseOverlay}
+            onMarkEntered={(c, status) => void markEntered(c, status ?? 'entered')}
+            autoFillData={autoFillData}
+            autoMarkOnClose
+          />
         )}
         <StatusBar style="light" />
       </View>

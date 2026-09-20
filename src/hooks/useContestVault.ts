@@ -226,3 +226,41 @@ export function getPastContests(): Contest[] {
     return !Number.isNaN(end.getTime()) && end <= now
   })
 }
+
+/**
+ * Search Hive Mind history: local vault + Supabase contests table.
+ * Not limited to the current session live list.
+ */
+export async function searchHiveMind(query: string, limit = 40): Promise<Contest[]> {
+  const q = query.trim()
+  if (!q) return []
+  const qLower = q.toLowerCase()
+
+  const byUrl = new Map<string, Contest>()
+  for (const c of loadVault()) {
+    const hay = `${c.title} ${c.source ?? ''} ${c.url}`.toLowerCase()
+    if (hay.includes(qLower)) byUrl.set(normalizeUrl(c.url), c)
+  }
+
+  if (supabase) {
+    try {
+      const safe = q.replace(/[%_,]/g, ' ').trim()
+      if (safe) {
+        const { data, error } = await withTimeout(
+          supabase.from('contests').select('*').ilike('title', `%${safe}%`).limit(limit),
+          CLOUD_TIMEOUT_MS
+        )
+        if (!error && data) {
+          for (const row of data as ContestRow[]) {
+            const c = rowToContest(row)
+            byUrl.set(normalizeUrl(c.url), c)
+          }
+        }
+      }
+    } catch (err) {
+      console.warn('[Vault] searchHiveMind:', err)
+    }
+  }
+
+  return [...byUrl.values()].slice(0, limit)
+}

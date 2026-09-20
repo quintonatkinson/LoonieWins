@@ -151,3 +151,37 @@ export async function getPastContests(): Promise<Contest[]> {
     return !Number.isNaN(end.getTime()) && end <= now
   })
 }
+
+/** Search Hive Mind history: local vault + Supabase contests. */
+export async function searchHiveMind(query: string, limit = 40): Promise<Contest[]> {
+  const q = query.trim()
+  if (!q) return []
+  const qLower = q.toLowerCase()
+  const byUrl = new Map<string, Contest>()
+
+  for (const c of await loadVault()) {
+    const hay = `${c.title} ${c.source ?? ''} ${c.url}`.toLowerCase()
+    if (hay.includes(qLower)) byUrl.set(normalizeUrl(c.url), c)
+  }
+
+  try {
+    const safe = q.replace(/[%_,]/g, ' ').trim()
+    if (safe && supabase) {
+      const { data, error } = await supabase
+        .from('contests')
+        .select('*')
+        .ilike('title', `%${safe}%`)
+        .limit(limit)
+      if (!error && data) {
+        for (const row of data as ContestRow[]) {
+          const c = rowToContest(row)
+          byUrl.set(normalizeUrl(c.url), c)
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('[Vault] searchHiveMind:', err)
+  }
+
+  return [...byUrl.values()].slice(0, limit)
+}

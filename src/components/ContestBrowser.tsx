@@ -5,6 +5,13 @@ import { resolveContestUrl } from '../lib/rssFetcher'
 import { reportUrl } from '../lib/utils/reportedUrls'
 import { getInjectionScript } from '../lib/autofill/assassin'
 import type { AutoFillData } from '../types/profile'
+import { daysLeftUntilExpiry } from '../lib/utils/expiryDate'
+import { shareContest } from '../lib/utils/shareContest'
+import CountdownTimer from './CountdownTimer'
+import {
+  badgeToneClass,
+  getRequirementBadges,
+} from '../lib/utils/requirementBadges'
 
 interface ContestBrowserProps {
   contest: Contest | null
@@ -13,6 +20,8 @@ interface ContestBrowserProps {
   onMarkEntered?: (contest: Contest, status?: 'entered' | 'submitted') => void | Promise<unknown>
   autoFillData?: AutoFillData
   onAutoFillUsed?: () => void
+  /** When true, returning from Open & Enter auto-marks entered (with brief undo). */
+  autoMarkOnReturn?: boolean
 }
 
 const DEFAULT_AUTOFILL: AutoFillData = {
@@ -117,6 +126,7 @@ export default function ContestBrowser({
   onMarkEntered,
   autoFillData = DEFAULT_AUTOFILL,
   onAutoFillUsed,
+  autoMarkOnReturn = false,
 }: ContestBrowserProps) {
   const [resolvedUrl, setResolvedUrl] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
@@ -125,9 +135,11 @@ export default function ContestBrowser({
   const [autoFillMsg, setAutoFillMsg] = useState<string | null>(null)
   const [pendingMark, setPendingMark] = useState(false)
   const [statusMsg, setStatusMsg] = useState<string | null>(null)
+  const [awaitingReturn, setAwaitingReturn] = useState(false)
   const iframeRef = useRef<HTMLIFrameElement>(null)
   const isNativeRef = useRef<boolean | null>(null)
   const iframeLoadTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const skipReturnOnceRef = useRef(false)
 
   const hasProfile =
     Boolean(autoFillData.email?.trim()) ||
@@ -140,6 +152,7 @@ export default function ContestBrowser({
     setResolvedUrl(null)
     setIframeLikelyBlocked(false)
     setPendingMark(false)
+    setAwaitingReturn(false)
     setAutoFillMsg(null)
     setStatusMsg(null)
     resolveContestUrl(contest.url, contest.contentSnippet ?? contest.description).then((url) => {
@@ -159,11 +172,35 @@ export default function ContestBrowser({
       if (!contest || !onMarkEntered) return
       await onMarkEntered(contest, status)
       setPendingMark(false)
+      setAwaitingReturn(false)
       setStatusMsg(status === 'submitted' ? 'Marked as submitted' : 'Marked as entered')
       setTimeout(() => onClose(), 450)
     },
     [contest, onMarkEntered, onClose]
   )
+
+  // Auto-mark when user returns after Open & Enter
+  useEffect(() => {
+    if (!open || !autoMarkOnReturn || !awaitingReturn || !onMarkEntered || !contest) return
+    const onReturn = () => {
+      if (skipReturnOnceRef.current) {
+        skipReturnOnceRef.current = false
+        return
+      }
+      if (document.visibilityState && document.visibilityState !== 'visible') return
+      setAwaitingReturn(false)
+      void confirmMark('entered')
+    }
+    const onVis = () => {
+      if (document.visibilityState === 'visible') onReturn()
+    }
+    window.addEventListener('focus', onReturn)
+    document.addEventListener('visibilitychange', onVis)
+    return () => {
+      window.removeEventListener('focus', onReturn)
+      document.removeEventListener('visibilitychange', onVis)
+    }
+  }, [open, autoMarkOnReturn, awaitingReturn, onMarkEntered, contest, confirmMark])
 
   const openNativeWebView = useCallback(
     async (url: string) => {
@@ -190,29 +227,47 @@ export default function ContestBrowser({
 
         InAppBrowser.addListener('closeEvent', () => {
           InAppBrowser.removeAllListeners()
-          if (onMarkEntered) setPendingMark(true)
+          if (autoMarkOnReturn && onMarkEntered) {
+            void confirmMark('entered')
+          } else if (onMarkEntered) {
+            setPendingMark(true)
+          }
         })
         return true
       } catch (_) {
         return false
       }
     },
-    [autoFillData, contest?.title, onAutoFillUsed, onMarkEntered]
+    [autoFillData, contest?.title, onAutoFillUsed, onMarkEntered, autoMarkOnReturn, confirmMark]
   )
 
   const handleEnterContest = useCallback(() => {
     if (!resolvedUrl) return
+    skipReturnOnceRef.current = true
     openNativeWebView(resolvedUrl).then((opened) => {
       if (!opened) {
         window.open(resolvedUrl, '_blank', 'noopener,noreferrer')
-        if (onMarkEntered) setPendingMark(true)
+        if (autoMarkOnReturn && onMarkEntered) {
+          setAwaitingReturn(true)
+          setStatusMsg('Opened — marking entered when you return')
+        } else if (onMarkEntered) {
+          setPendingMark(true)
+        }
       }
     })
-  }, [resolvedUrl, openNativeWebView, onMarkEntered])
+  }, [resolvedUrl, openNativeWebView, onMarkEntered, autoMarkOnReturn])
 
   const handleEnterAndTrack = useCallback(() => {
     handleEnterContest()
   }, [handleEnterContest])
+
+  const handleShare = useCallback(async () => {
+    if (!contest) return
+    const result = await shareContest(contest)
+    if (result === 'shared') setStatusMsg('Shared')
+    else if (result === 'copied') setStatusMsg('Link copied')
+    else setStatusMsg('Could not share')
+  }, [contest])
 
   const handleAutoFill = () => {
     if (!hasProfile) {
@@ -242,11 +297,8 @@ export default function ContestBrowser({
     }
   }
 
-  const daysLeft = contest?.expiryDate
-    ? Math.ceil(
-        (new Date(contest.expiryDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24)
-      )
-    : null
+  const daysLeft = daysLeftUntilExpiry(contest?.expiryDate)
+  const reqBadges = contest ? getRequirementBadges(contest) : []
 
   if (!open) return null
 
@@ -265,21 +317,35 @@ export default function ContestBrowser({
         aria-label="Contest entry – Smart Fill"
       >
         <div className="flex items-start justify-between p-4 border-b border-white/10 shrink-0">
-          <div>
+          <div className="min-w-0 pr-2">
             <h2 className="font-semibold text-lg line-clamp-2">
               {decodeTitle(contest?.title ?? '')}
             </h2>
-            <div className="flex gap-3 mt-1 text-sm text-white/80">
-              {contest?.prizeValue != null && <span>${contest.prizeValue}</span>}
-              {daysLeft != null && (
+            <div className="flex flex-wrap gap-2 mt-2 items-center text-sm text-white/80">
+              {contest?.prizeValue != null && <span>${contest.prizeValue.toLocaleString()}</span>}
+              {contest?.expiryDate ? (
+                <CountdownTimer targetDate={contest.expiryDate} variant="detail" />
+              ) : daysLeft != null ? (
                 <span>{daysLeft > 0 ? `${daysLeft} days left` : 'Ended'}</span>
-              )}
+              ) : null}
             </div>
+            {reqBadges.length > 0 && (
+              <div className="flex flex-wrap gap-1.5 mt-2">
+                {reqBadges.map((b) => (
+                  <span
+                    key={b.kind}
+                    className={`rounded-full px-2 py-0.5 text-xs font-medium border ${badgeToneClass(b)}`}
+                  >
+                    {b.icon} {b.label}
+                  </span>
+                ))}
+              </div>
+            )}
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="p-2 rounded-lg hover:bg-white/10 text-white/80"
+            className="p-2 rounded-lg hover:bg-white/10 text-white/80 shrink-0"
             aria-label="Close"
           >
             ✕
@@ -453,15 +519,24 @@ export default function ContestBrowser({
                 </button>
               )}
             </div>
-            {onMarkEntered && (
+            <div className="flex gap-3 items-center">
               <button
                 type="button"
-                onClick={() => void confirmMark('submitted')}
-                className="text-xs text-white/60 hover:text-win self-start"
+                onClick={() => void handleShare()}
+                className="text-xs text-white/60 hover:text-win"
               >
-                Mark as submitted instead
+                Share contest
               </button>
-            )}
+              {onMarkEntered && (
+                <button
+                  type="button"
+                  onClick={() => void confirmMark('submitted')}
+                  className="text-xs text-white/60 hover:text-win"
+                >
+                  Mark as submitted instead
+                </button>
+              )}
+            </div>
             <button
               type="button"
               onClick={() => {
