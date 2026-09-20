@@ -20,7 +20,8 @@
       "buildNumber": "1",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
-        "CFBundleDisplayName": "LoonieWins"
+        "CFBundleDisplayName": "LoonieWins",
+        "UIBackgroundModes": ["remote-notification"]
       },
       "privacyManifests": {
         "NSPrivacyAccessedAPITypes": [
@@ -41,7 +42,11 @@
       },
       "package": "com.quinton.looniewins",
       "versionCode": 1,
-      "permissions": [],
+      "permissions": [
+        "android.permission.POST_NOTIFICATIONS",
+        "android.permission.RECEIVE_BOOT_COMPLETED",
+        "android.permission.VIBRATE"
+      ],
       "blockedPermissions": [
         "android.permission.RECORD_AUDIO",
         "android.permission.CAMERA",
@@ -51,6 +56,16 @@
         "com.google.android.gms.permission.AD_ID"
       ]
     },
+    "plugins": [
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/icon.png",
+          "color": "#39FF14",
+          "defaultChannel": "looniewins-alerts"
+        }
+      ]
+    ],
     "web": {
       "favicon": "./assets/favicon.png"
     },

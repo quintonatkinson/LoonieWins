@@ -19,6 +19,14 @@ begin
   end if;
 
   -- Multi-schema cleanup (also covered by ON DELETE CASCADE where configured)
+  begin
+    delete from public.push_alert_log where user_id = uid;
+  exception when undefined_table then null;
+  end;
+  begin
+    delete from public.push_tokens where user_id = uid;
+  exception when undefined_table then null;
+  end;
   delete from tracking.contest_entries where user_id = uid;
   delete from tracking.transactions where user_id = uid;
   delete from giveaways.user_wins where user_id = uid;

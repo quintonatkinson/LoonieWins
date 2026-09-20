@@ -37,6 +37,8 @@ export async function clearMobileLocalData(): Promise<void> {
 
 async function wipeUserRowsFallback(userId: string): Promise<void> {
   await Promise.all([
+    supabase.from('push_alert_log').delete().eq('user_id', userId),
+    supabase.from('push_tokens').delete().eq('user_id', userId),
     tracking().from('contest_entries').delete().eq('user_id', userId),
     tracking().from('transactions').delete().eq('user_id', userId),
     giveaways().from('user_wins').delete().eq('user_id', userId),

@@ -10,6 +10,9 @@ import {
 } from 'react-native'
 import { SUPPORT_EMAIL, LEGAL_SITE_ORIGIN, legalUrl, mailtoSupport } from '../lib/legal/constants'
 import { deleteAccountAndLocalData } from '../lib/account/deleteAccount'
+import NotificationPreferences from '../components/NotificationPreferences'
+import { useAuth } from '../contexts/AuthContext'
+import { registerForPushNotifications } from '../lib/notifications/registerPush'
 
 interface SettingsScreenProps {
   onClose: () => void
@@ -28,7 +31,32 @@ function openLegal(path: 'privacy' | 'terms' | 'support' | 'delete-account') {
 }
 
 export default function SettingsScreen({ onClose }: SettingsScreenProps) {
+  const { user } = useAuth()
   const [busy, setBusy] = useState(false)
+  const [pushMsg, setPushMsg] = useState<string | null>(null)
+
+  const enableDevicePush = async () => {
+    if (!user) {
+      Alert.alert('Sign in required', 'Log in to register this device for push alerts.')
+      return
+    }
+    setBusy(true)
+    setPushMsg(null)
+    try {
+      const result = await registerForPushNotifications(user.id)
+      if (result.error && !result.token) {
+        Alert.alert('Push registration', result.error)
+      } else {
+        setPushMsg(
+          result.error
+            ? `Token saved with warning: ${result.error}`
+            : 'Device registered. Tokens stored in Supabase.'
+        )
+      }
+    } finally {
+      setBusy(false)
+    }
+  }
 
   const confirmDelete = () => {
     Alert.alert(
@@ -77,8 +105,32 @@ export default function SettingsScreen({ onClose }: SettingsScreenProps) {
 
       <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 48, gap: 8 }}>
         <Text style={{ color: '#9ca3af', fontSize: 13, marginBottom: 8 }}>
-          Privacy, support, and account controls required for App Store and Google Play.
+          Privacy, support, notifications, and account controls for App Store and Google Play.
         </Text>
+
+        <NotificationPreferences />
+
+        <TouchableOpacity
+          onPress={() => void enableDevicePush()}
+          disabled={busy}
+          style={{
+            backgroundColor: '#1f2937',
+            borderRadius: 12,
+            padding: 14,
+            borderWidth: 1,
+            borderColor: '#39FF14',
+            marginBottom: 8,
+            opacity: busy ? 0.6 : 1,
+          }}
+        >
+          <Text style={{ color: '#39FF14', fontWeight: '700' }}>Register this device</Text>
+          <Text style={{ color: '#6b7280', fontSize: 12, marginTop: 4 }}>
+            Request permission and save Expo push token to Supabase
+          </Text>
+        </TouchableOpacity>
+        {pushMsg ? (
+          <Text style={{ color: '#9ca3af', fontSize: 12, marginBottom: 8 }}>{pushMsg}</Text>
+        ) : null}
 
         {(
           [
