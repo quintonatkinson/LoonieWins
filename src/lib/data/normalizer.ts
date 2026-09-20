@@ -26,6 +26,8 @@ export interface Contest {
   eligibilityUnverified?: boolean
   requirements?: string[]
   linkStatus?: number
+  /** Hive Mind / feed created timestamp (ISO) — used for New rails */
+  createdAt?: string
 }
 
 export interface RawFeedItem {

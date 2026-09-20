@@ -119,8 +119,16 @@ export function useContestPipeline() {
               return !Number.isNaN(end.getTime()) && end <= new Date()
             })()
           if (expired) return
-          // Drop dead links: 404, 403 (Cloudflare blocked), 500 (server error)
-          if (enriched.linkStatus === 404 || enriched.linkStatus === 403 || enriched.linkStatus === 500) return
+          // Drop dead links: 404, 403 (Cloudflare blocked), 410, 5xx
+          if (
+            enriched.linkStatus === 404 ||
+            enriched.linkStatus === 403 ||
+            enriched.linkStatus === 410 ||
+            enriched.linkStatus === 500 ||
+            enriched.linkStatus === 502 ||
+            enriched.linkStatus === 503
+          )
+            return
 
           collected.push(enriched)
         } catch (_) {

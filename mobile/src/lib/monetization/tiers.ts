@@ -20,6 +20,7 @@ export type PaywallFeatureFlag =
   | 'extra_smart_fills'
   | 'unlimited_smart_fills'
   | 'priority_sources'
+  | 'new_ending_rails'
 
 export type FeatureFlags = Partial<Record<PaywallFeatureFlag, boolean>>
 
@@ -42,7 +43,8 @@ export function hasFeature(
       flag === 'extra_smart_fills' ||
       flag === 'unlimited_smart_fills' ||
       flag === 'higher_entry_caps' ||
-      flag === 'priority_sources'
+      flag === 'priority_sources' ||
+      flag === 'new_ending_rails'
     ) {
       return true
     }
@@ -97,6 +99,7 @@ export const PRO_TIER_PERKS = [
   'Unlimited contest entries',
   'No points required to enter',
   'Unlimited Smart-Fills',
+  'New & Ending Soon rails on Home',
   'Priority source prep flag',
   'Support development',
 ] as const

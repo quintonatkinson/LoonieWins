@@ -63,6 +63,17 @@ export function useUserLimits() {
     })
   const smartFillsBlocked = !smartFillsUnlimited && smartFillsRemaining <= 0
 
+  const hasNewEndingRails =
+    !userIsFree ||
+    hasFeature(flags, 'new_ending_rails', {
+      tier: subscriptionTier,
+      isPremium: profile?.is_premium,
+    }) ||
+    hasFeature(flags, 'priority_sources', {
+      tier: subscriptionTier,
+      isPremium: profile?.is_premium,
+    })
+
   const spendForEntry = useMemo(
     () => () => spendPointsForEntry(ENTRY_COST_PTS),
     [spendPointsForEntry]
@@ -85,5 +96,6 @@ export function useUserLimits() {
     smartFillsRemaining,
     smartFillsUnlimited,
     smartFillsBlocked,
+    hasNewEndingRails,
   }
 }

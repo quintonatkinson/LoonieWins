@@ -18,21 +18,36 @@ import CountryToggle from '../components/CountryToggle'
 import RadarLoader from '../components/RadarLoader'
 import { useContestPipeline } from '../hooks/useContestPipeline'
 import { useContestEntries } from '../hooks/useContestEntries'
+import { useContestSocialProof } from '../hooks/useContestSocialProof'
+import { useUserLimits } from '../hooks/useUserLimits'
 import { useAuth } from '../contexts/AuthContext'
 import { compareExpiryAscending, daysLeftUntilExpiry } from '../lib/utils/expiryDate'
+import { isEndingTonight } from '../lib/utils/countdownLabel'
+import { isDeadLink } from '../lib/utils/linkHealth'
 import {
   loadHomeMode,
-  loadQuebecSafe,
+  loadAutoAdvance,
   resolveInitialGeo,
+  resolveInitialQuebecSafe,
   saveGeoFilter,
   saveHomeMode,
   saveQuebecSafe,
+  saveAutoAdvance,
   type GeoFilterValue,
   type HomeMode,
 } from '../lib/utils/feedPrefs'
 import { searchHiveMind } from '../hooks/useContestVault'
 import { shareContest } from '../lib/utils/shareContest'
-import { Linking } from 'react-native'
+import { Alert, Linking } from 'react-native'
+import {
+  contestRequiresAgeGate,
+  loadAgeConfirmed,
+  saveAgeConfirmed,
+} from '../lib/utils/ageGate'
+
+const NEW_RAIL_MS = 48 * 60 * 60 * 1000
+const FREE_RAIL_TEASER = 2
+const PRO_RAIL_LIMIT = 12
 
 type SortFilter = 'high-value' | 'ending-soon' | 'best-odds' | null
 
@@ -88,6 +103,8 @@ export default function Dashboard({ onOpenOverlay, onPressUrl, enteredIds: enter
   const localEntries = useContestEntries()
   const enteredIds = enteredIdsProp ?? localEntries.enteredIds
   const persistEntered = localEntries.markEntered
+  const { hasNewEndingRails } = useUserLimits()
+  const social = useContestSocialProof()
 
   const [search, setSearch] = useState('')
   const [sortFilter, setSortFilter] = useState<SortFilter>('ending-soon')
@@ -96,33 +113,56 @@ export default function Dashboard({ onOpenOverlay, onPressUrl, enteredIds: enter
   const [tagFilters, setTagFilters] = useState<Set<string>>(new Set())
   const [geoFilter, setGeoFilter] = useState<GeoFilterValue>('CA')
   const [homeMode, setHomeMode] = useState<HomeMode>('routine')
+  const [autoAdvance, setAutoAdvance] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [hiveResults, setHiveResults] = useState<Contest[]>([])
   const [statusToast, setStatusToast] = useState<string | null>(null)
   const pendingAutoMarkRef = useRef<Contest | null>(null)
+  const enterNextQueueRef = useRef<Contest[]>([])
+  const autoAdvanceRef = useRef(true)
+  const homeModeRef = useRef<HomeMode>('routine')
+  const oneTapEnterRef = useRef<(contest: Contest) => Promise<void>>(async () => {})
   const prefsReady = useRef(false)
 
   useEffect(() => {
     let cancelled = false
     ;(async () => {
-      const [geo, qc, mode] = await Promise.all([
+      const [geo, qc, mode, advance] = await Promise.all([
         resolveInitialGeo({
           province: profile?.auto_fill_data?.province,
           settingsGeo: profile?.settings?.geoFilter,
         }),
-        loadQuebecSafe(false),
+        resolveInitialQuebecSafe({
+          province: profile?.auto_fill_data?.province,
+          settingsQuebecSafe: profile?.settings?.quebecSafe,
+        }),
         loadHomeMode('routine'),
+        loadAutoAdvance(true),
       ])
       if (cancelled) return
       setGeoFilter(geo)
       setQuebecSafe(qc)
       setHomeMode(mode)
+      setAutoAdvance(advance)
+      if (qc) {
+        void saveQuebecSafe(true)
+        void updateProfile({
+          settings: { ...(profile?.settings ?? {}), quebecSafe: true },
+        })
+      }
       prefsReady.current = true
     })()
     return () => {
       cancelled = true
     }
-  }, [profile?.auto_fill_data?.province, profile?.settings?.geoFilter])
+  }, [profile?.auto_fill_data?.province, profile?.settings?.geoFilter, profile?.settings?.quebecSafe])
+
+  useEffect(() => {
+    autoAdvanceRef.current = autoAdvance
+  }, [autoAdvance])
+  useEffect(() => {
+    homeModeRef.current = homeMode
+  }, [homeMode])
 
   useEffect(() => {
     if (!statusToast) return
@@ -133,9 +173,41 @@ export default function Dashboard({ onOpenOverlay, onPressUrl, enteredIds: enter
   const markEntered = useCallback(
     (contest: Contest, status: 'entered' | 'submitted' = 'entered') => {
       void persistEntered(contest, status)
+      void social.refresh()
+      if (homeModeRef.current !== 'routine' || !autoAdvanceRef.current) return
+      const next = enterNextQueueRef.current.find((c) => c.id !== contest.id)
+      if (!next) return
+      setTimeout(() => {
+        setStatusToast('Next up — opening next contest')
+        void oneTapEnterRef.current(next)
+      }, 600)
     },
-    [persistEntered]
+    [persistEntered, social]
   )
+
+  const ensureAgeOk = useCallback(async (contest: Contest): Promise<boolean> => {
+    if (!contestRequiresAgeGate(contest)) return true
+    if (await loadAgeConfirmed()) return true
+    return new Promise((resolve) => {
+      Alert.alert(
+        '18+ required',
+        'This contest is marked 18+. Confirm you are of legal age to continue.',
+        [
+          { text: 'Cancel', style: 'cancel', onPress: () => resolve(false) },
+          {
+            text: 'I am 18+',
+            onPress: () => {
+              void saveAgeConfirmed(true)
+              void updateProfile({
+                settings: { ...(profile?.settings ?? {}), ageConfirmed: true },
+              })
+              resolve(true)
+            },
+          },
+        ]
+      )
+    })
+  }, [profile, updateProfile])
 
   // Auto-mark when app returns to foreground after one-tap Enter
   useEffect(() => {
@@ -153,6 +225,7 @@ export default function Dashboard({ onOpenOverlay, onPressUrl, enteredIds: enter
 
   const oneTapEnter = useCallback(
     async (contest: Contest) => {
+      if (!(await ensureAgeOk(contest))) return
       pendingAutoMarkRef.current = contest
       try {
         const url = await resolveContestUrl(
@@ -167,8 +240,9 @@ export default function Dashboard({ onOpenOverlay, onPressUrl, enteredIds: enter
         setStatusToast('Opened — marks entered when you return')
       }
     },
-    [onPressUrl]
+    [onPressUrl, ensureAgeOk]
   )
+  oneTapEnterRef.current = oneTapEnter
 
   const handleGeoChange = useCallback(
     (val: GeoFilterValue) => {
@@ -210,20 +284,57 @@ export default function Dashboard({ onOpenOverlay, onPressUrl, enteredIds: enter
       (c) =>
         !enteredIds.has(c.id) &&
         c.id !== '__offline_alert__' &&
+        !isDeadLink(c) &&
         passesGeo(c, geoFilter) &&
         !(quebecSafe && c.restrictions?.includes('no_quebec'))
     )
     return [...base].sort((a, b) => compareExpiryAscending(a.expiryDate, b.expiryDate)).slice(0, 25)
   }, [liveContests, enteredIds, geoFilter, quebecSafe])
 
+  useEffect(() => {
+    enterNextQueueRef.current = enterNextQueue
+  }, [enterNextQueue])
+
   const nextContest = enterNextQueue[0] ?? null
+
+  const railBase = useMemo(
+    () =>
+      liveContests.filter(
+        (c) =>
+          c.id !== '__offline_alert__' &&
+          !isDeadLink(c) &&
+          passesGeo(c, geoFilter) &&
+          !(quebecSafe && c.restrictions?.includes('no_quebec'))
+      ),
+    [liveContests, geoFilter, quebecSafe]
+  )
+
+  const newRail = useMemo(() => {
+    const cutoff = Date.now() - NEW_RAIL_MS
+    return [...railBase]
+      .filter((c) => {
+        if (!c.createdAt) return false
+        const t = Date.parse(c.createdAt)
+        return Number.isFinite(t) && t >= cutoff
+      })
+      .sort((a, b) => Date.parse(b.createdAt!) - Date.parse(a.createdAt!))
+      .slice(0, hasNewEndingRails ? PRO_RAIL_LIMIT : FREE_RAIL_TEASER)
+  }, [railBase, hasNewEndingRails])
+
+  const endingRail = useMemo(() => {
+    return [...railBase]
+      .filter((c) => c.expiryDate && isEndingTonight(c.expiryDate))
+      .sort((a, b) => compareExpiryAscending(a.expiryDate, b.expiryDate))
+      .slice(0, hasNewEndingRails ? PRO_RAIL_LIMIT : FREE_RAIL_TEASER)
+  }, [railBase, hasNewEndingRails])
 
   const routineContests = useMemo(() => {
     if (homeMode === 'routine') return enterNextQueue.slice(0, 10)
-    return liveContests.filter((c) => enteredIds.has(c.id)).slice(0, 10)
+    return liveContests.filter((c) => enteredIds.has(c.id) && !isDeadLink(c)).slice(0, 10)
   }, [homeMode, enterNextQueue, liveContests, enteredIds])
 
   let feedContests = liveContests.filter((c) => {
+    if (isDeadLink(c)) return false
     if (hideEntered && enteredIds.has(c.id)) return false
     if (quebecSafe && c.restrictions?.includes('no_quebec')) return false
     if (!passesGeo(c, geoFilter)) return false
@@ -249,7 +360,7 @@ export default function Dashboard({ onOpenOverlay, onPressUrl, enteredIds: enter
   const hiveOnly = useMemo(() => {
     if (!search.trim() || hiveResults.length === 0) return []
     const liveIds = new Set(liveContests.map((c) => c.id))
-    return hiveResults.filter((c) => !liveIds.has(c.id))
+    return hiveResults.filter((c) => !liveIds.has(c.id) && !isDeadLink(c))
   }, [search, hiveResults, liveContests])
 
   const daysLeft = (c: Contest) => daysLeftUntilExpiry(c.expiryDate)
@@ -308,6 +419,9 @@ export default function Dashboard({ onOpenOverlay, onPressUrl, enteredIds: enter
                 const next = !quebecSafe
                 setQuebecSafe(next)
                 void saveQuebecSafe(next)
+                void updateProfile({
+                  settings: { ...(profile?.settings ?? {}), quebecSafe: next },
+                })
               }}
               className={`px-4 py-2 rounded-full border ${quebecSafe ? 'bg-win border-win' : 'bg-surface border-gray-600/50'}`}
             >
@@ -316,6 +430,10 @@ export default function Dashboard({ onOpenOverlay, onPressUrl, enteredIds: enter
               </Text>
             </TouchableOpacity>
           </View>
+
+          {social.hiveLabel ? (
+            <Text className="px-4 pb-1 text-xs text-gray-500">{social.hiveLabel} across LoonieWins</Text>
+          ) : null}
 
           <View className="px-4 pb-2 flex-row gap-2">
             {(['routine', 'browse'] as const).map((key) => (
@@ -337,10 +455,25 @@ export default function Dashboard({ onOpenOverlay, onPressUrl, enteredIds: enter
           </View>
 
           <View className="px-4 pt-2">
-            <Text className="text-base font-bold text-gray-50 mb-3">
-              <Text className="text-win">⚡</Text>{' '}
-              {homeMode === 'routine' ? 'Enter next' : 'Your Daily Routine'}
-            </Text>
+            <View className="flex-row items-center justify-between mb-3">
+              <Text className="text-base font-bold text-gray-50">
+                <Text className="text-win">⚡</Text>{' '}
+                {homeMode === 'routine' ? 'Enter next' : 'Your Daily Routine'}
+              </Text>
+              {homeMode === 'routine' && (
+                <TouchableOpacity
+                  onPress={() => {
+                    const next = !autoAdvance
+                    setAutoAdvance(next)
+                    void saveAutoAdvance(next)
+                  }}
+                >
+                  <Text className="text-[11px] text-gray-500">
+                    Auto-next {autoAdvance ? 'ON' : 'OFF'}
+                  </Text>
+                </TouchableOpacity>
+              )}
+            </View>
             {homeMode === 'routine' && nextContest && (
               <TouchableOpacity
                 onPress={() => void oneTapEnter(nextContest)}
@@ -353,6 +486,7 @@ export default function Dashboard({ onOpenOverlay, onPressUrl, enteredIds: enter
                 </Text>
                 <Text className="text-xs text-gray-900/70 mt-1">
                   Opens contest · marks entered when you return
+                  {autoAdvance ? ' · then auto-advances' : ''}
                 </Text>
               </TouchableOpacity>
             )}
@@ -369,6 +503,62 @@ export default function Dashboard({ onOpenOverlay, onPressUrl, enteredIds: enter
                     onOpenOverlay={handleOpenOverlay}
                     onOneTapEnter={(contest) => void oneTapEnter(contest)}
                     onShare={(contest) => void handleShare(contest)}
+                    onPressUrl={onPressUrl}
+                    variant="routine"
+                    daysLeft={daysLeft(c)}
+                    entered={enteredIds.has(c.id)}
+                  />
+                ))
+              )}
+            </ScrollView>
+          </View>
+
+          <View className="px-4 pt-3">
+            <Text className="text-sm font-bold text-gray-50 mb-2">
+              New {!hasNewEndingRails ? <Text className="text-amber-400 text-[10px]"> PRO</Text> : null}
+            </Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} className="-mx-4 px-4 pb-2">
+              {newRail.length === 0 ? (
+                <Text className="text-gray-500 text-sm py-2">Nothing new right now.</Text>
+              ) : (
+                newRail.map((c) => (
+                  <ContestCard
+                    key={`new-${c.id}`}
+                    contest={c}
+                    onOpenOverlay={hasNewEndingRails ? handleOpenOverlay : () => setStatusToast('Upgrade to Pro for New rails')}
+                    onOneTapEnter={
+                      hasNewEndingRails
+                        ? (contest) => void oneTapEnter(contest)
+                        : () => setStatusToast('Upgrade to Pro for New rails')
+                    }
+                    onShare={hasNewEndingRails ? (contest) => void handleShare(contest) : undefined}
+                    onPressUrl={onPressUrl}
+                    variant="routine"
+                    daysLeft={daysLeft(c)}
+                    entered={enteredIds.has(c.id)}
+                  />
+                ))
+              )}
+            </ScrollView>
+            <Text className="text-sm font-bold text-gray-50 mb-2 mt-2">
+              Ending tonight{' '}
+              {!hasNewEndingRails ? <Text className="text-amber-400 text-[10px]">PRO</Text> : null}
+            </Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} className="-mx-4 px-4 pb-2">
+              {endingRail.length === 0 ? (
+                <Text className="text-gray-500 text-sm py-2">Nothing ending tonight.</Text>
+              ) : (
+                endingRail.map((c) => (
+                  <ContestCard
+                    key={`end-${c.id}`}
+                    contest={c}
+                    onOpenOverlay={hasNewEndingRails ? handleOpenOverlay : () => setStatusToast('Upgrade to Pro for Ending rails')}
+                    onOneTapEnter={
+                      hasNewEndingRails
+                        ? (contest) => void oneTapEnter(contest)
+                        : () => setStatusToast('Upgrade to Pro for Ending rails')
+                    }
+                    onShare={hasNewEndingRails ? (contest) => void handleShare(contest) : undefined}
                     onPressUrl={onPressUrl}
                     variant="routine"
                     daysLeft={daysLeft(c)}

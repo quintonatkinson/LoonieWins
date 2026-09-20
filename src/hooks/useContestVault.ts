@@ -6,6 +6,7 @@
 
 import type { Contest } from '../lib/rssFetcher'
 import { toExpiryEndOfDay } from '../lib/utils/expiryDate'
+import { isDeadLink, DEAD_LINK_STATUSES } from '../lib/utils/linkHealth'
 import { supabase } from '../lib/supabase'
 import { autoCategorize } from '../lib/data/tagger'
 
@@ -29,7 +30,8 @@ function withTimeout<T>(promise: PromiseLike<T>, ms: number): Promise<T> {
 
 const VAULT_KEY = 'loonie_vault_v1'
 
-const DEAD_STATUSES = [403, 404, 500]
+/** @deprecated prefer DEAD_LINK_STATUSES from linkHealth */
+const DEAD_STATUSES = [...DEAD_LINK_STATUSES]
 
 interface ContestRow {
   id: string
@@ -87,6 +89,7 @@ function rowToContest(row: ContestRow): Contest {
     requirements,
     linkStatus: row.link_status ?? undefined,
     isLocked: row.is_locked,
+    createdAt: row.created_at ?? undefined,
     restrictions: deriveRestrictions(row.title, tags),
   }
 }
@@ -226,7 +229,7 @@ export function getLiveContests(): Contest[] {
   return vault
     .map(withDerivedRestrictions)
     .filter((c) => {
-      if (c.linkStatus != null && DEAD_STATUSES.includes(c.linkStatus)) return false
+      if (isDeadLink(c)) return false
       if (c.expiryDate == null) return true
       const end = toExpiryEndOfDay(c.expiryDate)
       return !Number.isNaN(end.getTime()) && end > now
@@ -250,15 +253,21 @@ export function getPastContests(): Contest[] {
 
 /**
  * Search Hive Mind history: local vault + Supabase contests table.
- * Not limited to the current session live list.
+ * Dead links (403/404/410/5xx) are buried from primary results.
  */
-export async function searchHiveMind(query: string, limit = 40): Promise<Contest[]> {
+export async function searchHiveMind(
+  query: string,
+  limit = 40,
+  opts?: { includeDead?: boolean }
+): Promise<Contest[]> {
   const q = query.trim()
   if (!q) return []
   const qLower = q.toLowerCase()
+  const includeDead = opts?.includeDead === true
 
   const byUrl = new Map<string, Contest>()
   for (const c of loadVault()) {
+    if (!includeDead && isDeadLink(c)) continue
     const hay = `${c.title} ${c.source ?? ''} ${c.url}`.toLowerCase()
     if (hay.includes(qLower)) byUrl.set(normalizeUrl(c.url), withDerivedRestrictions(c))
   }
@@ -274,6 +283,7 @@ export async function searchHiveMind(query: string, limit = 40): Promise<Contest
         if (!error && data) {
           for (const row of data as ContestRow[]) {
             const c = rowToContest(row)
+            if (!includeDead && isDeadLink(c)) continue
             byUrl.set(normalizeUrl(c.url), c)
           }
         }
@@ -285,3 +295,5 @@ export async function searchHiveMind(query: string, limit = 40): Promise<Contest
 
   return [...byUrl.values()].slice(0, limit)
 }
+
+export { isDeadLink, DEAD_STATUSES }
