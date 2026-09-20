@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback } from 'react'
 import {
   View,
   Text,
@@ -14,10 +14,7 @@ import ContestCard from '../components/ContestCard'
 import CountryToggle from '../components/CountryToggle'
 import RadarLoader from '../components/RadarLoader'
 import { useContestPipeline } from '../hooks/useContestPipeline'
-import { storage } from '../lib/utils/storage'
-import type { AutoFillData } from '../types/profile'
-
-const STORAGE_ENTERED = 'looniewins_entered'
+import { useContestEntries } from '../hooks/useContestEntries'
 
 type SortFilter = 'high-value' | 'ending-soon' | 'best-odds' | null
 
@@ -50,11 +47,19 @@ const TAG_REQ_FILTERS: { key: string; label: string; match: (c: Contest) => bool
 interface DashboardProps {
   onOpenOverlay: (contest: Contest) => void
   onPressUrl: (url: string) => void
+  enteredIds?: Set<string>
 }
 
-export default function Dashboard({ onOpenOverlay, onPressUrl }: DashboardProps) {
+export default function Dashboard({
+  onOpenOverlay,
+  onPressUrl,
+  enteredIds: enteredIdsProp,
+}: DashboardProps) {
   const pipeline = useContestPipeline()
   const { liveContests, isScanning, isSyncingCloud, isFinished, offlineMode, phaseMessage, refetch } = pipeline
+  // Prefer shared ids from App (updated when ContestBrowser marks entered)
+  const localEntries = useContestEntries()
+  const enteredIds = enteredIdsProp ?? localEntries.enteredIds
 
   const [search, setSearch] = useState('')
   const [sortFilter, setSortFilter] = useState<SortFilter>(null)
@@ -62,41 +67,7 @@ export default function Dashboard({ onOpenOverlay, onPressUrl }: DashboardProps)
   const [hideQCExcluded, setHideQCExcluded] = useState(false)
   const [tagFilters, setTagFilters] = useState<Set<string>>(new Set())
   const [geoFilter, setGeoFilter] = useState<'CA' | 'US' | 'ANY'>('CA')
-  const [enteredIds, setEnteredIdsState] = useState<Set<string>>(new Set())
   const [refreshing, setRefreshing] = useState(false)
-  const [autoFillData] = useState<AutoFillData>(() => ({
-    name: 'John Doe',
-    email: 'test@email.com',
-    address: '123 Main St, Toronto ON',
-  }))
-
-  useEffect(() => {
-    let mounted = true
-    storage.getItem(STORAGE_ENTERED).then((raw) => {
-      if (!mounted) return
-      try {
-        const arr = raw ? JSON.parse(raw) : []
-        setEnteredIdsState(new Set(Array.isArray(arr) ? arr : []))
-      } catch {
-        setEnteredIdsState(new Set())
-      }
-    })
-    return () => { mounted = false }
-  }, [])
-
-  const persistEntered = useCallback((ids: Set<string>) => {
-    storage.setItem(STORAGE_ENTERED, JSON.stringify([...ids]))
-  }, [])
-
-  const markEntered = useCallback(
-    (contest: Contest) => {
-      const next = new Set(enteredIds)
-      next.add(contest.id)
-      setEnteredIdsState(next)
-      persistEntered(next)
-    },
-    [enteredIds, persistEntered]
-  )
 
   const routineContests = liveContests.filter((c) => enteredIds.has(c.id)).slice(0, 10)
 
@@ -145,25 +116,19 @@ export default function Dashboard({ onOpenOverlay, onPressUrl }: DashboardProps)
     setRefreshing(false)
   }, [refetch])
 
-  const handleOpenOverlay = useCallback(
-    (contest: Contest) => {
-      markEntered(contest)
-      onOpenOverlay(contest)
-    },
-    [markEntered, onOpenOverlay]
-  )
-
+  // Do not mark entered on open — ContestBrowser prompts after WebView close.
   const renderItem = useCallback(
     ({ item: c }: { item: Contest }) => (
       <ContestCard
         contest={c}
-        onOpenOverlay={handleOpenOverlay}
+        onOpenOverlay={onOpenOverlay}
         onPressUrl={onPressUrl}
         variant="feed"
         daysLeft={daysLeft(c)}
+        entered={enteredIds.has(c.id)}
       />
     ),
-    [handleOpenOverlay, onPressUrl]
+    [onOpenOverlay, onPressUrl, enteredIds]
   )
 
   const keyExtractor = useCallback((c: Contest) => c.id, [])
@@ -192,10 +157,11 @@ export default function Dashboard({ onOpenOverlay, onPressUrl }: DashboardProps)
                   <ContestCard
                     key={c.id}
                     contest={c}
-                    onOpenOverlay={handleOpenOverlay}
+                    onOpenOverlay={onOpenOverlay}
                     onPressUrl={onPressUrl}
                     variant="routine"
                     daysLeft={daysLeft(c)}
+                    entered={enteredIds.has(c.id)}
                   />
                 ))
               )}

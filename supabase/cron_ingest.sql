@@ -1,0 +1,21 @@
+-- Schedule server-side giveaway ingest every 30 minutes via pg_cron + pg_net.
+-- Requires: extensions pg_cron, pg_net; Edge Function `ingest-giveaways` deployed.
+-- Replace PROJECT_REF and SERVICE_ROLE_KEY (or use vault secrets) before running.
+
+-- CREATE EXTENSION IF NOT EXISTS pg_cron;
+-- CREATE EXTENSION IF NOT EXISTS pg_net;
+
+-- SELECT cron.schedule(
+--   'looniewins-ingest-giveaways',
+--   '*/30 * * * *',
+--   $$
+--   SELECT net.http_post(
+--     url := 'https://PROJECT_REF.supabase.co/functions/v1/ingest-giveaways',
+--     headers := jsonb_build_object(
+--       'Content-Type', 'application/json',
+--       'Authorization', 'Bearer SERVICE_ROLE_OR_ANON_KEY'
+--     ),
+--     body := '{}'::jsonb
+--   );
+--   $$
+-- );

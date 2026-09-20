@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react'
+import { useCallback } from 'react'
 import { View, Text, TouchableOpacity, ScrollView } from 'react-native'
 import type { Contest } from '../lib/rssFetcher'
 import { useUserLimits } from '../hooks/useUserLimits'
@@ -10,6 +10,7 @@ interface ContestCardProps {
   onPressUrl?: (url: string) => void
   variant: 'routine' | 'feed' | 'ended'
   daysLeft?: number | null
+  entered?: boolean
 }
 
 const reqLabels: Record<string, string> = {
@@ -26,6 +27,7 @@ export default function ContestCard({
   onPressUrl,
   variant,
   daysLeft: daysLeftProp,
+  entered = false,
 }: ContestCardProps) {
   const {
     dailyLimitReached,
@@ -169,6 +171,11 @@ export default function ContestCard({
           {contest.title}
         </Text>
         <View className="flex-row flex-wrap items-center gap-3 mt-1">
+          {entered && (
+            <View className="rounded-full px-2 py-0.5 bg-win/20 border border-win/40">
+              <Text className="text-win text-xs font-medium">Entered</Text>
+            </View>
+          )}
           {contest.prizeValue != null && (
             <View className="flex-row">
               <Text className="text-win text-xs">$</Text>

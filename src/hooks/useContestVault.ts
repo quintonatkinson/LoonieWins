@@ -8,6 +8,24 @@ import type { Contest } from '../lib/rssFetcher'
 import { toExpiryEndOfDay } from '../lib/utils/expiryDate'
 import { supabase } from '../lib/supabase'
 
+const CLOUD_TIMEOUT_MS = 8000
+
+function withTimeout<T>(promise: PromiseLike<T>, ms: number): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const t = setTimeout(() => reject(new Error('timeout')), ms)
+    Promise.resolve(promise).then(
+      (v) => {
+        clearTimeout(t)
+        resolve(v)
+      },
+      (e) => {
+        clearTimeout(t)
+        reject(e)
+      }
+    )
+  })
+}
+
 const VAULT_KEY = 'loonie_vault_v1'
 
 const DEAD_STATUSES = [403, 404, 500]
@@ -95,10 +113,12 @@ function saveVault(contests: Contest[]): void {
  * Cloud data wins conflicts (by url). Dispatches 'loonie_vault_updated'.
  */
 export async function fetchFromCloud(): Promise<number> {
+  if (!supabase) return 0
   try {
-    const { data, error } = await supabase
-      .from('contests')
-      .select('*')
+    const { data, error } = await withTimeout(
+      supabase.from('contests').select('*'),
+      CLOUD_TIMEOUT_MS
+    )
 
     if (error) {
       console.warn('[Vault] fetchFromCloud error:', error.message)
@@ -133,13 +153,16 @@ export async function fetchFromCloud(): Promise<number> {
  * Cloud Push: UPSERT enriched contests to Supabase master DB.
  */
 export async function syncToCloud(contests: Contest[]): Promise<void> {
-  if (contests.length === 0) return
+  if (!supabase || contests.length === 0) return
   try {
     const rows = contests.map((c) => contestToRow(c))
-    const { error } = await supabase.from('contests').upsert(rows, {
-      onConflict: 'id',
-      ignoreDuplicates: false,
-    })
+    const { error } = await withTimeout(
+      supabase.from('contests').upsert(rows, {
+        onConflict: 'id',
+        ignoreDuplicates: false,
+      }),
+      CLOUD_TIMEOUT_MS
+    )
     if (error) {
       console.warn('[Vault] syncToCloud error:', error.message)
     }
