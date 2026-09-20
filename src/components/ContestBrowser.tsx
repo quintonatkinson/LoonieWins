@@ -273,7 +273,7 @@ export default function ContestBrowser({
                     <button
                       type="button"
                       onClick={handleEnterContest}
-                      className="shrink-0 px-3 py-1.5 rounded-lg bg-win text-slate-950 font-semibold text-xs"
+                      className="shrink-0 px-3 py-1.5 rounded-lg bg-win text-on-win font-semibold text-xs"
                     >
                       Open in Browser
                     </button>
@@ -282,7 +282,7 @@ export default function ContestBrowser({
                 <button
                   type="button"
                   onClick={handleAutoFill}
-                  className="absolute bottom-16 right-4 px-4 py-2 rounded-xl bg-win text-slate-950 font-semibold shadow-lg hover:opacity-90"
+                  className="absolute bottom-16 right-4 px-4 py-2 rounded-xl bg-win text-on-win font-semibold shadow-lg hover:opacity-90"
                 >
                   ⚡ Auto-Fill Form
                 </button>
@@ -306,7 +306,7 @@ export default function ContestBrowser({
               <button
                 type="button"
                 onClick={handleEnterContest}
-                className="flex-1 py-2.5 rounded-lg bg-win text-gray-900 font-semibold hover:opacity-90"
+                className="flex-1 py-2.5 rounded-lg bg-win text-on-win font-semibold hover:opacity-90"
               >
                 Open in Browser
               </button>

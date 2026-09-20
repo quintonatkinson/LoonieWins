@@ -133,7 +133,7 @@ export default function ContestCard({
         className="shrink-0 px-5 py-2.5 rounded-lg bg-win"
         activeOpacity={0.8}
       >
-        <Text className="text-gray-900 font-semibold text-sm">{isLocked ? 'View on RFD' : 'Enter'}</Text>
+        <Text className="text-on-win font-semibold text-sm">{isLocked ? 'View on RFD' : 'Enter'}</Text>
       </TouchableOpacity>
     )
   }
@@ -152,7 +152,7 @@ export default function ContestCard({
           className={`mt-auto mt-3 w-full py-2.5 rounded-lg ${showUnlock ? 'bg-amber-500/20 border border-amber-500/40' : 'bg-win'}`}
         >
           <Text
-            className={`text-center font-semibold text-sm ${showUnlock ? 'text-amber-400' : 'text-gray-900'}`}
+            className={`text-center font-semibold text-sm ${showUnlock ? 'text-amber-400' : 'text-on-win'}`}
           >
             {variant === 'ended' ? 'Ended' : showUnlock ? `UNLOCK (${entryCostPts} Pts)` : isLocked ? 'View on RFD' : 'Enter'}
           </Text>

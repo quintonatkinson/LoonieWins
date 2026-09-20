@@ -1,5 +1,6 @@
 import { Routes, Route } from 'react-router-dom'
 import { UserEarnProvider } from './contexts/UserEarnContext'
+import { ThemeProvider } from './contexts/ThemeContext'
 import Layout from './components/Layout'
 import Dashboard from './pages/Dashboard'
 import Referrals from './pages/Referrals'
@@ -10,6 +11,7 @@ import Profile from './pages/Profile'
 
 function App() {
   return (
+    <ThemeProvider>
     <UserEarnProvider>
     <Layout>
       <Routes>
@@ -22,6 +24,7 @@ function App() {
       </Routes>
     </Layout>
     </UserEarnProvider>
+    </ThemeProvider>
   )
 }
 

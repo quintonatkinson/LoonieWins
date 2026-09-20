@@ -140,7 +140,7 @@ export default function Winners() {
             onClick={() => setTimeFilter(key)}
             className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
               timeFilter === key
-                ? 'bg-win text-gray-900'
+                ? 'bg-win text-on-win'
                 : 'bg-gray-800 border border-gray-600/50 text-gray-300 hover:text-white'
             }`}
           >
@@ -152,7 +152,7 @@ export default function Winners() {
       {/* You could be next CTA */}
       <Link
         to="/"
-        className="block w-full py-3 rounded-xl bg-win text-gray-900 font-semibold text-center text-sm hover:opacity-90 transition-opacity"
+        className="block w-full py-3 rounded-xl bg-win text-on-win font-semibold text-center text-sm hover:opacity-90 transition-opacity"
       >
         Find contests to enter
       </Link>

@@ -13,7 +13,9 @@ import type { Contest } from '../lib/rssFetcher'
 import ContestCard from '../components/ContestCard'
 import CountryToggle from '../components/CountryToggle'
 import RadarLoader from '../components/RadarLoader'
+import AccentPicker from '../components/AccentPicker'
 import { useContestPipeline } from '../hooks/useContestPipeline'
+import { useTheme } from '../contexts/ThemeContext'
 import { storage } from '../lib/utils/storage'
 import type { AutoFillData } from '../types/profile'
 
@@ -53,6 +55,7 @@ interface DashboardProps {
 }
 
 export default function Dashboard({ onOpenOverlay, onPressUrl }: DashboardProps) {
+  const { accentColor } = useTheme()
   const pipeline = useContestPipeline()
   const { liveContests, isScanning, isSyncingCloud, isFinished, offlineMode, phaseMessage, refetch } = pipeline
 
@@ -178,6 +181,12 @@ export default function Dashboard({ onOpenOverlay, onPressUrl }: DashboardProps)
       {!showFullRadar && (
         <>
           <View className="px-4 pt-3 pb-2">
+            <Text className="text-xs font-semibold text-white uppercase tracking-wide mb-2">
+              Appearance
+            </Text>
+            <AccentPicker />
+          </View>
+          <View className="px-4 pt-3 pb-2">
             <CountryToggle value={geoFilter} onChange={setGeoFilter} />
           </View>
           <View className="px-4 pt-4">
@@ -293,7 +302,7 @@ export default function Dashboard({ onOpenOverlay, onPressUrl }: DashboardProps)
       <ScrollView
         className="flex-1 bg-gray-900"
         contentContainerStyle={{ flexGrow: 1 }}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#39FF14" />}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={accentColor} />}
       >
         {listHeader}
         {isSyncingCloud ? (
@@ -316,7 +325,7 @@ export default function Dashboard({ onOpenOverlay, onPressUrl }: DashboardProps)
       <ScrollView
         className="flex-1 bg-gray-900"
         contentContainerStyle={{ flexGrow: 1, padding: 16 }}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#39FF14" />}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={accentColor} />}
       >
         {listHeader}
         <View className="rounded-xl bg-surface border border-gray-600/50 p-6 items-center gap-4 mt-4">
@@ -334,7 +343,7 @@ export default function Dashboard({ onOpenOverlay, onPressUrl }: DashboardProps)
       <ScrollView
         className="flex-1 bg-gray-900"
         contentContainerStyle={{ flexGrow: 1, padding: 16 }}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#39FF14" />}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={accentColor} />}
       >
         {listHeader}
         <View className="rounded-xl bg-surface border border-gray-600/50 p-6 items-center gap-4 mt-4">
@@ -362,7 +371,7 @@ export default function Dashboard({ onOpenOverlay, onPressUrl }: DashboardProps)
         ListHeaderComponent={listHeader}
         contentContainerStyle={{ paddingBottom: 96 }}
         stickyHeaderIndices={[]}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#39FF14" />}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={accentColor} />}
         ListFooterComponent={
           !isFinished ? (
             <View className="py-4">

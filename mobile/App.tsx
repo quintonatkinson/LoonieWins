@@ -6,10 +6,12 @@ import { Linking } from 'react-native'
 import type { Contest } from './src/lib/rssFetcher'
 import { resolveContestUrl } from './src/lib/rssFetcher'
 import { UserEarnProvider } from './src/contexts/UserEarnContext'
+import { ThemeProvider, useTheme } from './src/contexts/ThemeContext'
 import Dashboard from './src/screens/Dashboard'
 import ContestBrowser from './src/screens/ContestBrowser'
 
 function AppContent() {
+  const { accentColor } = useTheme()
   const [overlayContest, setOverlayContest] = useState<Contest | null>(null)
   const [resolvedUrl, setResolvedUrl] = useState<string | null>(null)
   const [resolving, setResolving] = useState(false)
@@ -51,7 +53,7 @@ function AppContent() {
             backgroundColor: 'rgba(0,0,0,0.5)',
           }}
         >
-          <ActivityIndicator size="large" color="#39FF14" />
+          <ActivityIndicator size="large" color={accentColor} />
         </View>
       )}
       {showBrowser && (
@@ -67,8 +69,10 @@ function AppContent() {
 
 export default function App() {
   return (
-    <UserEarnProvider>
-      <AppContent />
-    </UserEarnProvider>
+    <ThemeProvider>
+      <UserEarnProvider>
+        <AppContent />
+      </UserEarnProvider>
+    </ThemeProvider>
   )
 }
