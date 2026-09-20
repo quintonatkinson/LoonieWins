@@ -24,6 +24,13 @@ import { downloadWebDataExport, deleteAccountAndLocalData } from '../lib/account
 import { SUPPORT_EMAIL } from '../lib/legal/constants'
 import { loadAutoFillData, saveAutoFillData } from '../lib/utils/autoFillStorage'
 import { isSupabaseConfigured } from '../lib/supabase'
+import {
+  loadHomeMode,
+  loadQuebecSafe,
+  saveHomeMode,
+  saveQuebecSafe,
+  type HomeMode,
+} from '../lib/utils/feedPrefs'
 
 const AUTO_FILL_FIELDS: { key: keyof AutoFillData; label: string }[] = [
   { key: 'firstName', label: 'First Name' },
@@ -65,6 +72,9 @@ export default function Profile() {
   const [deleteMsg, setDeleteMsg] = useState<string | null>(null)
   const [entryFilter, setEntryFilter] = useState<'all' | ContestEntryStatus>('all')
   const [entrySearch, setEntrySearch] = useState('')
+  const [showPrefs, setShowPrefs] = useState(false)
+  const [quebecSafe, setQuebecSafe] = useState(() => loadQuebecSafe(false))
+  const [homeMode, setHomeMode] = useState<HomeMode>(() => loadHomeMode('routine'))
 
   const autoFillData: Partial<AutoFillData> = useMemo(() => {
     const af = profile?.auto_fill_data
@@ -418,14 +428,76 @@ export default function Profile() {
           <li>
             <button
               type="button"
+              onClick={() => setShowPrefs((v) => !v)}
               className="flex items-center gap-3 w-full text-left px-4 py-3 hover:bg-white/5 transition-colors"
+              aria-expanded={showPrefs}
             >
               <Settings className="w-5 h-5 text-gray-400 shrink-0" />
-              <div>
+              <div className="flex-1">
                 <p className="text-sm font-medium text-white">Preferences</p>
-                <p className="text-xs text-gray-500">Quebec filter, notifications</p>
+                <p className="text-xs text-gray-500">Québec-safe, home mode</p>
               </div>
+              <span className="text-gray-500 text-xs">{showPrefs ? 'Hide' : 'Edit'}</span>
             </button>
+            {showPrefs && (
+              <div className="px-4 pb-4 space-y-3 border-t border-gray-600/40 bg-gray-900/40">
+                <label className="flex items-center justify-between gap-3 pt-3">
+                  <span className="text-sm text-gray-200">
+                    Québec-safe
+                    <span className="block text-xs text-gray-500">Hide contests that exclude Quebec</span>
+                  </span>
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={quebecSafe}
+                    onClick={() => {
+                      const next = !quebecSafe
+                      setQuebecSafe(next)
+                      saveQuebecSafe(next)
+                    }}
+                    className={`relative w-11 h-6 rounded-full transition-colors ${
+                      quebecSafe ? 'bg-win' : 'bg-gray-600'
+                    }`}
+                  >
+                    <span
+                      className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white transition-transform ${
+                        quebecSafe ? 'translate-x-5' : ''
+                      }`}
+                    />
+                  </button>
+                </label>
+                <div>
+                  <p className="text-sm text-gray-200 mb-2">Home screen</p>
+                  <div className="flex gap-2">
+                    {(
+                      [
+                        ['routine', 'Daily Routine'],
+                        ['browse', 'Browse all'],
+                      ] as const
+                    ).map(([key, label]) => (
+                      <button
+                        key={key}
+                        type="button"
+                        onClick={() => {
+                          setHomeMode(key)
+                          saveHomeMode(key)
+                        }}
+                        className={`flex-1 py-2 rounded-lg text-xs font-semibold ${
+                          homeMode === key
+                            ? 'bg-win text-gray-900'
+                            : 'bg-gray-800 text-gray-400 border border-gray-600/50'
+                        }`}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <p className="text-xs text-gray-500">
+                  Also available on Home. Province in Smart-Fill sets the default geo filter when none is saved.
+                </p>
+              </div>
+            )}
           </li>
           <li>
             <Link
