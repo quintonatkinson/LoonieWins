@@ -77,13 +77,17 @@ function passesGeo(c: Contest, geoFilter: GeoFilterValue): boolean {
 interface DashboardProps {
   onOpenOverlay: (contest: Contest) => void
   onPressUrl: (url: string) => void
+  /** Shared from App so ContestBrowser mark-entered updates feed badges immediately */
+  enteredIds?: Set<string>
 }
 
-export default function Dashboard({ onOpenOverlay, onPressUrl }: DashboardProps) {
+export default function Dashboard({ onOpenOverlay, onPressUrl, enteredIds: enteredIdsProp }: DashboardProps) {
   const pipeline = useContestPipeline()
   const { liveContests, isScanning, isSyncingCloud, isFinished, offlineMode, phaseMessage, refetch } = pipeline
   const { profile, updateProfile } = useAuth()
-  const { enteredIds, markEntered: persistEntered } = useContestEntries()
+  const localEntries = useContestEntries()
+  const enteredIds = enteredIdsProp ?? localEntries.enteredIds
+  const persistEntered = localEntries.markEntered
 
   const [search, setSearch] = useState('')
   const [sortFilter, setSortFilter] = useState<SortFilter>('ending-soon')
