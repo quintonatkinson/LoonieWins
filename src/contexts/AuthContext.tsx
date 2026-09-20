@@ -10,6 +10,8 @@ import {
 import type { Session, User } from '@supabase/supabase-js'
 import { isSupabaseConfigured, supabase } from '../lib/supabase'
 import type { AutoFillData } from '../types/profile'
+import type { FeatureFlags } from '../lib/monetization/tiers'
+import { FREE_SMART_FILLS_DEFAULT } from '../lib/monetization/tiers'
 
 export type SubscriptionTier = 'free' | 'weekly' | 'monthly'
 
@@ -27,6 +29,12 @@ export interface UserProfile {
   smart_fills_remaining: number
   last_daily_entry_at: string | null
   subscription_tier: SubscriptionTier
+  referral_code: string | null
+  referred_by: string | null
+  weekly_entries_used: number
+  weekly_entries_reset_at: string | null
+  last_streak_at: string | null
+  feature_flags: FeatureFlags
 }
 
 interface AuthContextValue {
@@ -63,9 +71,39 @@ function mapProfile(row: Record<string, unknown>): UserProfile {
     streak: Number(row.streak ?? 0),
     auto_fill_data: auto,
     settings: (row.settings as Record<string, unknown>) ?? {},
-    smart_fills_remaining: Number(row.smart_fills_remaining ?? 3),
+    smart_fills_remaining: Number(row.smart_fills_remaining ?? FREE_SMART_FILLS_DEFAULT),
     last_daily_entry_at: (row.last_daily_entry_at as string | null) ?? null,
     subscription_tier,
+    referral_code: (row.referral_code as string | null) ?? null,
+    referred_by: (row.referred_by as string | null) ?? null,
+    weekly_entries_used: Number(row.weekly_entries_used ?? 0),
+    weekly_entries_reset_at: (row.weekly_entries_reset_at as string | null) ?? null,
+    last_streak_at: (row.last_streak_at as string | null) ?? null,
+    feature_flags: (row.feature_flags as FeatureFlags) ?? {},
+  }
+}
+
+function guestProfile(): UserProfile {
+  return {
+    id: 'local-guest',
+    email: null,
+    display_name: 'Guest',
+    is_premium: false,
+    points_balance: 1250,
+    xp: 0,
+    level: 1,
+    streak: 0,
+    auto_fill_data: {},
+    settings: { welcome_granted: true },
+    smart_fills_remaining: FREE_SMART_FILLS_DEFAULT,
+    last_daily_entry_at: null,
+    subscription_tier: 'free',
+    referral_code: null,
+    referred_by: null,
+    weekly_entries_used: 0,
+    weekly_entries_reset_at: null,
+    last_streak_at: null,
+    feature_flags: {},
   }
 }
 
@@ -132,21 +170,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     let mounted = true
     if (!supabase || !isSupabaseConfigured) {
       // Guest demo profile so earn/autofill/entry limits work offline
-      setProfile({
-        id: 'local-guest',
-        email: null,
-        display_name: 'Guest',
-        is_premium: false,
-        points_balance: 1250,
-        xp: 0,
-        level: 1,
-        streak: 0,
-        auto_fill_data: {},
-        settings: { welcome_granted: true },
-        smart_fills_remaining: 3,
-        last_daily_entry_at: null,
-        subscription_tier: 'free',
-      })
+      setProfile(guestProfile())
       setLoading(false)
       setAuthReady(true)
       return () => {
@@ -239,28 +263,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // Guest / offline profile lives in memory (+ autofill mirrored to localStorage by callers)
       if (!user || !supabase) {
         setProfile((prev) => {
-          const base =
-            prev ??
-            ({
-              id: 'local-guest',
-              email: null,
-              display_name: 'Guest',
-              is_premium: false,
-              points_balance: 1250,
-              xp: 0,
-              level: 1,
-              streak: 0,
-              auto_fill_data: {},
-              settings: {},
-              smart_fills_remaining: 3,
-              last_daily_entry_at: null,
-              subscription_tier: 'free' as const,
-            } satisfies UserProfile)
+          const base = prev ?? guestProfile()
           return {
             ...base,
             ...patch,
             auto_fill_data: patch.auto_fill_data ?? base.auto_fill_data,
             settings: patch.settings ?? base.settings,
+            feature_flags: patch.feature_flags ?? base.feature_flags,
           }
         })
         return { error: null }
@@ -280,6 +289,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (patch.subscription_tier !== undefined) payload.subscription_tier = patch.subscription_tier
       if (patch.is_premium !== undefined) payload.is_premium = patch.is_premium
       if (patch.email !== undefined) payload.email = patch.email
+      if (patch.referral_code !== undefined) payload.referral_code = patch.referral_code
+      if (patch.referred_by !== undefined) payload.referred_by = patch.referred_by
+      if (patch.weekly_entries_used !== undefined)
+        payload.weekly_entries_used = patch.weekly_entries_used
+      if (patch.weekly_entries_reset_at !== undefined)
+        payload.weekly_entries_reset_at = patch.weekly_entries_reset_at
+      if (patch.last_streak_at !== undefined) payload.last_streak_at = patch.last_streak_at
+      if (patch.feature_flags !== undefined) payload.feature_flags = patch.feature_flags
 
       const { data, error } = await supabase
         .from('profiles')

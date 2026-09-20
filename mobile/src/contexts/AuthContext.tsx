@@ -10,6 +10,8 @@ import {
 import type { Session, User } from '@supabase/supabase-js'
 import { supabase } from '../lib/supabase'
 import type { AutoFillData } from '../types/profile'
+import type { FeatureFlags } from '../lib/monetization/tiers'
+import { FREE_SMART_FILLS_DEFAULT } from '../lib/monetization/tiers'
 
 export type SubscriptionTier = 'free' | 'weekly' | 'monthly'
 
@@ -27,6 +29,12 @@ export interface UserProfile {
   smart_fills_remaining: number
   last_daily_entry_at: string | null
   subscription_tier: SubscriptionTier
+  referral_code: string | null
+  referred_by: string | null
+  weekly_entries_used: number
+  weekly_entries_reset_at: string | null
+  last_streak_at: string | null
+  feature_flags: FeatureFlags
 }
 
 interface AuthContextValue {
@@ -62,9 +70,15 @@ function mapProfile(row: Record<string, unknown>): UserProfile {
     streak: Number(row.streak ?? 0),
     auto_fill_data: (row.auto_fill_data ?? {}) as AutoFillData,
     settings: (row.settings as Record<string, unknown>) ?? {},
-    smart_fills_remaining: Number(row.smart_fills_remaining ?? 3),
+    smart_fills_remaining: Number(row.smart_fills_remaining ?? FREE_SMART_FILLS_DEFAULT),
     last_daily_entry_at: (row.last_daily_entry_at as string | null) ?? null,
     subscription_tier,
+    referral_code: (row.referral_code as string | null) ?? null,
+    referred_by: (row.referred_by as string | null) ?? null,
+    weekly_entries_used: Number(row.weekly_entries_used ?? 0),
+    weekly_entries_reset_at: (row.weekly_entries_reset_at as string | null) ?? null,
+    last_streak_at: (row.last_streak_at as string | null) ?? null,
+    feature_flags: (row.feature_flags as FeatureFlags) ?? {},
   }
 }
 

@@ -13,6 +13,9 @@ interface ContestBrowserProps {
   onMarkEntered?: (contest: Contest, status?: 'entered' | 'submitted') => void | Promise<unknown>
   autoFillData?: AutoFillData
   onAutoFillUsed?: () => void
+  /** Free-tier paywall: block Smart-Fill when exhausted */
+  smartFillBlocked?: boolean
+  smartFillsRemaining?: number | null
 }
 
 const DEFAULT_AUTOFILL: AutoFillData = {
@@ -117,6 +120,8 @@ export default function ContestBrowser({
   onMarkEntered,
   autoFillData = DEFAULT_AUTOFILL,
   onAutoFillUsed,
+  smartFillBlocked = false,
+  smartFillsRemaining = null,
 }: ContestBrowserProps) {
   const [resolvedUrl, setResolvedUrl] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
@@ -215,6 +220,11 @@ export default function ContestBrowser({
   }, [handleEnterContest])
 
   const handleAutoFill = () => {
+    if (smartFillBlocked) {
+      setAutoFillMsg('Smart-Fills exhausted on Free — upgrade to Pro for unlimited.')
+      onAutoFillUsed?.()
+      return
+    }
     if (!hasProfile) {
       setAutoFillMsg('Add autofill details in Profile first.')
       return
@@ -233,7 +243,11 @@ export default function ContestBrowser({
       doc.body?.appendChild(script)
       script.remove()
       onAutoFillUsed?.()
-      setAutoFillMsg('Autofill injected — check fields, then Mark as Entered.')
+      setAutoFillMsg(
+        smartFillsRemaining != null
+          ? `Autofill injected (${Math.max(0, smartFillsRemaining - 1)} left). Mark as Entered when done.`
+          : 'Autofill injected — check fields, then Mark as Entered.'
+      )
     } catch (_) {
       setAutoFillMsg(
         'Could not reach the form (cross-origin). Open in Browser and tap the copy chips.'
@@ -387,9 +401,17 @@ export default function ContestBrowser({
                 <button
                   type="button"
                   onClick={handleAutoFill}
-                  className="absolute bottom-16 right-4 px-4 py-2 rounded-xl bg-win text-slate-950 font-semibold shadow-lg hover:opacity-90"
+                  className={`absolute bottom-16 right-4 px-4 py-2 rounded-xl font-semibold shadow-lg hover:opacity-90 ${
+                    smartFillBlocked
+                      ? 'bg-amber-500/20 text-amber-400 border border-amber-500/40'
+                      : 'bg-win text-slate-950'
+                  }`}
                 >
-                  ⚡ Auto-Fill Form
+                  {smartFillBlocked
+                    ? 'Unlock Smart-Fills (Pro)'
+                    : smartFillsRemaining != null
+                      ? `⚡ Auto-Fill (${smartFillsRemaining} left)`
+                      : '⚡ Auto-Fill Form'}
                 </button>
               </div>
               <p className="text-xs text-white/50 px-2 py-1 shrink-0">

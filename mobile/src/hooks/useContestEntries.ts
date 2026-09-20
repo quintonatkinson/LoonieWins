@@ -3,6 +3,10 @@ import type { Contest } from '../lib/rssFetcher'
 import { tracking } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { getItem, setItem } from '../lib/utils/storage'
+import {
+  computeLocalProgress,
+  rpcAwardEntryProgress,
+} from '../lib/monetization/progression'
 
 export type ContestEntryStatus = 'entered' | 'submitted' | 'won' | 'lost' | 'expired'
 
@@ -67,10 +71,38 @@ function upsertLocalSync(prev: ContestEntry[], row: ContestEntry): ContestEntry[
 }
 
 export function useContestEntries() {
-  const { user } = useAuth()
+  const { user, profile, updateProfile, refreshProfile } = useAuth()
   const [entries, setEntries] = useState<ContestEntry[]>([])
   const [loading, setLoading] = useState(false)
   const [lastError, setLastError] = useState<string | null>(null)
+
+  const applyProgress = useCallback(
+    async (contestId: string, status: ContestEntryStatus, existing: ContestEntry | undefined) => {
+      const firstEnter = !existing
+      const firstSubmit =
+        status === 'submitted' || status === 'won'
+          ? !existing || (existing.status !== 'submitted' && existing.status !== 'won')
+          : false
+      if (!firstEnter && !firstSubmit) return
+      if (user) {
+        const res = await rpcAwardEntryProgress(contestId, status)
+        if (res.ok && !res.local) {
+          await refreshProfile()
+          return
+        }
+      }
+      if (!profile) return
+      const next = computeLocalProgress(profile, { firstEnter, firstSubmit })
+      if (next.xp_gained <= 0) return
+      await updateProfile({
+        xp: next.xp,
+        level: next.level,
+        streak: next.streak,
+        last_streak_at: next.last_streak_at,
+      })
+    },
+    [user, profile, updateProfile, refreshProfile]
+  )
 
   const refresh = useCallback(async () => {
     if (!user) {
@@ -132,7 +164,10 @@ export function useContestEntries() {
         return next
       })
 
-      if (!user) return { ok: true }
+      if (!user) {
+        await applyProgress(contest.id, status, existing)
+        return { ok: true }
+      }
 
       try {
         const { error } = await tracking()
@@ -154,6 +189,7 @@ export function useContestEntries() {
           setLastError(error.message)
           return { ok: false, error: error.message }
         }
+        await applyProgress(contest.id, status, existing)
         return { ok: true }
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e)
@@ -161,7 +197,7 @@ export function useContestEntries() {
         return { ok: false, error: msg }
       }
     },
-    [user, entries]
+    [user, entries, applyProgress]
   )
 
   const updateStatus = useCallback(
@@ -180,7 +216,10 @@ export function useContestEntries() {
         void saveLocal(rows)
         return rows
       })
-      if (!user) return { ok: true }
+      if (!user) {
+        await applyProgress(contestId, status, existing)
+        return { ok: true }
+      }
       try {
         const { error } = await tracking()
           .from('contest_entries')
@@ -188,12 +227,13 @@ export function useContestEntries() {
           .eq('user_id', user.id)
           .eq('contest_id', contestId)
         if (error) return { ok: false, error: error.message }
+        await applyProgress(contestId, status, existing)
         return { ok: true }
       } catch (e) {
         return { ok: false, error: e instanceof Error ? e.message : String(e) }
       }
     },
-    [user, entries]
+    [user, entries, applyProgress]
   )
 
   const removeEntry = useCallback(
