@@ -6,15 +6,32 @@ import { useUserLimits } from '../hooks/useUserLimits'
 import { useUserEarn } from '../contexts/UserEarnContext'
 import SubscriptionModal from './SubscriptionModal'
 import CountdownTimer from './CountdownTimer'
+import { daysLeftUntilExpiry } from '../lib/utils/expiryDate'
+import {
+  badgeToneClass,
+  getRequirementBadges,
+} from '../lib/utils/requirementBadges'
 
 interface ContestCardProps {
   contest: Contest
   onOpenOverlay: (contest: Contest) => void
+  /** One-tap Enter: open contest + auto-mark on return */
+  onOneTapEnter?: (contest: Contest) => void
+  onShare?: (contest: Contest) => void
   variant: 'routine' | 'feed' | 'ended'
   daysLeft?: number | null
+  entered?: boolean
 }
 
-export default function ContestCard({ contest, onOpenOverlay, variant, daysLeft: daysLeftProp }: ContestCardProps) {
+export default function ContestCard({
+  contest,
+  onOpenOverlay,
+  onOneTapEnter,
+  onShare,
+  variant,
+  daysLeft: daysLeftProp,
+  entered = false,
+}: ContestCardProps) {
   const navigate = useNavigate()
   const {
     dailyLimitReached,
@@ -32,17 +49,21 @@ export default function ContestCard({ contest, onOpenOverlay, variant, daysLeft:
   const [toast, setToast] = useState(false)
   const { setSubscriptionTier } = useUserEarn()
 
-  const daysLeft =
-    daysLeftProp ??
-    (contest.expiryDate
-      ? Math.max(0, Math.ceil((new Date(contest.expiryDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24)))
-      : null)
+  const daysLeft = daysLeftProp ?? daysLeftUntilExpiry(contest.expiryDate)
 
   useEffect(() => {
     if (!toast) return
     const t = setTimeout(() => setToast(false), 3000)
     return () => clearTimeout(t)
   }, [toast])
+
+  const openEntry = useCallback(() => {
+    if (onOneTapEnter) {
+      onOneTapEnter(contest)
+      return
+    }
+    onOpenOverlay(contest)
+  }, [contest, onOneTapEnter, onOpenOverlay])
 
   const handleEnter = useCallback(() => {
     if (contest.id === '__offline_alert__') return
@@ -55,22 +76,28 @@ export default function ContestCard({ contest, onOpenOverlay, variant, daysLeft:
       return
     }
     if (hasUnlimitedEntries) {
-      onOpenOverlay(contest)
+      openEntry()
       return
     }
     if (canEnterFree) {
-      useFreeEntry()
-      onOpenOverlay(contest)
+      // Open first so guest/demo never blocks on bookkeeping
+      openEntry()
+      try {
+        useFreeEntry()
+      } catch (_) {}
       return
     }
     if (dailyLimitReached && userIsFree) {
       if (balance >= entryCostPts && spendPointsForEntry()) {
-        onOpenOverlay(contest)
+        openEntry()
         setToast(true)
       } else {
         setShowInsufficient(true)
       }
+      return
     }
+    // Fallback: never dead-end the Enter CTA
+    openEntry()
   }, [
     contest,
     variant,
@@ -82,7 +109,7 @@ export default function ContestCard({ contest, onOpenOverlay, variant, daysLeft:
     entryCostPts,
     spendPointsForEntry,
     useFreeEntry,
-    onOpenOverlay,
+    openEntry,
   ])
 
   const showUnlock =
@@ -105,6 +132,16 @@ export default function ContestCard({ contest, onOpenOverlay, variant, daysLeft:
   }
 
   const isLocked = contest.isLocked === true
+  const tags = contest.tags ?? []
+  const entryTypeLabel = tags.includes('Daily')
+    ? 'Daily'
+    : tags.includes('Weekly')
+      ? 'Weekly'
+      : tags.includes('Instant Win')
+        ? 'Instant Win'
+        : tags.includes('1 Single Entry')
+          ? 'Single'
+          : 'Contest'
   const button = variant === 'ended' ? (
     <button
       type="button"
@@ -189,32 +226,55 @@ export default function ContestCard({ contest, onOpenOverlay, variant, daysLeft:
     elig === 'NA' ? '🌎' :
     '🍁' // Unknown = assume Canadian suppliers
   const eligUnverified = contest.eligibilityUnverified ?? false
-  const reqs = contest.requirements ?? []
-  const reqLabels: Record<string, string> = {
-    'Purchase Required': 'Purchase Required',
-    'Social Action': 'Social Follow',
-    'App Download': 'App Download',
-    'Creative Submission': 'Photo Needed',
-    'Newsletter Signup': 'Newsletter',
-  }
+  const reqBadges = getRequirementBadges(contest)
 
   if (variant === 'routine') {
     return (
       <>
-        <button
-          type="button"
-          onClick={handleEnter}
-          className="shrink-0 w-52 rounded-xl bg-surface border border-gray-600/50 p-4 text-left flex flex-col gap-3"
-        >
-          <span className="font-semibold text-gray-50 line-clamp-2 text-sm leading-tight">{contest.title}</span>
-          <span
-            className={`mt-auto w-full py-2.5 rounded-lg font-semibold text-sm text-center ${
-              showUnlock ? 'bg-amber-500/20 text-amber-400 border border-amber-500/40' : 'bg-win text-gray-900'
-            }`}
-          >
-            {variant === 'ended' ? 'Ended' : showUnlock ? `UNLOCK (${entryCostPts} Pts)` : isLocked ? 'View on RFD' : 'Enter'}
-          </span>
-        </button>
+        <div className="shrink-0 w-52 rounded-xl bg-surface border border-gray-600/50 p-4 text-left flex flex-col gap-3">
+          <button type="button" onClick={handleEnter} className="text-left flex flex-col gap-2 flex-1">
+            <div className="flex flex-wrap gap-1">
+              {reqBadges
+                .filter((b) => b.costly)
+                .slice(0, 1)
+                .map((b) => (
+                  <span
+                    key={b.kind}
+                    className={`text-[10px] font-semibold px-1.5 py-0.5 rounded border ${badgeToneClass(b)}`}
+                  >
+                    {b.icon} {b.kind === 'purchase' ? 'Purchase' : b.label}
+                  </span>
+                ))}
+              {contest.expiryDate && <CountdownTimer targetDate={contest.expiryDate} />}
+            </div>
+            <span className="font-semibold text-gray-50 line-clamp-2 text-sm leading-tight">{contest.title}</span>
+            <span
+              className={`mt-auto w-full py-2.5 rounded-lg font-semibold text-sm text-center ${
+                showUnlock ? 'bg-amber-500/20 text-amber-400 border border-amber-500/40' : 'bg-win text-gray-900'
+              }`}
+            >
+              {showUnlock ? `UNLOCK (${entryCostPts} Pts)` : isLocked ? 'View on RFD' : 'Enter'}
+            </span>
+          </button>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => onOpenOverlay(contest)}
+              className="flex-1 py-1.5 rounded-lg text-[11px] font-medium text-gray-400 border border-gray-600/50 hover:text-gray-50"
+            >
+              Smart-Fill
+            </button>
+            {onShare && (
+              <button
+                type="button"
+                onClick={() => onShare(contest)}
+                className="flex-1 py-1.5 rounded-lg text-[11px] font-medium text-gray-400 border border-gray-600/50 hover:text-gray-50"
+              >
+                Share
+              </button>
+            )}
+          </div>
+        </div>
         {toastEl}
         {insufficientEl}
         {subscriptionModal}
@@ -226,7 +286,25 @@ export default function ContestCard({ contest, onOpenOverlay, variant, daysLeft:
     <>
       <li className="rounded-xl bg-surface border border-gray-600/50 px-4 py-3 flex items-center gap-3">
         <div className="flex-1 min-w-0 flex flex-col gap-1">
-          <span className="text-xs text-gray-500 font-medium">Single</span>
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-xs text-gray-500 font-medium">{entryTypeLabel}</span>
+            {entered && (
+              <span className="text-[10px] uppercase tracking-wide font-semibold px-1.5 py-0.5 rounded bg-win/20 text-win border border-win/30">
+                Entered
+              </span>
+            )}
+            {reqBadges
+              .filter((b) => b.costly)
+              .map((b) => (
+                <span
+                  key={b.kind}
+                  className={`text-[10px] uppercase tracking-wide font-semibold px-1.5 py-0.5 rounded border ${badgeToneClass(b)}`}
+                  title={b.label}
+                >
+                  {b.icon} {b.kind === 'purchase' ? 'Purchase' : b.label}
+                </span>
+              ))}
+          </div>
           <p className="font-semibold text-gray-50 text-sm line-clamp-2">{contest.title}</p>
           <div className="flex flex-wrap items-center gap-3 mt-1 text-xs text-gray-400">
             {contest.prizeValue != null && (
@@ -270,23 +348,31 @@ export default function ContestCard({ contest, onOpenOverlay, variant, daysLeft:
                 🔒 RFD Account Required
               </span>
             )}
-            {reqs.length === 0 ? (
-              <span className="rounded-full px-2 py-0.5 text-xs font-medium bg-win/20 text-win border border-win/40">
-                Easy Entry
+            {reqBadges.map((b) => (
+              <span
+                key={b.kind}
+                className={`rounded-full px-2 py-0.5 text-xs font-medium border ${badgeToneClass(b)}`}
+              >
+                {b.icon} {b.label}
               </span>
-            ) : (
-              reqs.map((r) => {
-                const label = reqLabels[r] ?? r
-                const icon = r === 'Purchase Required' ? '🧾' : r === 'Social Action' ? '📱' : r === 'Creative Submission' ? '📸' : r === 'App Download' ? '📲' : r === 'Newsletter Signup' ? '📧' : ''
-                return (
-                  <span
-                    key={r}
-                    className="rounded-full px-2 py-0.5 text-xs font-medium bg-gray-600/50 text-gray-300 border border-gray-500/50"
-                  >
-                    {icon ? `${icon} ` : ''}{label}
-                  </span>
-                )
-              })
+            ))}
+            {onShare && variant !== 'ended' && (
+              <button
+                type="button"
+                onClick={() => onShare(contest)}
+                className="rounded-full px-2 py-0.5 text-xs font-medium bg-gray-600/40 text-gray-300 border border-gray-500/40 hover:text-win"
+              >
+                Share
+              </button>
+            )}
+            {onOneTapEnter && (
+              <button
+                type="button"
+                onClick={() => onOpenOverlay(contest)}
+                className="rounded-full px-2 py-0.5 text-xs font-medium bg-gray-600/40 text-gray-300 border border-gray-500/40 hover:text-win"
+              >
+                Smart-Fill
+              </button>
             )}
           </div>
         </div>

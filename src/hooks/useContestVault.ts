@@ -7,6 +7,25 @@
 import type { Contest } from '../lib/rssFetcher'
 import { toExpiryEndOfDay } from '../lib/utils/expiryDate'
 import { supabase } from '../lib/supabase'
+import { autoCategorize } from '../lib/data/tagger'
+
+const CLOUD_TIMEOUT_MS = 8000
+
+function withTimeout<T>(promise: PromiseLike<T>, ms: number): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const t = setTimeout(() => reject(new Error('timeout')), ms)
+    Promise.resolve(promise).then(
+      (v) => {
+        clearTimeout(t)
+        resolve(v)
+      },
+      (e) => {
+        clearTimeout(t)
+        reject(e)
+      }
+    )
+  })
+}
 
 const VAULT_KEY = 'loonie_vault_v1'
 
@@ -38,7 +57,23 @@ function normalizeUrl(url: string): string {
   }
 }
 
+function deriveRestrictions(title: string, tags: string[] = []): string[] {
+  // Hive Mind DB has no restrictions column — re-derive from title/tags so Québec-safe works.
+  return autoCategorize(title, tags.join(' ')).restrictions
+}
+
+/** Rehydrate restrictions when missing (cloud pull / older vault rows). */
+export function withDerivedRestrictions(c: Contest): Contest {
+  if (c.restrictions && c.restrictions.length > 0) return c
+  return {
+    ...c,
+    restrictions: deriveRestrictions(c.title, c.tags ?? []),
+  }
+}
+
 function rowToContest(row: ContestRow): Contest {
+  const tags = Array.isArray(row.tags) ? row.tags : []
+  const requirements = Array.isArray(row.requirements) ? row.requirements : []
   return {
     id: row.id,
     title: row.title,
@@ -48,11 +83,11 @@ function rowToContest(row: ContestRow): Contest {
     is_estimated_expiry: row.is_estimated_expiry,
     prizeValue: row.prize_value ?? undefined,
     eligibility: (row.eligibility as Contest['eligibility']) ?? undefined,
-    tags: Array.isArray(row.tags) ? row.tags : [],
-    requirements: Array.isArray(row.requirements) ? row.requirements : [],
+    tags,
+    requirements,
     linkStatus: row.link_status ?? undefined,
     isLocked: row.is_locked,
-    restrictions: [],
+    restrictions: deriveRestrictions(row.title, tags),
   }
 }
 
@@ -95,10 +130,12 @@ function saveVault(contests: Contest[]): void {
  * Cloud data wins conflicts (by url). Dispatches 'loonie_vault_updated'.
  */
 export async function fetchFromCloud(): Promise<number> {
+  if (!supabase) return 0
   try {
-    const { data, error } = await supabase
-      .from('contests')
-      .select('*')
+    const { data, error } = await withTimeout(
+      supabase.from('contests').select('*'),
+      CLOUD_TIMEOUT_MS
+    )
 
     if (error) {
       console.warn('[Vault] fetchFromCloud error:', error.message)
@@ -133,13 +170,16 @@ export async function fetchFromCloud(): Promise<number> {
  * Cloud Push: UPSERT enriched contests to Supabase master DB.
  */
 export async function syncToCloud(contests: Contest[]): Promise<void> {
-  if (contests.length === 0) return
+  if (!supabase || contests.length === 0) return
   try {
     const rows = contests.map((c) => contestToRow(c))
-    const { error } = await supabase.from('contests').upsert(rows, {
-      onConflict: 'id',
-      ignoreDuplicates: false,
-    })
+    const { error } = await withTimeout(
+      supabase.from('contests').upsert(rows, {
+        onConflict: 'id',
+        ignoreDuplicates: false,
+      }),
+      CLOUD_TIMEOUT_MS
+    )
     if (error) {
       console.warn('[Vault] syncToCloud error:', error.message)
     }
@@ -183,12 +223,14 @@ export function syncToVault(enrichedContests: Contest[]): void {
 export function getLiveContests(): Contest[] {
   const vault = loadVault()
   const now = new Date()
-  return vault.filter((c) => {
-    if (c.linkStatus != null && DEAD_STATUSES.includes(c.linkStatus)) return false
-    if (c.expiryDate == null) return true
-    const end = toExpiryEndOfDay(c.expiryDate)
-    return !Number.isNaN(end.getTime()) && end > now
-  })
+  return vault
+    .map(withDerivedRestrictions)
+    .filter((c) => {
+      if (c.linkStatus != null && DEAD_STATUSES.includes(c.linkStatus)) return false
+      if (c.expiryDate == null) return true
+      const end = toExpiryEndOfDay(c.expiryDate)
+      return !Number.isNaN(end.getTime()) && end > now
+    })
 }
 
 /**
@@ -197,9 +239,49 @@ export function getLiveContests(): Contest[] {
 export function getPastContests(): Contest[] {
   const vault = loadVault()
   const now = new Date()
-  return vault.filter((c) => {
-    if (c.expiryDate == null) return false
-    const end = toExpiryEndOfDay(c.expiryDate)
-    return !Number.isNaN(end.getTime()) && end <= now
-  })
+  return vault
+    .map(withDerivedRestrictions)
+    .filter((c) => {
+      if (c.expiryDate == null) return false
+      const end = toExpiryEndOfDay(c.expiryDate)
+      return !Number.isNaN(end.getTime()) && end <= now
+    })
+}
+
+/**
+ * Search Hive Mind history: local vault + Supabase contests table.
+ * Not limited to the current session live list.
+ */
+export async function searchHiveMind(query: string, limit = 40): Promise<Contest[]> {
+  const q = query.trim()
+  if (!q) return []
+  const qLower = q.toLowerCase()
+
+  const byUrl = new Map<string, Contest>()
+  for (const c of loadVault()) {
+    const hay = `${c.title} ${c.source ?? ''} ${c.url}`.toLowerCase()
+    if (hay.includes(qLower)) byUrl.set(normalizeUrl(c.url), withDerivedRestrictions(c))
+  }
+
+  if (supabase) {
+    try {
+      const safe = q.replace(/[%_,]/g, ' ').trim()
+      if (safe) {
+        const { data, error } = await withTimeout(
+          supabase.from('contests').select('*').ilike('title', `%${safe}%`).limit(limit),
+          CLOUD_TIMEOUT_MS
+        )
+        if (!error && data) {
+          for (const row of data as ContestRow[]) {
+            const c = rowToContest(row)
+            byUrl.set(normalizeUrl(c.url), c)
+          }
+        }
+      }
+    } catch (err) {
+      console.warn('[Vault] searchHiveMind:', err)
+    }
+  }
+
+  return [...byUrl.values()].slice(0, limit)
 }
