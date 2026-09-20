@@ -1,51 +1,41 @@
 # LoonieWins
 
-Canadian contest aggregator & offerwall — Win More, Work Less.
+Canadian + American contest aggregator & offerwall — Win More, Work Less.
 
 ## Stack
 
-- React 18 + TypeScript
-- Vite
-- Tailwind CSS (glassmorphism dark theme)
-- React Router
-- Supabase (client + schema in `supabase/schema.sql`)
+- React 18 + TypeScript + Vite + Tailwind
+- Supabase (Hive Mind `contests` + auth schemas)
+- Edge Function `ingest-giveaways` for server-side refresh
 
 ## Setup
 
-1. **Install dependencies**
+1. `npm install`
+2. Copy `.env.example` → `.env`:
+   - `VITE_SUPABASE_URL=https://oftunznsumfidavvbqz.supabase.co`
+   - `VITE_SUPABASE_ANON_KEY=…`
+   - Optional: `VITE_RSS2JSON_API_KEY` for fatter RSS pages (50–100 vs ~10 free)
+3. `npm run dev`
+4. Run Hive Mind / bootstrap SQL as needed (`supabase_schema.sql`, `supabase/schema.sql`)
+5. **Server ingest (recommended):** follow [`docs/ingest-deploy.md`](./docs/ingest-deploy.md)
 
-   ```bash
-   npm install
-   ```
+## Giveaway sources
 
-2. **Environment (optional for Supabase)**
+Canonical inventory: `src/lib/data/sources.ts` (mirrored in `mobile/`).
 
-   Copy `.env.example` to `.env` and set:
+- Explicit `country: 'CA' | 'US' | 'BOTH'`
+- `enabled` flag + optional `includeKeywords`, `fetchStrategy: 'rss2json_first'`
+- Purchase / buy-to-enter tagging via `tagger.ts` (+ source `defaultRequirements` for purchase-category feeds)
+- Curated daily/brand promos (Tims, McD, Scene+, PCH, OEM/Nike/telecom hubs, …): `src/lib/data/seasonalPromos.ts`
 
-   - `VITE_SUPABASE_URL`
-   - `VITE_SUPABASE_ANON_KEY`
+### Active pools (high level)
 
-3. **Run dev server**
+- **CA:** RedFlagDeals Contests (brand/OEM drops land here; Atom ~15 newest), Contest Canada (.net), CFS contests/daily, ContestScoop, Reddit CA subs
+- **US:** Sweepstakes Bible (+ daily / IW / ending / no-purchase / purchase-required), Online Sweepstakes (+ daily), Sweeties, FreebieShark, Hip2Save, Southern Savers, Contest Bee, FreeStuffFinder giveaways (rss2json), Reddit US subs
 
-   ```bash
-   npm run dev
-   ```
+### Blocked / scaffolds
 
-4. **Database**
+- SmartCanucks contests category: Cloudflare — needs partnership
+- Gleam / ViralSweep / Woobox directories & retailer hubs: no public listing API — scaffold only
 
-   Run `supabase/schema.sql` in your Supabase project SQL editor to create tables and RLS.
-
-## Features
-
-- **Dashboard:** Daily Routine (big cards), sticky search, filters, contest feed (thin cards) from real RSS (Reddit, RedFlagDeals). ENTER opens Smart-Fill overlay.
-- **Smart-Fill overlay:** Resolves contest URL, shows auto-fill preview, iframe form, “Auto-Fill Form” button, mark as entered.
-- **Referrals:** Community link list, add link, click-for-karma.
-- **Earn:** Tasks/surveys (points), Pro Pass (1000 pts), Subscribe ($4.99/mo).
-- **Winners:** Grid of recent wins.
-- **Profile:** Plan meter (Smart-Fills remaining), Applied Contests, Settings (Auto-Fill Data, Preferences, Export, Delete Account).
-
-## RSS sources
-
-- Reddit: `r/contestsofcanada`
-- RedFlagDeals: Contests forum (34)
-- CanadianFreeStuff / ContestScoop: add RSS URLs in `src/lib/rssFetcher.ts` when available.
+Refresh: client mount + 30 min while open; Edge Function / GitHub Action / pg_cron for Hive Mind with app closed.
