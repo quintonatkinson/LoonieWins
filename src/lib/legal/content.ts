@@ -12,7 +12,7 @@ export interface LegalSection {
   bullets?: string[]
 }
 
-export const PRIVACY_LAST_UPDATED = '2026-03-18'
+export const PRIVACY_LAST_UPDATED = '2026-09-20'
 
 export function getPrivacySections(): LegalSection[] {
   return [
@@ -27,7 +27,7 @@ export function getPrivacySections(): LegalSection[] {
     {
       heading: 'What the App does',
       paragraphs: [
-        `${APP_NAME} aggregates publicly available contest and giveaway listings, helps you track entries, and offers optional Smart-Fill helpers so you can copy personal details into third-party contest forms. Contest entry forms themselves are operated by third parties, not by us.`,
+        `${APP_NAME} aggregates publicly available contest and giveaway listings, helps you track entries, syncs an optional cloud profile, offers Smart-Fill helpers for third-party contest forms, supports referrals and optional earn/offerwall rewards, and can send push alerts about new or ending contests. Contest entry forms themselves are operated by third parties, not by us.`,
       ],
     },
     {
@@ -36,50 +36,71 @@ export function getPrivacySections(): LegalSection[] {
         'Depending on how you use the App, we may process the following categories of information:',
       ],
       bullets: [
-        'Account information (when you sign in): email address and authentication identifiers provided by our auth provider (Supabase Auth).',
-        'Profile / Smart-Fill details you choose to save: name, email, phone, mailing address, city, province/state, and postal/ZIP code. Today these values are stored primarily on your device; when cloud profiles are enabled they may also sync to our database under your account.',
-        'App activity stored on your device: points balance, subscription tier selection, daily entry timestamps, entered-contest IDs, reported URLs, and a local contest cache (“vault”).',
-        'Contest metadata synced to our servers: public contest titles, URLs, sources, tags, prize estimates, and expiry dates. This feed does not include your personal Smart-Fill profile.',
+        'Account: email address and authentication identifiers via Supabase Auth when you create an account or sign in (email/password). Guest use without keys keeps data on-device only.',
+        'Cloud profile: display name, subscription/premium flags, points, XP, level, streak, weekly entry counters, feature flags, referral code / referred-by, notification preferences, and other settings stored under your account.',
+        'Smart-Fill / contact details you choose to save: name, email, phone, mailing address, city, province/state, and postal/ZIP. Stored on your device and, when signed in, synced to your cloud profile. When you trigger Smart-Fill, values may be injected into a third-party contest form; submitting shares them with that sponsor under their policy.',
+        'Entry tracking: contest IDs, titles, URLs, prize estimates, status, and timestamps — on-device and, when signed in, in our entry-tracking tables.',
+        'Referrals: invite/referral codes, referral pool links, and click/signup credit records when you use referral features.',
+        'Earn / transactions: points ledger entries (offerwall credits, referral rewards, entry spends) associated with your account when signed in.',
+        'Push notifications (mobile): Expo push tokens, platform, optional device id / app version, linked to your user id, plus notification preference toggles. Web may save preferences only; browser Web Push is not enabled.',
+        'User-submitted contests (when enabled): title, URL, and submitter id for moderated listings you propose.',
+        'Wins: win records associated with accounts when that feature is enabled.',
+        'Contest feed metadata: public contest titles, URLs, sources, tags, prize estimates, and expiry dates. The shared feed is not your Smart-Fill profile.',
+        'On-device cache: local contest vault, reported URLs, and offline copies of profile/entry data.',
         'Support messages you send us by email.',
-        'Technical data required to run the service (for example IP address and basic request logs processed by our hosting/database providers).',
+        'Technical data (for example IP address and basic request logs processed by our hosting/database providers).',
+      ],
+    },
+    {
+      heading: 'Offerwall (when configured)',
+      paragraphs: [
+        'If an offerwall provider app id is configured (currently AdGem), the App may open that provider’s wall and pass a player/user identifier (your account id, or a guest id). We do not read or send your device advertising ID (IDFA/GAID) for this. Without a configured app id, earn tasks stay in a local sandbox and are not sent to AdGem. Completing offers is subject to the offerwall provider’s own terms and privacy policy.',
       ],
     },
     {
       heading: 'Information we do not currently collect',
       paragraphs: [
-        'As of the date above, the App does not integrate advertising SDKs, analytics SDKs, crash reporters, or social login providers. If that changes, we will update this policy and the App Store / Play Data safety disclosures before shipping.',
+        'As of the date above, the App does not integrate analytics SDKs, crash reporters, social login providers, or native advertising SDKs that collect advertising IDs. Android advertising-ID permission is blocked while we are not running ads. In-app purchase billing is not live yet (upgrade UI may be stubbed). If that changes, we will update this policy and the App Store / Play Data safety disclosures before shipping.',
       ],
     },
     {
       heading: 'How we use information',
       paragraphs: ['We use information to:'],
       bullets: [
-        'Operate contest discovery, caching, and entry-tracking features.',
+        'Operate contest discovery, caching, entry tracking, referrals, and progression (XP/streak/points).',
+        'Sync your signed-in profile and Smart-Fill data across devices.',
         'Provide Smart-Fill helpers that you explicitly trigger.',
+        'Deliver optional push alerts you enable (new contests / ending soon).',
+        'Credit earn/referral rewards and enforce free/Pro limits.',
         'Maintain optional Pro / subscription entitlements when in-app purchases are enabled.',
-        'Respond to support and account-deletion requests.',
+        'Moderate user-submitted listings and respond to support or deletion requests.',
         'Secure the service and prevent abuse.',
       ],
     },
     {
       heading: 'Sharing',
       paragraphs: [
-        'We do not sell your personal information. We share data only with service providers that help us run the App (currently Supabase for database/auth hosting), and when required by law.',
-        'When you open or submit a third-party contest form (including inside an in-app browser), that site’s own privacy policy applies to anything you enter there.',
+        'We do not sell your personal information. We share data with service providers that help us run the App, and when required by law.',
+        'When you open or submit a third-party contest form (including inside an in-app browser), that site’s own privacy policy applies to anything you enter or autofill there.',
+      ],
+      bullets: [
+        'Supabase — authentication, database, and related hosting.',
+        'Expo Push (and Apple APNs / Google FCM when configured) — delivery of push notifications on mobile.',
+        'Offerwall provider (e.g. AdGem) — only when an offerwall app id is configured; receives a player/user id for reward attribution.',
       ],
     },
     {
       heading: 'Retention',
       paragraphs: [
         'Device-stored data remains until you clear app storage, uninstall the App, or use Delete Account / clear data in Settings.',
-        'Server-side account and profile data is retained while your account is active. After a verified deletion request, we delete associated personal data except records we must keep for legal, security, or accounting reasons (disclosed to you if applicable).',
+        'Server-side account and profile data is retained while your account is active. After a verified deletion request, we delete associated personal data (including profile, entries, tokens, and related rows our deletion process covers) except records we must keep for legal, security, or accounting reasons (disclosed to you if applicable).',
       ],
     },
     {
       heading: 'Your choices',
       paragraphs: [
         `You can review this policy in-app (Profile → Privacy) or at ${legalUrl('privacy')}.`,
-        `You can export local App data from Profile → Export Data, and permanently clear local data / request account deletion from Profile → Delete Account. Google Play users can also use the web deletion resource at ${legalUrl('delete-account')}.`,
+        `You can export App data from Profile → Export Data (local keys plus signed-in cloud profile/entries/transactions/referrals/wins when available), and permanently clear local data / request account deletion from Profile → Delete Account. Google Play users can also use the web deletion resource at ${legalUrl('delete-account')}.`,
         `Support: ${SUPPORT_EMAIL}.`,
       ],
     },
