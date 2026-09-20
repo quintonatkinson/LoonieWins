@@ -2,6 +2,7 @@ import { Routes, Route, useLocation } from 'react-router-dom'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
 import { UserEarnProvider } from './contexts/UserEarnContext'
 import AuthScreen from './components/AuthScreen'
+import { ThemeProvider } from './contexts/ThemeContext'
 import Layout from './components/Layout'
 import Dashboard from './pages/Dashboard'
 import Referrals from './pages/Referrals'
@@ -21,6 +22,7 @@ const PUBLIC_PATHS = new Set(['/privacy', '/terms', '/support', '/delete-account
 
 function MainAppRoutes() {
   return (
+    <ThemeProvider>
     <UserEarnProvider>
       <Layout>
         <Routes>
@@ -30,59 +32,53 @@ function MainAppRoutes() {
           <Route path="/winners" element={<Winners />} />
           <Route path="/past" element={<PastContests />} />
           <Route path="/profile" element={<Profile />} />
-          <Route path="/submit" element={<SubmitContest />} />
-          <Route path="/moderate" element={<ModerateContests />} />
           <Route path="/privacy" element={<Privacy />} />
           <Route path="/terms" element={<Terms />} />
           <Route path="/support" element={<Support />} />
           <Route path="/delete-account" element={<DeleteAccount />} />
+          <Route path="/submit" element={<SubmitContest />} />
+          <Route path="/moderate" element={<ModerateContests />} />
         </Routes>
       </Layout>
     </UserEarnProvider>
+    </ThemeProvider>
   )
 }
 
-function AuthenticatedApp() {
-  const { session, loading, authReady } = useAuth()
+function App() {
   const location = useLocation()
-  const isPublic = PUBLIC_PATHS.has(location.pathname)
+  const isPublicRoute = PUBLIC_PATHS.has(location.pathname)
+  
+  // Require auth unless on public pages OR Supabase not configured
+  const requireAuth = isSupabaseConfigured() && !isPublicRoute
 
-  if (!authReady || loading) {
+  return (
+    <AuthProvider>
+      {requireAuth ? (
+        <AppWithAuth />
+      ) : (
+        <MainAppRoutes />
+      )}
+    </AuthProvider>
+  )
+}
+
+function AppWithAuth() {
+  const { user, loading } = useAuth()
+
+  if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-900">
-        <p className="text-win font-semibold animate-pulse">Loading LoonieWins…</p>
+      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
+        Loading...
       </div>
     )
   }
 
-  // Store / compliance pages must work without login (Play external deletion URL).
-  if (isPublic) {
-    return (
-      <Layout>
-        <Routes>
-          <Route path="/privacy" element={<Privacy />} />
-          <Route path="/terms" element={<Terms />} />
-          <Route path="/support" element={<Support />} />
-          <Route path="/delete-account" element={<DeleteAccount />} />
-        </Routes>
-      </Layout>
-    )
-  }
-
-  // Local/demo boot without Supabase keys — keep feed usable with local entry tracking.
-  if (!session && isSupabaseConfigured) {
+  if (!user) {
     return <AuthScreen />
   }
 
   return <MainAppRoutes />
-}
-
-function App() {
-  return (
-    <AuthProvider>
-      <AuthenticatedApp />
-    </AuthProvider>
-  )
 }
 
 export default App

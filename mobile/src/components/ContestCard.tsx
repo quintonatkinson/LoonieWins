@@ -143,7 +143,7 @@ export default function ContestCard({
             className={`mt-3 w-full py-2.5 rounded-lg ${showUnlock ? 'bg-amber-500/20 border border-amber-500/40' : 'bg-win'}`}
           >
             <Text
-              className={`text-center font-semibold text-sm ${showUnlock ? 'text-amber-400' : 'text-gray-900'}`}
+              className={`text-center font-semibold text-sm ${showUnlock ? 'text-amber-400' : 'text-on-win'}`}
             >
               {showUnlock ? `UNLOCK (${entryCostPts} Pts)` : isLocked ? 'View on RFD' : 'Enter'}
             </Text>
@@ -259,7 +259,7 @@ export default function ContestCard({
       >
         <Text
           className={`font-semibold text-sm ${
-            variant === 'ended' ? 'text-gray-400' : showUnlock ? 'text-amber-400' : 'text-gray-900'
+            variant === 'ended' ? 'text-gray-400' : showUnlock ? 'text-amber-400' : 'text-on-win'
           }`}
         >
           {variant === 'ended' ? 'Ended' : showUnlock ? `UNLOCK (${entryCostPts} Pts)` : isLocked ? 'View on RFD' : 'Enter'}

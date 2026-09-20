@@ -126,7 +126,7 @@ export default function Winners() {
             type="button"
             onClick={() => setTimeFilter(f)}
             className={`px-3 py-1.5 rounded-full text-xs font-medium ${
-              timeFilter === f ? 'bg-win text-gray-900' : 'bg-surface border border-gray-600/50 text-gray-400'
+              timeFilter === f ? 'bg-win text-on-win' : 'bg-surface border border-gray-600/50 text-gray-400'
             }`}
           >
             {f === 'week' ? 'This week' : f === 'month' ? 'This month' : 'All time'}

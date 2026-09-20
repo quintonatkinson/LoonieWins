@@ -187,14 +187,14 @@ export default function ContestCard({
     <button
       type="button"
       onClick={handleEnter}
-      className="shrink-0 px-5 py-2.5 rounded-lg bg-win text-gray-900 font-semibold text-sm"
+      className="shrink-0 px-5 py-2.5 rounded-lg bg-win text-on-win font-semibold text-sm"
     >
       {isLocked ? 'View on RFD' : 'Enter'}
     </button>
   )
 
   const toastEl = toast ? (
-    <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-50 px-4 py-2 rounded-lg bg-win text-gray-900 font-medium text-sm shadow-lg">
+    <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-50 px-4 py-2 rounded-lg bg-win text-on-win font-medium text-sm shadow-lg">
       Entry Unlocked!
     </div>
   ) : null
@@ -294,7 +294,7 @@ export default function ContestCard({
             )}
             <span
               className={`mt-auto w-full py-2.5 rounded-lg font-semibold text-sm text-center ${
-                showUnlock ? 'bg-amber-500/20 text-amber-400 border border-amber-500/40' : 'bg-win text-gray-900'
+                showUnlock ? 'bg-amber-500/20 text-amber-400 border border-amber-500/40' : 'bg-win text-on-win'
               }`}
             >
               {showUnlock ? `UNLOCK (${entryCostPts} Pts)` : isLocked ? 'View on RFD' : 'Enter'}

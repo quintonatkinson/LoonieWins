@@ -11,7 +11,9 @@ import {
 import { SUPPORT_EMAIL, LEGAL_SITE_ORIGIN, legalUrl, mailtoSupport } from '../lib/legal/constants'
 import { deleteAccountAndLocalData } from '../lib/account/deleteAccount'
 import NotificationPreferences from '../components/NotificationPreferences'
+import AccentPicker from '../components/AccentPicker'
 import { useAuth } from '../contexts/AuthContext'
+import { useTheme } from '../contexts/ThemeContext'
 import { registerForPushNotifications } from '../lib/notifications/registerPush'
 
 interface SettingsScreenProps {
@@ -32,6 +34,7 @@ function openLegal(path: 'privacy' | 'terms' | 'support' | 'delete-account') {
 
 export default function SettingsScreen({ onClose }: SettingsScreenProps) {
   const { user } = useAuth()
+  const { accentColor } = useTheme()
   const [busy, setBusy] = useState(false)
   const [pushMsg, setPushMsg] = useState<string | null>(null)
 
@@ -99,7 +102,7 @@ export default function SettingsScreen({ onClose }: SettingsScreenProps) {
       >
         <Text style={{ color: '#fff', fontSize: 20, fontWeight: '700' }}>Settings</Text>
         <TouchableOpacity onPress={onClose} accessibilityRole="button">
-          <Text style={{ color: '#39FF14', fontSize: 16 }}>Close</Text>
+          <Text style={{ color: accentColor, fontSize: 16 }}>Close</Text>
         </TouchableOpacity>
       </View>
 
@@ -107,6 +110,11 @@ export default function SettingsScreen({ onClose }: SettingsScreenProps) {
         <Text style={{ color: '#9ca3af', fontSize: 13, marginBottom: 8 }}>
           Privacy, support, notifications, and account controls for App Store and Google Play.
         </Text>
+
+        <Text style={{ color: '#fff', fontSize: 13, fontWeight: '700', marginBottom: 4, textTransform: 'uppercase' }}>
+          Appearance
+        </Text>
+        <AccentPicker />
 
         <NotificationPreferences />
 
@@ -118,12 +126,12 @@ export default function SettingsScreen({ onClose }: SettingsScreenProps) {
             borderRadius: 12,
             padding: 14,
             borderWidth: 1,
-            borderColor: '#39FF14',
+            borderColor: accentColor,
             marginBottom: 8,
             opacity: busy ? 0.6 : 1,
           }}
         >
-          <Text style={{ color: '#39FF14', fontWeight: '700' }}>Register this device</Text>
+          <Text style={{ color: accentColor, fontWeight: '700' }}>Register this device</Text>
           <Text style={{ color: '#6b7280', fontSize: 12, marginTop: 4 }}>
             Request permission and save Expo push token to Supabase
           </Text>

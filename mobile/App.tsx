@@ -6,6 +6,7 @@ import type { Contest } from './src/lib/rssFetcher'
 import { resolveContestUrl } from './src/lib/rssFetcher'
 import { AuthProvider, useAuth } from './src/contexts/AuthContext'
 import { UserEarnProvider } from './src/contexts/UserEarnContext'
+import { ThemeProvider, useTheme } from './src/contexts/ThemeContext'
 import { useContestEntries } from './src/hooks/useContestEntries'
 import AuthScreen from './src/components/AuthScreen'
 import Dashboard from './src/screens/Dashboard'
@@ -20,6 +21,7 @@ import type { AutoFillData } from './src/types/profile'
 
 function AppContent() {
   const { session, loading, authReady, profile, user, updateProfile } = useAuth()
+  const { accentColor } = useTheme()
   const { enteredIds, markEntered } = useContestEntries()
   const [overlayContest, setOverlayContest] = useState<Contest | null>(null)
   const [resolvedUrl, setResolvedUrl] = useState<string | null>(null)
@@ -100,8 +102,8 @@ function AppContent() {
   if (!authReady || loading) {
     return (
       <View style={{ flex: 1, backgroundColor: '#111827', justifyContent: 'center', alignItems: 'center' }}>
-        <ActivityIndicator size="large" color="#39FF14" />
-        <Text style={{ color: '#39FF14', marginTop: 12, fontWeight: '600' }}>Loading LoonieWins…</Text>
+        <ActivityIndicator size="large" color={accentColor} />
+        <Text style={{ color: accentColor, marginTop: 12, fontWeight: '600' }}>Loading LoonieWins…</Text>
       </View>
     )
   }
@@ -133,7 +135,7 @@ function AppContent() {
               paddingVertical: 8,
             }}
           >
-            <Text style={{ color: '#39FF14', fontSize: 13, fontWeight: '600' }}>Settings</Text>
+            <Text style={{ color: accentColor, fontSize: 13, fontWeight: '600' }}>Settings</Text>
           </TouchableOpacity>
         </View>
         <Dashboard
@@ -154,7 +156,7 @@ function AppContent() {
               backgroundColor: 'rgba(0,0,0,0.5)',
             }}
           >
-            <ActivityIndicator size="large" color="#39FF14" />
+            <ActivityIndicator size="large" color={accentColor} />
           </View>
         )}
         {showBrowser && (
@@ -175,8 +177,10 @@ function AppContent() {
 
 export default function App() {
   return (
-    <AuthProvider>
-      <AppContent />
-    </AuthProvider>
+    <ThemeProvider>
+      <AuthProvider>
+        <AppContent />
+      </AuthProvider>
+    </ThemeProvider>
   )
 }

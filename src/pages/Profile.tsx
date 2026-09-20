@@ -22,6 +22,7 @@ import { useContestEntries, type ContestEntryStatus } from '../hooks/useContestE
 import { useUserLimits } from '../hooks/useUserLimits'
 import SubscriptionModal from '../components/SubscriptionModal'
 import NotificationPreferences from '../components/NotificationPreferences'
+import AccentPicker from '../components/AccentPicker'
 import type { AutoFillData } from '../types/profile'
 import { downloadWebDataExport, deleteAccountAndLocalData } from '../lib/account/deleteAccount'
 import { SUPPORT_EMAIL } from '../lib/legal/constants'
@@ -450,6 +451,12 @@ export default function Profile() {
             {saveMsg && <p className="text-sm text-red-400">{saveMsg}</p>}
           </div>
         )}
+      </section>
+
+      {/* Appearance – accent themes */}
+      <section className="rounded-xl bg-gray-800/80 border border-gray-600/50 p-4">
+        <h2 className="text-sm font-semibold text-white uppercase tracking-wide mb-3">Appearance</h2>
+        <AccentPicker />
       </section>
 
       {/* Community */}

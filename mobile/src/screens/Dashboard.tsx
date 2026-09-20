@@ -17,6 +17,7 @@ import ContestCard from '../components/ContestCard'
 import CountryToggle from '../components/CountryToggle'
 import RadarLoader from '../components/RadarLoader'
 import { useContestPipeline } from '../hooks/useContestPipeline'
+import { useTheme } from '../contexts/ThemeContext'
 import { useContestEntries } from '../hooks/useContestEntries'
 import { useContestSocialProof } from '../hooks/useContestSocialProof'
 import { useUserLimits } from '../hooks/useUserLimits'
@@ -97,6 +98,7 @@ interface DashboardProps {
 }
 
 export default function Dashboard({ onOpenOverlay, onPressUrl, enteredIds: enteredIdsProp }: DashboardProps) {
+  const { accentColor } = useTheme()
   const pipeline = useContestPipeline()
   const { liveContests, isScanning, isSyncingCloud, isFinished, offlineMode, phaseMessage, refetch } = pipeline
   const { profile, updateProfile } = useAuth()
@@ -685,7 +687,7 @@ export default function Dashboard({ onOpenOverlay, onPressUrl, enteredIds: enter
       <ScrollView
         className="flex-1 bg-gray-900"
         contentContainerStyle={{ flexGrow: 1 }}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#39FF14" />}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={accentColor} />}
       >
         {listHeader}
         {isSyncingCloud ? (
@@ -711,7 +713,7 @@ export default function Dashboard({ onOpenOverlay, onPressUrl, enteredIds: enter
         keyExtractor={keyExtractor}
         ListHeaderComponent={listHeader}
         contentContainerStyle={{ paddingBottom: 96 }}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#39FF14" />}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={accentColor} />}
         ListFooterComponent={
           !isFinished && homeMode === 'browse' ? (
             <View className="py-4">
