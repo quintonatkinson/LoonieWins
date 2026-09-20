@@ -11,6 +11,8 @@ export const REFERRAL_CLICK_POINTS = 50
 export const REFERRAL_SIGNUP_REFERRER_POINTS = 500
 export const REFERRAL_SIGNUP_REFEREE_POINTS = 250
 export const XP_PER_LEVEL = 100
+export const COMEBACK_BONUS_XP = 50
+export const COMEBACK_BONUS_POINTS = 100
 
 export type SubscriptionTier = 'free' | 'weekly' | 'monthly'
 
@@ -89,14 +91,15 @@ export function levelForXp(xp: number): number {
 export const FREE_TIER_PERKS = [
   `${FREE_WEEKLY_ENTRY_CAP} free contest entries per week`,
   `Extra entries: ${ENTRY_COST_PTS} pts each`,
-  `Earn points via offerwall & surveys`,
   `${FREE_SMART_FILLS_DEFAULT} Smart-Fills (then Pro)`,
+  'Standard push alerts',
+  'Main Opportunity feed only',
 ] as const
 
 export const PRO_TIER_PERKS = [
-  'Unlimited contest entries',
-  'No points required to enter',
+  'Unlimited contest entries — no weekly cap, no points to enter',
   'Unlimited Smart-Fills',
-  'Priority source prep flag',
-  'Support development',
+  'Priority “ending tonight” push alerts',
+  'New + Ending Tonight Pro feed rails',
+  'Support LoonieWins development',
 ] as const

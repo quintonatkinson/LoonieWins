@@ -89,10 +89,24 @@ export function UserEarnProvider({ children }: { children: ReactNode }) {
 
   const upgradeToPro = useCallback(
     async (planId: BillingPlanId) => {
-      await purchaseSubscription(planId)
-      setSubscriptionTier(planId)
+      const result = await purchaseSubscription(planId, { appUserId: user?.id })
+      if (!result.ok) {
+        if (result.cancelled) return
+        throw new Error(result.message)
+      }
+      await updateProfile({
+        subscription_tier: planId,
+        is_premium: true,
+        feature_flags: {
+          ...(profile?.feature_flags ?? {}),
+          unlimited_entries: true,
+          unlimited_smart_fills: true,
+          priority_sources: true,
+        },
+        ...(result.productId ? { iap_product_id: result.productId } : {}),
+      })
     },
-    [setSubscriptionTier]
+    [user?.id, profile?.feature_flags, updateProfile]
   )
 
   const addPoints = useCallback(
