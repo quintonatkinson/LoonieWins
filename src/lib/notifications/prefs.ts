@@ -9,6 +9,11 @@ export interface NotificationPrefs {
   newContestsUS: boolean
   /** Alert for contests whose expiry is later today (America/Toronto) */
   endingTonight: boolean
+  /**
+   * Weekly email digest: “N new CA contests + M ending tonight”.
+   * Delivered by Edge Function `send-weekly-digest` (Resend). Default off.
+   */
+  weeklyDigestEmail: boolean
 }
 
 export const DEFAULT_NOTIFICATION_PREFS: NotificationPrefs = {
@@ -16,6 +21,7 @@ export const DEFAULT_NOTIFICATION_PREFS: NotificationPrefs = {
   newContestsCA: true,
   newContestsUS: false,
   endingTonight: true,
+  weeklyDigestEmail: false,
 }
 
 export function parseNotificationPrefs(
@@ -36,6 +42,10 @@ export function parseNotificationPrefs(
       typeof raw.endingTonight === 'boolean'
         ? raw.endingTonight
         : DEFAULT_NOTIFICATION_PREFS.endingTonight,
+    weeklyDigestEmail:
+      typeof raw.weeklyDigestEmail === 'boolean'
+        ? raw.weeklyDigestEmail
+        : DEFAULT_NOTIFICATION_PREFS.weeklyDigestEmail,
   }
 }
 

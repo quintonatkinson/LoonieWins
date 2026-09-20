@@ -100,6 +100,7 @@ export const PRO_TIER_PERKS = [
   'Unlimited contest entries',
   'No points required to enter',
   'Unlimited Smart-Fills',
+  'Priority ending-tonight push alerts',
   'Priority source prep flag',
   'Support development',
 ] as const

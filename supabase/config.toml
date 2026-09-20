@@ -1,9 +1,11 @@
-# Supabase project config for LoonieWins scheduled ingest + push alerts.
-# After `supabase functions deploy ingest-giveaways` / `send-push-alerts`,
-# enable cron (Dashboard → Edge Function Schedules, or pg_cron — see cron_*.sql).
+# Supabase project config for LoonieWins scheduled ingest + push alerts + digest.
+# After `supabase functions deploy …`, enable cron (Dashboard schedules or pg_cron).
 
 [functions.ingest-giveaways]
 verify_jwt = false
 
 [functions.send-push-alerts]
+verify_jwt = false
+
+[functions.send-weekly-digest]
 verify_jwt = false

@@ -62,7 +62,8 @@
         {
           "icon": "./assets/icon.png",
           "color": "#39FF14",
-          "defaultChannel": "looniewins-alerts"
+          "defaultChannel": "looniewins-alerts",
+          "sounds": []
         }
       ]
     ],

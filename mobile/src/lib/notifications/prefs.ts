@@ -5,6 +5,8 @@ export interface NotificationPrefs {
   newContestsCA: boolean
   newContestsUS: boolean
   endingTonight: boolean
+  /** Weekly email digest via send-weekly-digest (Resend). Default off. */
+  weeklyDigestEmail: boolean
 }
 
 export const DEFAULT_NOTIFICATION_PREFS: NotificationPrefs = {
@@ -12,6 +14,7 @@ export const DEFAULT_NOTIFICATION_PREFS: NotificationPrefs = {
   newContestsCA: true,
   newContestsUS: false,
   endingTonight: true,
+  weeklyDigestEmail: false,
 }
 
 export function parseNotificationPrefs(
@@ -32,6 +35,10 @@ export function parseNotificationPrefs(
       typeof raw.endingTonight === 'boolean'
         ? raw.endingTonight
         : DEFAULT_NOTIFICATION_PREFS.endingTonight,
+    weeklyDigestEmail:
+      typeof raw.weeklyDigestEmail === 'boolean'
+        ? raw.weeklyDigestEmail
+        : DEFAULT_NOTIFICATION_PREFS.weeklyDigestEmail,
   }
 }
 

@@ -29,7 +29,12 @@ const TOGGLES: { key: PrefKey; label: string; hint: string }[] = [
   {
     key: 'endingTonight',
     label: 'Ending tonight',
-    hint: 'Contests that expire later today (Toronto time)',
+    hint: 'Contests that expire later today (Toronto time). Pro gets priority delivery.',
+  },
+  {
+    key: 'weeklyDigestEmail',
+    label: 'Weekly digest email',
+    hint: 'Email: N new CA contests + M ending tonight (Sundays)',
   },
 ]
 
@@ -70,7 +75,8 @@ export default function NotificationPreferences() {
       </Text>
       {TOGGLES.map(({ key, label, hint }) => {
         const on = prefs[key]
-        const disabledMaster = key !== 'enabled' && !prefs.enabled
+        const disabledMaster =
+          key !== 'enabled' && key !== 'weeklyDigestEmail' && !prefs.enabled
         return (
           <View
             key={key}

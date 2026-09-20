@@ -1,5 +1,5 @@
 import './global.css'
-import { useState, useCallback, useEffect, useMemo } from 'react'
+import { useState, useCallback, useEffect, useMemo, useRef } from 'react'
 import { StatusBar } from 'expo-status-bar'
 import { View, ActivityIndicator, TouchableOpacity, Text, Linking } from 'react-native'
 import type { Contest } from './src/lib/rssFetcher'
@@ -12,7 +12,10 @@ import Dashboard from './src/screens/Dashboard'
 import ContestBrowser from './src/screens/ContestBrowser'
 import SettingsScreen from './src/screens/SettingsScreen'
 import { parseNotificationPrefs } from './src/lib/notifications/prefs'
-import { registerForPushNotifications } from './src/lib/notifications/registerPush'
+import {
+  registerForPushNotifications,
+  subscribePushRegistrationOnResume,
+} from './src/lib/notifications/registerPush'
 import type { AutoFillData } from './src/types/profile'
 
 function AppContent() {
@@ -23,17 +26,28 @@ function AppContent() {
   const [resolving, setResolving] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
 
-  // Register Expo push token when signed in and alerts are enabled
+  const userIdRef = useRef(user?.id)
+  const prefsEnabledRef = useRef(true)
+  userIdRef.current = user?.id
+  prefsEnabledRef.current = parseNotificationPrefs(profile?.settings).enabled
+
+  // Register Expo push token on sign-in / pref enable; retry on foreground
   useEffect(() => {
     if (!user?.id) return
-    const prefs = parseNotificationPrefs(profile?.settings)
-    if (!prefs.enabled) return
+    if (!prefsEnabledRef.current) return
     void registerForPushNotifications(user.id).then((r) => {
       if (r.error && !r.token) {
         console.warn('[Push]', r.error)
       }
     })
   }, [user?.id, profile?.settings])
+
+  useEffect(() => {
+    return subscribePushRegistrationOnResume(
+      () => userIdRef.current,
+      () => prefsEnabledRef.current
+    )
+  }, [])
 
   const autoFillData: AutoFillData = useMemo(() => {
     const data = profile?.auto_fill_data ?? {}

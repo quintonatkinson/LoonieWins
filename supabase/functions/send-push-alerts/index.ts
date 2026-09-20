@@ -4,6 +4,8 @@
  * Modes:
  *   - new_contests: contests created recently matching CA / US prefs
  *   - ending_tonight: contests with expiry_date later today (America/Toronto)
+ *       Pro (is_premium / weekly|monthly / priority_sources): priority + guaranteed (no free cap)
+ *       Free: normal priority, capped per run (FREE_ENDING_CAP)
  *
  * Deploy:
  *   supabase functions deploy send-push-alerts
@@ -11,7 +13,7 @@
  * Secrets: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
  * Optional: EXPO_ACCESS_TOKEN (recommended for production Expo push)
  *
- * Schedule: see supabase/cron_push_alerts.sql + docs/push-notifications.md
+ * Schedule: see supabase/cron_push_alerts.sql + docs/push-digest.md
  */
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.0'
@@ -46,7 +48,25 @@ interface TokenRow {
 interface ProfileRow {
   id: string
   settings: Record<string, unknown> | null
+  is_premium?: boolean | null
+  subscription_tier?: string | null
+  feature_flags?: Record<string, unknown> | null
+  email?: string | null
 }
+
+interface ExpoMessage {
+  to: string
+  title: string
+  body: string
+  data?: Record<string, unknown>
+  sound?: string
+  priority?: 'default' | 'normal' | 'high'
+  channelId?: string
+  interruptionLevel?: 'active' | 'timeSensitive' | 'critical'
+}
+
+/** Free users: max ending-tonight alerts per cron run (Pro = unlimited / guaranteed). */
+const FREE_ENDING_CAP = 3
 
 const DEFAULT_PREFS: NotificationPrefs = {
   enabled: true,
@@ -68,9 +88,17 @@ function parsePrefs(settings: Record<string, unknown> | null | undefined): Notif
   }
 }
 
+function isProUser(p: ProfileRow | undefined): boolean {
+  if (!p) return false
+  if (p.is_premium) return true
+  const tier = (p.subscription_tier ?? 'free').toLowerCase()
+  if (tier === 'weekly' || tier === 'monthly') return true
+  if (p.feature_flags?.priority_sources === true) return true
+  return false
+}
+
 /** End of "today" in America/Toronto as ISO (UTC). */
 function torontoEndOfDayIso(now = new Date()): string {
-  // Approximate: format parts in Toronto, then construct local midnight next day → UTC
   const fmt = new Intl.DateTimeFormat('en-CA', {
     timeZone: 'America/Toronto',
     year: 'numeric',
@@ -81,10 +109,7 @@ function torontoEndOfDayIso(now = new Date()): string {
   const y = parts.find((p) => p.type === 'year')?.value
   const m = parts.find((p) => p.type === 'month')?.value
   const d = parts.find((p) => p.type === 'day')?.value
-  // Toronto midnight next calendar day as offset: use noon UTC guess then adjust via formatter
-  // Simpler: treat Toronto date as YYYY-MM-DD and use 23:59:59 America/Toronto via fixed offset lookup
   const dateStr = `${y}-${m}-${d}`
-  // Build Date for 23:59:59.999 Toronto by probing offset
   const probe = new Date(`${dateStr}T12:00:00Z`)
   const torontoHour = Number(
     new Intl.DateTimeFormat('en-US', {
@@ -93,9 +118,6 @@ function torontoEndOfDayIso(now = new Date()): string {
       hour12: false,
     }).format(probe)
   )
-  const offsetHours = 12 - torontoHour // hours to add to UTC noon to get Toronto noon... actually:
-  // At UTC noon, Toronto hour is torontoHour. So Toronto local = UTC + (torontoHour - 12)
-  // We want Toronto 23:59:59 = UTC 23:59:59 - (torontoHour - 12)
   const utcMs =
     Date.UTC(Number(y), Number(m) - 1, Number(d), 23, 59, 59, 999) -
     (torontoHour - 12) * 60 * 60 * 1000
@@ -109,17 +131,10 @@ function wantsNewContest(c: ContestRow, prefs: NotificationPrefs): boolean {
   if (elig === 'CA' || elig === 'UNKNOWN') return prefs.newContestsCA
   if (elig === 'US') return prefs.newContestsUS
   if (elig === 'NA') return prefs.newContestsCA || prefs.newContestsUS
-  return prefs.newContestsCA // default Canada-first for unknown tags
+  return prefs.newContestsCA
 }
 
-async function sendExpoPush(
-  messages: Array<{
-    to: string
-    title: string
-    body: string
-    data?: Record<string, unknown>
-  }>
-): Promise<{ ok: number; failed: number }> {
+async function sendExpoPush(messages: ExpoMessage[]): Promise<{ ok: number; failed: number }> {
   if (messages.length === 0) return { ok: 0, failed: 0 }
   const headers: Record<string, string> = {
     Accept: 'application/json',
@@ -131,7 +146,6 @@ async function sendExpoPush(
 
   let ok = 0
   let failed = 0
-  // Expo accepts batches of up to 100
   for (let i = 0; i < messages.length; i += 100) {
     const chunk = messages.slice(i, i + 100)
     const res = await fetch('https://exp.host/--/api/v2/push/send', {
@@ -174,6 +188,7 @@ Deno.serve(async (req) => {
       ? body.modes
       : (['new_contests', 'ending_tonight'] as AlertMode[])
     const lookbackMinutes = Number(body.lookbackMinutes ?? 90)
+    const freeEndingCap = Number(body.freeEndingCap ?? FREE_ENDING_CAP)
 
     const admin = createClient(supabaseUrl, serviceKey)
 
@@ -191,11 +206,14 @@ Deno.serve(async (req) => {
     const userIds = [...new Set(tokenRows.map((t) => t.user_id))]
     const { data: profiles, error: profileErr } = await admin
       .from('profiles')
-      .select('id, settings')
+      .select('id, settings, is_premium, subscription_tier, feature_flags, email')
       .in('id', userIds)
     if (profileErr) throw profileErr
+
+    const profileByUser = new Map<string, ProfileRow>()
     const prefsByUser = new Map<string, NotificationPrefs>()
     for (const p of (profiles ?? []) as ProfileRow[]) {
+      profileByUser.set(p.id, p)
       prefsByUser.set(p.id, parsePrefs(p.settings))
     }
 
@@ -206,14 +224,18 @@ Deno.serve(async (req) => {
       tokensByUser.set(t.user_id, list)
     }
 
-    const messages: Array<{
-      to: string
-      title: string
-      body: string
-      data?: Record<string, unknown>
-      sound?: string
-    }> = []
+    // Pro first so ending-tonight priority batch goes out ahead of free-cap users
+    const sortedUserIds = [...userIds].sort((a, b) => {
+      const ap = isProUser(profileByUser.get(a)) ? 0 : 1
+      const bp = isProUser(profileByUser.get(b)) ? 0 : 1
+      return ap - bp
+    })
+
+    const messages: ExpoMessage[] = []
     const logRows: Array<{ user_id: string; contest_id: string; alert_type: string }> = []
+    const freeEndingCount = new Map<string, number>()
+    let proEndingQueued = 0
+    let freeEndingQueued = 0
 
     // ---- New contests ----
     if (modes.includes('new_contests')) {
@@ -227,7 +249,7 @@ Deno.serve(async (req) => {
       if (cErr) throw cErr
 
       for (const c of (contests ?? []) as ContestRow[]) {
-        for (const uid of userIds) {
+        for (const uid of sortedUserIds) {
           const prefs = prefsByUser.get(uid) ?? DEFAULT_PREFS
           if (!wantsNewContest(c, prefs)) continue
 
@@ -240,8 +262,7 @@ Deno.serve(async (req) => {
             .maybeSingle()
           if (existing) continue
 
-          const region =
-            (c.eligibility ?? 'CA').toUpperCase() === 'US' ? 'US' : 'CA'
+          const region = (c.eligibility ?? 'CA').toUpperCase() === 'US' ? 'US' : 'CA'
           for (const to of tokensByUser.get(uid) ?? []) {
             messages.push({
               to,
@@ -249,6 +270,8 @@ Deno.serve(async (req) => {
               body: c.title?.slice(0, 120) || 'A new contest just landed',
               data: { type: 'new_contest', contestId: c.id },
               sound: 'default',
+              channelId: 'looniewins-alerts',
+              priority: 'default',
             })
           }
           logRows.push({ user_id: uid, contest_id: c.id, alert_type: 'new_contest' })
@@ -256,7 +279,7 @@ Deno.serve(async (req) => {
       }
     }
 
-    // ---- Ending tonight ----
+    // ---- Ending tonight (Pro priority / guaranteed) ----
     if (modes.includes('ending_tonight')) {
       const nowIso = new Date().toISOString()
       const eodIso = torontoEndOfDayIso()
@@ -270,9 +293,15 @@ Deno.serve(async (req) => {
       if (eErr) throw eErr
 
       for (const c of (ending ?? []) as ContestRow[]) {
-        for (const uid of userIds) {
+        for (const uid of sortedUserIds) {
           const prefs = prefsByUser.get(uid) ?? DEFAULT_PREFS
           if (!prefs.enabled || !prefs.endingTonight) continue
+
+          const pro = isProUser(profileByUser.get(uid))
+          if (!pro) {
+            const used = freeEndingCount.get(uid) ?? 0
+            if (used >= freeEndingCap) continue
+          }
 
           const { data: existing } = await admin
             .from('push_alert_log')
@@ -284,15 +313,35 @@ Deno.serve(async (req) => {
           if (existing) continue
 
           for (const to of tokensByUser.get(uid) ?? []) {
-            messages.push({
-              to,
-              title: 'Ending tonight',
-              body: c.title?.slice(0, 120) || 'A contest expires tonight',
-              data: { type: 'ending_tonight', contestId: c.id },
-              sound: 'default',
-            })
+            if (pro) {
+              messages.push({
+                to,
+                title: 'Ending tonight · Pro',
+                body: c.title?.slice(0, 120) || 'A contest expires tonight',
+                data: { type: 'ending_tonight', contestId: c.id, priority: true },
+                sound: 'default',
+                priority: 'high',
+                channelId: 'looniewins-ending-pro',
+                interruptionLevel: 'timeSensitive',
+              })
+              proEndingQueued++
+            } else {
+              messages.push({
+                to,
+                title: 'Ending tonight',
+                body: c.title?.slice(0, 120) || 'A contest expires tonight',
+                data: { type: 'ending_tonight', contestId: c.id, priority: false },
+                sound: 'default',
+                priority: 'default',
+                channelId: 'looniewins-alerts',
+              })
+              freeEndingQueued++
+            }
           }
           logRows.push({ user_id: uid, contest_id: c.id, alert_type: 'ending_tonight' })
+          if (!pro) {
+            freeEndingCount.set(uid, (freeEndingCount.get(uid) ?? 0) + 1)
+          }
         }
       }
     }
@@ -313,7 +362,9 @@ Deno.serve(async (req) => {
         modes,
         queued: messages.length,
         logRows: logRows.length,
+        endingTonight: { pro: proEndingQueued, free: freeEndingQueued, freeCap: freeEndingCap },
         expo: sendResult,
+        expoAccessTokenConfigured: Boolean(Deno.env.get('EXPO_ACCESS_TOKEN')),
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )

@@ -43,7 +43,7 @@ export default function SettingsScreen({ onClose }: SettingsScreenProps) {
     setBusy(true)
     setPushMsg(null)
     try {
-      const result = await registerForPushNotifications(user.id)
+      const result = await registerForPushNotifications(user.id, { force: true })
       if (result.error && !result.token) {
         Alert.alert('Push registration', result.error)
       } else {

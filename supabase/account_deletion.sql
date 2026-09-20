@@ -20,6 +20,10 @@ begin
 
   -- Multi-schema cleanup (also covered by ON DELETE CASCADE where configured)
   begin
+    delete from public.email_digest_log where user_id = uid;
+  exception when undefined_table then null;
+  end;
+  begin
     delete from public.push_alert_log where user_id = uid;
   exception when undefined_table then null;
   end;
