@@ -237,6 +237,16 @@ export async function rpcConsumeSmartFill(): Promise<{
   return { ...row, ok: Boolean(row.ok) }
 }
 
+export async function rpcEnsureReferralCode(): Promise<string | null> {
+  if (!configured) return null
+  const { data, error } = await supabase.rpc('ensure_referral_code')
+  if (error) {
+    console.warn('[Referral] ensure code:', error.message)
+    return null
+  }
+  return typeof data === 'string' ? data : null
+}
+
 export function localConsumeWeeklyEntry(
   used: number,
   resetAt: string | null | undefined,

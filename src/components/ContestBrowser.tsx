@@ -19,6 +19,8 @@ import {
   saveAgeConfirmed,
 } from '../lib/utils/ageGate'
 import { formatEntriesToday } from '../hooks/useContestSocialProof'
+import { resolveFeedDisplayPrefs } from '../lib/utils/userSettings'
+import { useAuth } from '../contexts/AuthContext'
 
 interface ContestBrowserProps {
   contest: Contest | null
@@ -145,6 +147,9 @@ export default function ContestBrowser({
   entriesToday = null,
   onAgeConfirmed,
 }: ContestBrowserProps) {
+  const { profile } = useAuth()
+  const preferSystemBrowser =
+    resolveFeedDisplayPrefs({ settings: profile?.settings }).openContestsIn === 'browser'
   const [resolvedUrl, setResolvedUrl] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [iframeLikelyBlocked, setIframeLikelyBlocked] = useState(false)
@@ -228,6 +233,7 @@ export default function ContestBrowser({
 
   const openNativeWebView = useCallback(
     async (url: string) => {
+      if (preferSystemBrowser) return false
       try {
         const { Capacitor } = await import('@capacitor/core')
         if (!Capacitor.isNativePlatform()) return false
@@ -262,7 +268,15 @@ export default function ContestBrowser({
         return false
       }
     },
-    [autoFillData, contest?.title, onAutoFillUsed, onMarkEntered, autoMarkOnReturn, confirmMark]
+    [
+      preferSystemBrowser,
+      autoFillData,
+      contest?.title,
+      onAutoFillUsed,
+      onMarkEntered,
+      autoMarkOnReturn,
+      confirmMark,
+    ]
   )
 
   const handleEnterContest = useCallback(() => {
