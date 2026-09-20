@@ -10,6 +10,10 @@ export const MOBILE_LOCAL_DATA_KEYS = [
   'loonie_vault_v1',
   'looniewins_autofill',
   'looniewins_settings',
+  'looniewins_display_prefs',
+  'looniewins_guest_profile',
+  'looniewins_weekly_entries_used',
+  'looniewins_contest_entries',
 ] as const
 
 export interface DeleteAccountResult {

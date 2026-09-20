@@ -91,31 +91,97 @@ function mapProfile(row: Record<string, unknown>): UserProfile {
   }
 }
 
+const GUEST_LS_KEY = 'looniewins_guest_profile'
+
+/** Persist a few guest fields so DEV stub Pro / weekly caps survive reload (no cloud). */
+function readGuestLocal(): Partial<UserProfile> {
+  try {
+    const raw = localStorage.getItem(GUEST_LS_KEY)
+    if (!raw) {
+      // Legacy single-key fallbacks
+      const tier = localStorage.getItem('looniewins_subscription_tier')
+      const weekly = localStorage.getItem('looniewins_weekly_entries_used')
+      const bal = localStorage.getItem('looniewins_balance')
+      return {
+        ...(tier === 'weekly' || tier === 'monthly' || tier === 'free'
+          ? { subscription_tier: tier, is_premium: tier !== 'free' }
+          : {}),
+        ...(weekly != null && weekly !== ''
+          ? { weekly_entries_used: Math.max(0, Number(weekly) || 0) }
+          : {}),
+        ...(bal != null && bal !== ''
+          ? { points_balance: Math.max(0, Number(bal) || 0) }
+          : {}),
+      }
+    }
+    return JSON.parse(raw) as Partial<UserProfile>
+  } catch {
+    return {}
+  }
+}
+
+function writeGuestLocal(profile: UserProfile): void {
+  try {
+    const slim = {
+      points_balance: profile.points_balance,
+      weekly_entries_used: profile.weekly_entries_used,
+      weekly_entries_reset_at: profile.weekly_entries_reset_at,
+      subscription_tier: profile.subscription_tier,
+      is_premium: profile.is_premium,
+      xp: profile.xp,
+      level: profile.level,
+      streak: profile.streak,
+      last_streak_at: profile.last_streak_at,
+      streak_grace_available: profile.streak_grace_available,
+      last_comeback_bonus_at: profile.last_comeback_bonus_at,
+      smart_fills_remaining: profile.smart_fills_remaining,
+      settings: profile.settings,
+      feature_flags: profile.feature_flags,
+      auto_fill_data: profile.auto_fill_data,
+    }
+    localStorage.setItem(GUEST_LS_KEY, JSON.stringify(slim))
+    localStorage.setItem('looniewins_subscription_tier', profile.subscription_tier)
+    localStorage.setItem('looniewins_weekly_entries_used', String(profile.weekly_entries_used))
+    localStorage.setItem('looniewins_balance', String(profile.points_balance))
+  } catch {
+    /* quota / private mode */
+  }
+}
+
 function guestProfile(): UserProfile {
+  const local = readGuestLocal()
+  const tier = local.subscription_tier
+  const subscription_tier: SubscriptionTier =
+    tier === 'weekly' || tier === 'monthly' || tier === 'free' ? tier : 'free'
+  const weeklyUsed = local.weekly_entries_used ?? 0
+  // Cap counters need a week anchor; without it normalizeWeeklyUsage() treats used as 0
+  const weeklyReset =
+    local.weekly_entries_reset_at ??
+    (weeklyUsed > 0 ? new Date().toISOString() : null)
   return {
     id: 'local-guest',
     email: null,
     display_name: 'Guest',
-    is_premium: false,
-    points_balance: 1250,
-    xp: 0,
-    level: 1,
-    streak: 0,
-    auto_fill_data: {},
-    settings: { welcome_granted: true },
-    smart_fills_remaining: FREE_SMART_FILLS_DEFAULT,
-    last_daily_entry_at: null,
-    subscription_tier: 'free',
+    is_premium: local.is_premium ?? subscription_tier !== 'free',
+    points_balance: local.points_balance ?? 1250,
+    xp: local.xp ?? 0,
+    level: local.level ?? 1,
+    streak: local.streak ?? 0,
+    auto_fill_data: local.auto_fill_data ?? {},
+    settings: { welcome_granted: true, ...(local.settings ?? {}) },
+    smart_fills_remaining: local.smart_fills_remaining ?? FREE_SMART_FILLS_DEFAULT,
+    last_daily_entry_at: local.last_daily_entry_at ?? null,
+    subscription_tier,
     referral_code: null,
     referred_by: null,
-    weekly_entries_used: 0,
-    weekly_entries_reset_at: null,
-    last_streak_at: null,
-    streak_grace_available: true,
-    last_comeback_bonus_at: null,
-    iap_product_id: null,
-    iap_expires_at: null,
-    feature_flags: {},
+    weekly_entries_used: weeklyUsed,
+    weekly_entries_reset_at: weeklyReset,
+    last_streak_at: local.last_streak_at ?? null,
+    streak_grace_available: local.streak_grace_available !== false,
+    last_comeback_bonus_at: local.last_comeback_bonus_at ?? null,
+    iap_product_id: local.iap_product_id ?? null,
+    iap_expires_at: local.iap_expires_at ?? null,
+    feature_flags: local.feature_flags ?? {},
   }
 }
 
@@ -272,17 +338,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const updateProfile = useCallback(
     async (patch: Partial<UserProfile>) => {
-      // Guest / offline profile lives in memory (+ autofill mirrored to localStorage by callers)
+      // Guest / offline profile: memory + localStorage so DEV Pro stub / caps survive reload
       if (!user || !supabase) {
         setProfile((prev) => {
           const base = prev ?? guestProfile()
-          return {
+          const next: UserProfile = {
             ...base,
             ...patch,
             auto_fill_data: patch.auto_fill_data ?? base.auto_fill_data,
             settings: patch.settings ?? base.settings,
             feature_flags: patch.feature_flags ?? base.feature_flags,
           }
+          writeGuestLocal(next)
+          return next
         })
         return { error: null }
       }
