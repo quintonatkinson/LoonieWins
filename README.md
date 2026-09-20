@@ -44,6 +44,10 @@ Canadian contest aggregator & offerwall — Win More, Work Less.
 - **Winners:** Grid of recent wins.
 - **Profile:** Plan meter (Smart-Fills remaining), Applied Contests, Settings (Auto-Fill Data, Preferences, Export, Delete Account).
 
+## Browser extension
+
+Chrome/Edge Manifest V3 autofill for giveaway forms lives in [`extension/`](./extension/). Load unpacked from that folder; see [`extension/README.md`](./extension/README.md) for install, sync (`looniewins_autofill` / Supabase anon), and security notes.
+
 ## RSS sources
 
 - Reddit: `r/contestsofcanada`
