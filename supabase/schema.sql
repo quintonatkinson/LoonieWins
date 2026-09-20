@@ -160,3 +160,9 @@ $$;
 create or replace trigger on_auth_user_created
   after insert on auth.users
   for each row execute procedure public.handle_new_user();
+
+-- =============================================================================
+-- Additive migrations (run after this bootstrap / full Hive Mind schema):
+--   supabase/migrations/20260920_user_contest_submissions.sql
+--   → public.contest_submissions + is_admin/is_moderator + submit/moderate RPCs
+-- =============================================================================
