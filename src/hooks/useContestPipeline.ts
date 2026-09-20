@@ -6,13 +6,15 @@ import { syncToVault, syncToCloud, fetchFromCloud, getLiveContests, isVaultEmpty
 
 const PHRASES = [
   'Scanning feeds...',
-  'Analyzing 150+ links...',
+  'Analyzing CA + US sources...',
   'Filtering dead contests...',
   'Extracting odds...',
 ]
 
 const CONCURRENCY = 3
 const PHRASE_INTERVAL_MS = 2000
+/** Background refresh so the vault stays continuously updated while the app is open */
+const AUTO_REFRESH_MS = 30 * 60 * 1000
 const DEFAULT_ELIGIBILITY: 'CA' | 'US' = 'CA'
 
 function computeQualityScore(c: Contest, defaultEligibility: 'CA' | 'US' = DEFAULT_ELIGIBILITY): number {
@@ -131,6 +133,7 @@ export function useContestPipeline() {
 
     if (!abortRef.current) {
       syncToVault(allEnriched)
+      void syncToCloud(allEnriched)
 
       const byResolvedUrl = new Map<string, Contest>()
       for (const c of collected) {
@@ -189,6 +192,14 @@ export function useContestPipeline() {
     return () => {
       abortRef.current = true
     }
+  }, [runPipeline])
+
+  // Continuous refresh while the dashboard session is alive
+  useEffect(() => {
+    const id = setInterval(() => {
+      if (!abortRef.current) runPipeline()
+    }, AUTO_REFRESH_MS)
+    return () => clearInterval(id)
   }, [runPipeline])
 
   useEffect(() => {

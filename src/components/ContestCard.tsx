@@ -12,12 +12,19 @@ interface ContestCardProps {
   onOpenOverlay: (contest: Contest) => void
   variant: 'routine' | 'feed' | 'ended'
   daysLeft?: number | null
+  entered?: boolean
 }
 
-export default function ContestCard({ contest, onOpenOverlay, variant, daysLeft: daysLeftProp }: ContestCardProps) {
+export default function ContestCard({
+  contest,
+  onOpenOverlay,
+  variant,
+  daysLeft: daysLeftProp,
+  entered = false,
+}: ContestCardProps) {
   const navigate = useNavigate()
   const {
-    dailyLimitReached,
+    weeklyLimitReached,
     userIsFree,
     canEnterFree,
     hasUnlimitedEntries,
@@ -25,12 +32,14 @@ export default function ContestCard({ contest, onOpenOverlay, variant, daysLeft:
     entryCostPts,
     spendPointsForEntry,
     useFreeEntry,
+    weeklyEntriesUsed,
+    weeklyEntryCap,
   } = useUserLimits()
 
   const [showInsufficient, setShowInsufficient] = useState(false)
   const [showSubscription, setShowSubscription] = useState(false)
   const [toast, setToast] = useState(false)
-  const { setSubscriptionTier } = useUserEarn()
+  const { upgradeToPro } = useUserEarn()
 
   const daysLeft =
     daysLeftProp ??
@@ -59,24 +68,28 @@ export default function ContestCard({ contest, onOpenOverlay, variant, daysLeft:
       return
     }
     if (canEnterFree) {
-      useFreeEntry()
+      // Open first so guest/demo never blocks on bookkeeping
       onOpenOverlay(contest)
+      void useFreeEntry()
       return
     }
-    if (dailyLimitReached && userIsFree) {
+    if (weeklyLimitReached && userIsFree) {
       if (balance >= entryCostPts && spendPointsForEntry()) {
         onOpenOverlay(contest)
         setToast(true)
       } else {
         setShowInsufficient(true)
       }
+      return
     }
+    // Fallback: never dead-end the Enter CTA
+    onOpenOverlay(contest)
   }, [
     contest,
     variant,
     hasUnlimitedEntries,
     canEnterFree,
-    dailyLimitReached,
+    weeklyLimitReached,
     userIsFree,
     balance,
     entryCostPts,
@@ -86,7 +99,7 @@ export default function ContestCard({ contest, onOpenOverlay, variant, daysLeft:
   ])
 
   const showUnlock =
-    contest.id !== '__offline_alert__' && dailyLimitReached && userIsFree && !hasUnlimitedEntries
+    contest.id !== '__offline_alert__' && weeklyLimitReached && userIsFree && !hasUnlimitedEntries
 
   const goToEarn = useCallback(() => {
     setShowInsufficient(false)
@@ -105,6 +118,16 @@ export default function ContestCard({ contest, onOpenOverlay, variant, daysLeft:
   }
 
   const isLocked = contest.isLocked === true
+  const tags = contest.tags ?? []
+  const entryTypeLabel = tags.includes('Daily')
+    ? 'Daily'
+    : tags.includes('Weekly')
+      ? 'Weekly'
+      : tags.includes('Instant Win')
+        ? 'Instant Win'
+        : tags.includes('1 Single Entry')
+          ? 'Single'
+          : 'Contest'
   const button = variant === 'ended' ? (
     <button
       type="button"
@@ -145,9 +168,10 @@ export default function ContestCard({ contest, onOpenOverlay, variant, daysLeft:
         role="dialog"
         aria-modal
       >
-        <p className="text-gray-50 font-medium">Insufficient Funds</p>
+        <p className="text-gray-50 font-medium">Weekly free entries used</p>
         <p className="text-gray-400 text-sm mt-2">
-          Not enough points. Do 1 Survey to unlock 2.5 Entries!
+          Free tier: {weeklyEntriesUsed}/{weeklyEntryCap ?? '∞'} entries this week. Spend{' '}
+          {entryCostPts} pts for another, earn more on Earn, or go Pro for unlimited.
         </p>
         <button
           type="button"
@@ -174,7 +198,8 @@ export default function ContestCard({ contest, onOpenOverlay, variant, daysLeft:
     <SubscriptionModal
       open={showSubscription}
       onClose={() => setShowSubscription(false)}
-      onSelectPlan={(planId) => setSubscriptionTier(planId)}
+      onSelectPlan={(planId) => void upgradeToPro(planId)}
+      showComparison
     />
   )
 
@@ -212,7 +237,7 @@ export default function ContestCard({ contest, onOpenOverlay, variant, daysLeft:
               showUnlock ? 'bg-amber-500/20 text-amber-400 border border-amber-500/40' : 'bg-win text-gray-900'
             }`}
           >
-            {variant === 'ended' ? 'Ended' : showUnlock ? `UNLOCK (${entryCostPts} Pts)` : isLocked ? 'View on RFD' : 'Enter'}
+            {showUnlock ? `UNLOCK (${entryCostPts} Pts)` : isLocked ? 'View on RFD' : 'Enter'}
           </span>
         </button>
         {toastEl}
@@ -226,7 +251,14 @@ export default function ContestCard({ contest, onOpenOverlay, variant, daysLeft:
     <>
       <li className="rounded-xl bg-surface border border-gray-600/50 px-4 py-3 flex items-center gap-3">
         <div className="flex-1 min-w-0 flex flex-col gap-1">
-          <span className="text-xs text-gray-500 font-medium">Single</span>
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-gray-500 font-medium">{entryTypeLabel}</span>
+            {entered && (
+              <span className="text-[10px] uppercase tracking-wide font-semibold px-1.5 py-0.5 rounded bg-win/20 text-win border border-win/30">
+                Entered
+              </span>
+            )}
+          </div>
           <p className="font-semibold text-gray-50 text-sm line-clamp-2">{contest.title}</p>
           <div className="flex flex-wrap items-center gap-3 mt-1 text-xs text-gray-400">
             {contest.prizeValue != null && (

@@ -1,11 +1,19 @@
-import { useState, useCallback, useEffect, useRef } from 'react'
+import { useState, useCallback, useEffect, useRef, useMemo } from 'react'
 import type { Contest } from '../lib/rssFetcher'
 import ContestBrowser from '../components/ContestBrowser'
 import ContestCard from '../components/ContestCard'
 import CountryToggle from '../components/CountryToggle'
 import RadarLoader from '../components/RadarLoader'
+import SubscriptionModal from '../components/SubscriptionModal'
 import { useContestPipeline } from '../hooks/useContestPipeline'
+import { useContestEntries } from '../hooks/useContestEntries'
+import { useUserLimits } from '../hooks/useUserLimits'
+import { useAuth } from '../contexts/AuthContext'
+import { useUserEarn } from '../contexts/UserEarnContext'
 import type { AutoFillData } from '../types/profile'
+import { loadAutoFillData } from '../lib/utils/autoFillStorage'
+import { rpcConsumeSmartFill } from '../lib/monetization/progression'
+import { isSupabaseConfigured } from '../lib/supabase'
 
 type SortFilter = 'high-value' | 'ending-soon' | 'best-odds' | 'most-popular'
 
@@ -36,24 +44,14 @@ const TAG_REQ_FILTERS: { key: string; label: string; match: (c: Contest) => bool
   { key: 'weekly', label: 'Weekly', match: (c) => (c.tags ?? []).includes('Weekly') },
 ]
 
-const STORAGE_ENTERED = 'looniewins_entered'
-
-function getEnteredIds(): Set<string> {
-  try {
-    const raw = localStorage.getItem(STORAGE_ENTERED)
-    return new Set(raw ? JSON.parse(raw) : [])
-  } catch {
-    return new Set()
-  }
-}
-
-function setEnteredIds(ids: Set<string>) {
-  localStorage.setItem(STORAGE_ENTERED, JSON.stringify([...ids]))
-}
-
 export default function Dashboard() {
   const pipeline = useContestPipeline()
   const { liveContests, isScanning, isSyncingCloud, isFinished, offlineMode, phaseMessage, refetch } = pipeline
+  const { profile, updateProfile } = useAuth()
+  const { enteredIds, markEntered: persistEntered } = useContestEntries()
+  const { smartFillsBlocked, smartFillsUnlimited, smartFillsRemaining } = useUserLimits()
+  const [showSmartFillPaywall, setShowSmartFillPaywall] = useState(false)
+  const { upgradeToPro } = useUserEarn()
 
   const [search, setSearch] = useState('')
   const [sortFilter, setSortFilter] = useState<SortFilter | null>(null)
@@ -62,21 +60,78 @@ export default function Dashboard() {
   const [tagFilters, setTagFilters] = useState<Set<string>>(new Set())
   const [geoFilter, setGeoFilter] = useState<'CA' | 'US' | 'ANY'>('CA')
   const [visibleCount, setVisibleCount] = useState(75)
-  const [enteredIds, setEnteredIdsState] = useState(getEnteredIds)
   const sentinelRef = useRef<HTMLDivElement | null>(null)
   const [overlayContest, setOverlayContest] = useState<Contest | null>(null)
-  const [autoFillData] = useState<AutoFillData>(() => ({
-    name: 'Jane Doe',
-    email: 'jane@example.com',
-    address: '123 Main St, Toronto ON',
-  }))
+  const [localAutoFill, setLocalAutoFill] = useState<AutoFillData>(() => loadAutoFillData())
 
-  const markEntered = useCallback((contest: Contest) => {
-    const next = new Set(enteredIds)
-    next.add(contest.id)
-    setEnteredIdsState(next)
-    setEnteredIds(next)
-  }, [enteredIds])
+  useEffect(() => {
+    const sync = () => setLocalAutoFill(loadAutoFillData())
+    window.addEventListener('loonie_autofill_updated', sync)
+    window.addEventListener('storage', sync)
+    return () => {
+      window.removeEventListener('loonie_autofill_updated', sync)
+      window.removeEventListener('storage', sync)
+    }
+  }, [])
+
+  const autoFillData: AutoFillData = useMemo(() => {
+    const af = profile?.auto_fill_data
+    if (af && (af.email || af.name || af.firstName)) {
+      return {
+        name:
+          af.name ||
+          [af.firstName, af.lastName].filter(Boolean).join(' ') ||
+          profile?.display_name ||
+          '',
+        firstName: af.firstName,
+        lastName: af.lastName,
+        email: af.email || profile?.email || '',
+        address: af.address || '',
+        phone: af.phone,
+        city: af.city,
+        province: af.province,
+        postalCode: af.postalCode,
+      }
+    }
+    return localAutoFill
+  }, [profile, localAutoFill])
+
+  const markEntered = useCallback(
+    (contest: Contest, status: 'entered' | 'submitted' = 'entered') => {
+      void persistEntered(contest, status)
+    },
+    [persistEntered]
+  )
+
+  const handleAutoFillUsed = useCallback(() => {
+    void (async () => {
+      if (smartFillsUnlimited) return
+      if (smartFillsBlocked) {
+        setShowSmartFillPaywall(true)
+        return
+      }
+      if (profile && isSupabaseConfigured) {
+        const res = await rpcConsumeSmartFill()
+        if (res.ok && !res.local) {
+          if (res.remaining != null) {
+            await updateProfile({ smart_fills_remaining: res.remaining })
+          }
+          return
+        }
+        if (res.reason === 'smart_fills_exhausted') {
+          setShowSmartFillPaywall(true)
+          return
+        }
+      }
+      const remaining = profile?.smart_fills_remaining
+      if (remaining == null) return
+      if (remaining <= 0) {
+        setShowSmartFillPaywall(true)
+        return
+      }
+      void updateProfile({ smart_fills_remaining: Math.max(0, remaining - 1) })
+    })()
+  }, [profile, updateProfile, smartFillsBlocked, smartFillsUnlimited])
 
   const routineContests = liveContests.filter((c) => enteredIds.has(c.id)).slice(0, 10)
 
@@ -172,6 +227,7 @@ export default function Dashboard() {
                 contest={c}
                 onOpenOverlay={setOverlayContest}
                 variant="routine"
+                entered
               />
             ))
           )}
@@ -339,6 +395,7 @@ export default function Dashboard() {
                       onOpenOverlay={setOverlayContest}
                       variant="feed"
                       daysLeft={daysLeft(c)}
+                      entered={enteredIds.has(c.id)}
                     />
                   ))}
                 </ul>
@@ -358,6 +415,16 @@ export default function Dashboard() {
         onClose={() => setOverlayContest(null)}
         onMarkEntered={markEntered}
         autoFillData={autoFillData}
+        onAutoFillUsed={handleAutoFillUsed}
+        smartFillBlocked={smartFillsBlocked}
+        smartFillsRemaining={smartFillsUnlimited ? null : smartFillsRemaining}
+      />
+
+      <SubscriptionModal
+        open={showSmartFillPaywall}
+        onClose={() => setShowSmartFillPaywall(false)}
+        onSelectPlan={(planId) => void upgradeToPro(planId)}
+        showComparison
       />
     </div>
   )
