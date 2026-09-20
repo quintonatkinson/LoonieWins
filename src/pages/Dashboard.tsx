@@ -1,4 +1,5 @@
 import { useState, useCallback, useEffect, useRef, useMemo } from 'react'
+import { Link } from 'react-router-dom'
 import type { Contest } from '../lib/rssFetcher'
 import ContestBrowser from '../components/ContestBrowser'
 import ContestCard from '../components/ContestCard'
@@ -177,8 +178,14 @@ export default function Dashboard() {
       )}
       {!showFullRadar && (
         <>
-      <div className="px-4 pt-3 pb-2">
+      <div className="px-4 pt-3 pb-2 flex flex-wrap items-center gap-3 justify-between">
         <CountryToggle value={geoFilter} onChange={setGeoFilter} />
+        <Link
+          to="/submit"
+          className="text-xs font-semibold px-3 py-1.5 rounded-lg border border-win/40 text-win hover:bg-win/10 transition-colors"
+        >
+          + Submit a contest
+        </Link>
       </div>
       {/* Your Daily Routine */}
       <section className="px-4 pt-4">

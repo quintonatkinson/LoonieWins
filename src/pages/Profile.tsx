@@ -14,6 +14,7 @@ import {
   LifeBuoy,
   Scale,
   LogOut,
+  PlusCircle,
 } from 'lucide-react'
 import { useUserEarn } from '../contexts/UserEarnContext'
 import { useAuth } from '../contexts/AuthContext'
@@ -410,6 +411,37 @@ export default function Profile() {
             {saveMsg && <p className="text-sm text-red-400">{saveMsg}</p>}
           </div>
         )}
+      </section>
+
+      {/* Community */}
+      <section>
+        <h2 className="text-sm font-semibold text-white uppercase tracking-wide mb-3">Community</h2>
+        <ul className="rounded-xl bg-gray-800/80 border border-gray-600/50 divide-y divide-gray-600/50 overflow-hidden">
+          <li>
+            <Link
+              to="/submit"
+              className="flex items-center gap-3 w-full text-left px-4 py-3 hover:bg-white/5 transition-colors"
+            >
+              <PlusCircle className="w-5 h-5 text-win shrink-0" />
+              <div>
+                <p className="text-sm text-white font-medium">Submit a contest</p>
+                <p className="text-xs text-gray-500">Moderated — approved items join the Hive Mind feed</p>
+              </div>
+            </Link>
+          </li>
+          <li>
+            <Link
+              to="/moderate"
+              className="flex items-center gap-3 w-full text-left px-4 py-3 hover:bg-white/5 transition-colors"
+            >
+              <Shield className="w-5 h-5 text-gray-400 shrink-0" />
+              <div>
+                <p className="text-sm text-white font-medium">Moderation queue</p>
+                <p className="text-xs text-gray-500">Mods / admins only</p>
+              </div>
+            </Link>
+          </li>
+        </ul>
       </section>
 
       <section>

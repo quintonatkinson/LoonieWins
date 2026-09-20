@@ -59,6 +59,7 @@ Canadian + American contest aggregator & offerwall — Win More, Work Less.
 - **Smart-Fill / entry:** Hardened autofill injection, expanded copy chips, Open & Enter with mark-entered / submitted prompts.
 - **Tracking:** Per-account `tracking.contest_entries` (entered / submitted / won / lost / expired) with local fallback.
 - **Profile:** Plan, applied contests with status actions, autofill, export, delete account.
+- **Submit a contest (moderated UGC):** `/submit` — title, URL, country eligibility, optional expiry. Mods approve via `/moderate` → Hive Mind `contests` (`source = user-submitted`). SQL: `supabase/migrations/20260920_user_contest_submissions.sql`.
 - **Referrals / Winners / Earn:** Backed by `giveaways.*` and `tracking.transactions`.
 - **Legal / store:** `/privacy`, `/terms`, `/support`, `/delete-account` + `public/legal/*.html`.
 - **Account deletion:** `public.delete_own_account()` in bootstrap (also `supabase/account_deletion.sql`).

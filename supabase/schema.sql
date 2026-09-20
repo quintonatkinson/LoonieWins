@@ -389,4 +389,7 @@ comment on function public.delete_own_account() is
 --   2. Auth → URL Configuration: add http://localhost:5173 and your Expo scheme.
 --   3. Settings → API → Exposed schemas: include tracking, giveaways.
 --   4. Set VITE_SUPABASE_* / EXPO_PUBLIC_SUPABASE_* and restart the app.
+-- Additive migrations (run after this bootstrap / full Hive Mind schema):
+--   supabase/migrations/20260920_user_contest_submissions.sql
+--   → public.contest_submissions + is_admin/is_moderator + submit/moderate RPCs
 -- =============================================================================

@@ -5,6 +5,7 @@ import { isSupabaseConfigured } from '../lib/supabase'
 
 const ROUTES = [
   { path: '/', label: 'Home', icon: '🏠' },
+  { path: '/submit', label: 'Submit', icon: '➕' },
   { path: '/referrals', label: 'Referrals', icon: '🔗' },
   { path: '/earn', label: 'Earn', icon: 'earn' as const },
   { path: '/winners', label: 'Winners', icon: '🏆' },
