@@ -7,6 +7,7 @@
 import type { Contest } from '../lib/rssFetcher'
 import { toExpiryEndOfDay } from '../lib/utils/expiryDate'
 import { supabase } from '../lib/supabase'
+import { autoCategorize } from '../lib/data/tagger'
 
 const CLOUD_TIMEOUT_MS = 8000
 
@@ -56,7 +57,23 @@ function normalizeUrl(url: string): string {
   }
 }
 
+function deriveRestrictions(title: string, tags: string[] = []): string[] {
+  // Hive Mind DB has no restrictions column — re-derive from title/tags so Québec-safe works.
+  return autoCategorize(title, tags.join(' ')).restrictions
+}
+
+/** Rehydrate restrictions when missing (cloud pull / older vault rows). */
+export function withDerivedRestrictions(c: Contest): Contest {
+  if (c.restrictions && c.restrictions.length > 0) return c
+  return {
+    ...c,
+    restrictions: deriveRestrictions(c.title, c.tags ?? []),
+  }
+}
+
 function rowToContest(row: ContestRow): Contest {
+  const tags = Array.isArray(row.tags) ? row.tags : []
+  const requirements = Array.isArray(row.requirements) ? row.requirements : []
   return {
     id: row.id,
     title: row.title,
@@ -66,11 +83,11 @@ function rowToContest(row: ContestRow): Contest {
     is_estimated_expiry: row.is_estimated_expiry,
     prizeValue: row.prize_value ?? undefined,
     eligibility: (row.eligibility as Contest['eligibility']) ?? undefined,
-    tags: Array.isArray(row.tags) ? row.tags : [],
-    requirements: Array.isArray(row.requirements) ? row.requirements : [],
+    tags,
+    requirements,
     linkStatus: row.link_status ?? undefined,
     isLocked: row.is_locked,
-    restrictions: [],
+    restrictions: deriveRestrictions(row.title, tags),
   }
 }
 
@@ -206,12 +223,14 @@ export function syncToVault(enrichedContests: Contest[]): void {
 export function getLiveContests(): Contest[] {
   const vault = loadVault()
   const now = new Date()
-  return vault.filter((c) => {
-    if (c.linkStatus != null && DEAD_STATUSES.includes(c.linkStatus)) return false
-    if (c.expiryDate == null) return true
-    const end = toExpiryEndOfDay(c.expiryDate)
-    return !Number.isNaN(end.getTime()) && end > now
-  })
+  return vault
+    .map(withDerivedRestrictions)
+    .filter((c) => {
+      if (c.linkStatus != null && DEAD_STATUSES.includes(c.linkStatus)) return false
+      if (c.expiryDate == null) return true
+      const end = toExpiryEndOfDay(c.expiryDate)
+      return !Number.isNaN(end.getTime()) && end > now
+    })
 }
 
 /**
@@ -220,11 +239,13 @@ export function getLiveContests(): Contest[] {
 export function getPastContests(): Contest[] {
   const vault = loadVault()
   const now = new Date()
-  return vault.filter((c) => {
-    if (c.expiryDate == null) return false
-    const end = toExpiryEndOfDay(c.expiryDate)
-    return !Number.isNaN(end.getTime()) && end <= now
-  })
+  return vault
+    .map(withDerivedRestrictions)
+    .filter((c) => {
+      if (c.expiryDate == null) return false
+      const end = toExpiryEndOfDay(c.expiryDate)
+      return !Number.isNaN(end.getTime()) && end <= now
+    })
 }
 
 /**
@@ -239,7 +260,7 @@ export async function searchHiveMind(query: string, limit = 40): Promise<Contest
   const byUrl = new Map<string, Contest>()
   for (const c of loadVault()) {
     const hay = `${c.title} ${c.source ?? ''} ${c.url}`.toLowerCase()
-    if (hay.includes(qLower)) byUrl.set(normalizeUrl(c.url), c)
+    if (hay.includes(qLower)) byUrl.set(normalizeUrl(c.url), withDerivedRestrictions(c))
   }
 
   if (supabase) {
