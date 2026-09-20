@@ -1,6 +1,9 @@
 /**
  * Offerwall (AdGem) — Expo env keys. Sandbox mock when unset.
+ * Sandbox rewards mirror pointsEconomy design centers.
  */
+
+import { DESIGN_REWARD_PTS } from '../monetization/pointsEconomy'
 
 export type OfferwallProviderId = 'adgem' | 'mock'
 
@@ -26,9 +29,29 @@ export interface OfferwallSession {
 
 const MOCK_OFFERS: OfferwallOffer[] = [
   {
+    id: 'mock-video',
+    title: 'Watch Ad Video',
+    reward: DESIGN_REWARD_PTS.rewardedVideo,
+    timeLabel: '30 Sec',
+    timeKind: 'video',
+    tag: 'Video',
+    provider: 'mock',
+    sandbox: true,
+  },
+  {
+    id: 'mock-poll',
+    title: 'Quick Poll: Streaming',
+    reward: DESIGN_REWARD_PTS.quickPoll,
+    timeLabel: '30 Sec',
+    timeKind: 'lightning',
+    tag: 'Easy',
+    provider: 'mock',
+    sandbox: true,
+  },
+  {
     id: 'mock-tech',
     title: 'Tech Opinion Panel',
-    reward: 500,
+    reward: DESIGN_REWARD_PTS.shortSurvey,
     timeLabel: '3 Mins',
     timeKind: 'lightning',
     tag: 'Hot',
@@ -38,7 +61,7 @@ const MOCK_OFFERS: OfferwallOffer[] = [
   {
     id: 'mock-grocery',
     title: 'Grocery Habits Survey',
-    reward: 1200,
+    reward: DESIGN_REWARD_PTS.midSurvey,
     timeLabel: '15 Mins',
     timeKind: 'clock',
     tag: 'High Reward',
@@ -46,12 +69,12 @@ const MOCK_OFFERS: OfferwallOffer[] = [
     sandbox: true,
   },
   {
-    id: 'mock-poll',
-    title: 'Quick Poll: Streaming',
-    reward: 50,
-    timeLabel: '30 Sec',
-    timeKind: 'lightning',
-    tag: 'Easy',
+    id: 'mock-game',
+    title: "Download 'Raid Legends'",
+    reward: DESIGN_REWARD_PTS.typicalCpi,
+    timeLabel: 'Game',
+    timeKind: 'game',
+    tag: 'Offer',
     provider: 'mock',
     sandbox: true,
   },

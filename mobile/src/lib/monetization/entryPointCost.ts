@@ -13,13 +13,17 @@ export type EntryCostTier =
   | 'premium'
   | 'mega'
 
+/**
+ * Calibrated: Tims ≈ 2–3 videos (~$0.05); vehicle ≈ 1 strong CPI (~$3).
+ * Keep in sync with web entryPointCost.ts / pointsEconomy.ts.
+ */
 export const ENTRY_COST_BY_TIER: Record<EntryCostTier, number> = {
-  micro: 75,
+  micro: 50,
   low: 100,
   standard: ENTRY_COST_PTS,
-  high: 400,
-  premium: 600,
-  mega: 1000,
+  high: 750,
+  premium: 1500,
+  mega: 3000,
 }
 
 export const ENTRY_COST_TIER_LABELS: Record<EntryCostTier, string> = {
