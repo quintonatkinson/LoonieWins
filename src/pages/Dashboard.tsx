@@ -38,8 +38,17 @@ import {
 import { searchHiveMind } from '../hooks/useContestVault'
 import { shareContest } from '../lib/utils/shareContest'
 import type { GeoFilterValue } from '../components/CountryToggle'
+import {
+  resolveFeedDisplayPrefs,
+  saveFeedDisplayPrefsLocal,
+  withFeedDisplayPrefs,
+  isPurchaseRequiredContest,
+  isAdultContest,
+  type CardDensity,
+  type SortDefault,
+} from '../lib/utils/userSettings'
 
-type SortFilter = 'high-value' | 'ending-soon' | 'best-odds' | 'most-popular'
+type SortFilter = SortDefault
 
 const NEW_RAIL_MS = 48 * 60 * 60 * 1000
 const FREE_RAIL_TEASER = 2
@@ -104,8 +113,9 @@ export default function Dashboard() {
   const { upgradeToPro } = useUserEarn()
   const social = useContestSocialProof()
 
+  const displayPrefs = resolveFeedDisplayPrefs({ settings: profile?.settings })
   const [search, setSearch] = useState('')
-  const [sortFilter, setSortFilter] = useState<SortFilter | null>('ending-soon')
+  const [sortFilter, setSortFilter] = useState<SortFilter | null>(displayPrefs.sortDefault)
   const [hideEntered, setHideEntered] = useState(true)
   const [quebecSafe, setQuebecSafe] = useState(() =>
     resolveInitialQuebecSafe({
@@ -122,6 +132,12 @@ export default function Dashboard() {
   )
   const [homeMode, setHomeMode] = useState<HomeMode>(() => loadHomeMode('routine'))
   const [autoAdvance, setAutoAdvance] = useState(() => loadAutoAdvance(true))
+  const [hidePurchaseRequired, setHidePurchaseRequired] = useState(
+    displayPrefs.hidePurchaseRequired
+  )
+  const [hideAdult, setHideAdult] = useState(displayPrefs.hideAdult)
+  const [adultAlwaysConfirm, setAdultAlwaysConfirm] = useState(displayPrefs.adultAlwaysConfirm)
+  const [cardDensity, setCardDensity] = useState<CardDensity>(displayPrefs.cardDensity)
   const [visibleCount, setVisibleCount] = useState(75)
   const sentinelRef = useRef<HTMLDivElement | null>(null)
   const [overlayContest, setOverlayContest] = useState<Contest | null>(null)
@@ -174,6 +190,17 @@ export default function Dashboard() {
       return qc
     })
   }, [profile, updateProfile])
+
+  // Sync display prefs when cloud profile / settings land
+  useEffect(() => {
+    if (!profile?.settings) return
+    const next = resolveFeedDisplayPrefs({ settings: profile.settings })
+    setHidePurchaseRequired(next.hidePurchaseRequired)
+    setHideAdult(next.hideAdult)
+    setAdultAlwaysConfirm(next.adultAlwaysConfirm)
+    setCardDensity(next.cardDensity)
+    setSortFilter((prev) => prev ?? next.sortDefault)
+  }, [profile?.settings])
 
   useEffect(() => {
     autoAdvanceRef.current = autoAdvance
@@ -292,6 +319,20 @@ export default function Dashboard() {
     })
   }, [profile, updateProfile])
 
+  const handleSortChange = useCallback(
+    (key: SortFilter) => {
+      const next = sortFilter === key ? null : key
+      setSortFilter(next)
+      if (next) {
+        saveFeedDisplayPrefsLocal({ sortDefault: next })
+        void updateProfile({
+          settings: withFeedDisplayPrefs(profile?.settings, { sortDefault: next }),
+        })
+      }
+    },
+    [sortFilter, profile?.settings, updateProfile]
+  )
+
   const handleHomeModeChange = useCallback((mode: HomeMode) => {
     setHomeMode(mode)
     saveHomeMode(mode)
@@ -395,6 +436,8 @@ export default function Dashboard() {
       if (isDeadLink(c)) return false
       if (!opts?.ignoreEntered && hideEntered && enteredIds.has(c.id)) return false
       if (quebecSafe && c.restrictions?.includes('no_quebec')) return false
+      if (hidePurchaseRequired && isPurchaseRequiredContest(c)) return false
+      if (hideAdult && isAdultContest(c)) return false
       if (!passesGeo(c, geoFilter)) return false
       if (search.trim()) {
         const q = search.toLowerCase()
@@ -408,7 +451,16 @@ export default function Dashboard() {
       }
       return true
     },
-    [hideEntered, enteredIds, quebecSafe, geoFilter, search, tagFilters]
+    [
+      hideEntered,
+      enteredIds,
+      quebecSafe,
+      hidePurchaseRequired,
+      hideAdult,
+      geoFilter,
+      search,
+      tagFilters,
+    ]
   )
 
   const sortFeed = useCallback(
@@ -769,7 +821,7 @@ export default function Dashboard() {
           <button
             key={key}
             type="button"
-            onClick={() => setSortFilter(sortFilter === key ? null : key)}
+            onClick={() => handleSortChange(key)}
             className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
               sortFilter === key
                 ? 'bg-win text-on-win'
@@ -787,6 +839,42 @@ export default function Dashboard() {
           }`}
         >
           Hide Entered
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            const next = !hidePurchaseRequired
+            setHidePurchaseRequired(next)
+            saveFeedDisplayPrefsLocal({ hidePurchaseRequired: next })
+            void updateProfile({
+              settings: withFeedDisplayPrefs(profile?.settings, { hidePurchaseRequired: next }),
+            })
+          }}
+          className={`px-4 py-2 rounded-full text-sm font-medium border transition-colors ${
+            hidePurchaseRequired
+              ? 'bg-gray-700 text-gray-50 border-gray-500'
+              : 'bg-surface border-gray-600/50 text-gray-400'
+          }`}
+        >
+          Hide Purchase
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            const next = !hideAdult
+            setHideAdult(next)
+            saveFeedDisplayPrefsLocal({ hideAdult: next })
+            void updateProfile({
+              settings: withFeedDisplayPrefs(profile?.settings, { hideAdult: next }),
+            })
+          }}
+          className={`px-4 py-2 rounded-full text-sm font-medium border transition-colors ${
+            hideAdult
+              ? 'bg-gray-700 text-gray-50 border-gray-500'
+              : 'bg-surface border-gray-600/50 text-gray-400'
+          }`}
+        >
+          Hide 18+
         </button>
       </div>
       )}
@@ -898,7 +986,7 @@ export default function Dashboard() {
               </div>
             ) : (
               <>
-                <ul className="space-y-2">
+                <ul className={`space-y-2 ${cardDensity === 'compact' ? 'space-y-1' : ''}`}>
                   {visibleContests.map((c) => (
                     <ContestCard
                       key={c.id}
@@ -907,6 +995,8 @@ export default function Dashboard() {
                       onOneTapEnter={(contest) => void oneTapEnter(contest)}
                       onShare={(contest) => void handleShare(contest)}
                       variant="feed"
+                      density={cardDensity}
+                      adultAlwaysConfirm={adultAlwaysConfirm}
                       daysLeft={daysLeft(c)}
                       entered={enteredIds.has(c.id)}
                       entriesToday={social.countFor(c.id)}

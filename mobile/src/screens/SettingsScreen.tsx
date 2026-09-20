@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import {
   View,
   Text,
@@ -7,12 +7,29 @@ import {
   Linking,
   Alert,
   ActivityIndicator,
+  Share,
+  Switch,
 } from 'react-native'
 import { SUPPORT_EMAIL, LEGAL_SITE_ORIGIN, legalUrl, mailtoSupport } from '../lib/legal/constants'
 import { deleteAccountAndLocalData } from '../lib/account/deleteAccount'
 import NotificationPreferences from '../components/NotificationPreferences'
+import AccentPicker from '../components/AccentPicker'
 import { useAuth } from '../contexts/AuthContext'
+import { useTheme } from '../contexts/ThemeContext'
 import { registerForPushNotifications } from '../lib/notifications/registerPush'
+import { isSupabaseConfigured } from '../lib/supabase'
+import { rpcEnsureReferralCode } from '../lib/monetization/progression'
+import {
+  resolveFeedDisplayPrefs,
+  saveFeedDisplayPrefsLocal,
+  withFeedDisplayPrefs,
+  SORT_DEFAULT_OPTIONS,
+  type FeedDisplayPrefs,
+  type CardDensity,
+  type OpenContestsIn,
+  type SortDefault,
+} from '../lib/utils/userSettings'
+import { loadQuebecSafe, saveQuebecSafe } from '../lib/utils/feedPrefs'
 
 interface SettingsScreenProps {
   onClose: () => void
@@ -31,9 +48,44 @@ function openLegal(path: 'privacy' | 'terms' | 'support' | 'delete-account') {
 }
 
 export default function SettingsScreen({ onClose }: SettingsScreenProps) {
-  const { user } = useAuth()
+  const { user, profile, updateProfile } = useAuth()
+  const { accentColor } = useTheme()
   const [busy, setBusy] = useState(false)
   const [pushMsg, setPushMsg] = useState<string | null>(null)
+  const [prefs, setPrefs] = useState<FeedDisplayPrefs>(DEFAULT_SYNC)
+  const [quebecSafe, setQuebecSafe] = useState(false)
+  const [inviteCode, setInviteCode] = useState<string | null>(profile?.referral_code ?? null)
+  const [inviteMsg, setInviteMsg] = useState<string | null>(null)
+
+  useEffect(() => {
+    void (async () => {
+      const next = await resolveFeedDisplayPrefs({ settings: profile?.settings })
+      setPrefs(next)
+      setQuebecSafe(await loadQuebecSafe(Boolean(profile?.settings?.quebecSafe)))
+    })()
+  }, [profile?.settings])
+
+  useEffect(() => {
+    if (!user || !isSupabaseConfigured) {
+      setInviteCode(profile?.referral_code ?? null)
+      return
+    }
+    void (async () => {
+      const code = await rpcEnsureReferralCode()
+      setInviteCode(code || profile?.referral_code || null)
+    })()
+  }, [user, profile?.referral_code])
+
+  const patchPref = useCallback(
+    (patch: Partial<FeedDisplayPrefs>) => {
+      setPrefs((prev) => ({ ...prev, ...patch }))
+      void saveFeedDisplayPrefsLocal(patch)
+      void updateProfile({
+        settings: withFeedDisplayPrefs(profile?.settings, patch),
+      })
+    },
+    [profile?.settings, updateProfile]
+  )
 
   const enableDevicePush = async () => {
     if (!user) {
@@ -83,6 +135,27 @@ export default function SettingsScreen({ onClose }: SettingsScreenProps) {
     )
   }
 
+  const copyInvite = async () => {
+    if (!inviteCode) return
+    try {
+      await Share.share({ message: inviteCode })
+      setInviteMsg('Share sheet opened (or copy from there).')
+    } catch {
+      setInviteMsg('Could not open share sheet.')
+    }
+  }
+
+  const shareInvite = async () => {
+    if (!inviteCode) return
+    try {
+      await Share.share({
+        message: `Join me on LoonieWins — use my invite code ${inviteCode} when you sign up.`,
+      })
+    } catch {
+      /* dismissed */
+    }
+  }
+
   return (
     <View style={{ flex: 1, backgroundColor: '#111827' }}>
       <View
@@ -99,14 +172,258 @@ export default function SettingsScreen({ onClose }: SettingsScreenProps) {
       >
         <Text style={{ color: '#fff', fontSize: 20, fontWeight: '700' }}>Settings</Text>
         <TouchableOpacity onPress={onClose} accessibilityRole="button">
-          <Text style={{ color: '#39FF14', fontSize: 16 }}>Close</Text>
+          <Text style={{ color: accentColor, fontSize: 16 }}>Close</Text>
         </TouchableOpacity>
       </View>
 
-      <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 48, gap: 8 }}>
-        <Text style={{ color: '#9ca3af', fontSize: 13, marginBottom: 8 }}>
-          Privacy, support, notifications, and account controls for App Store and Google Play.
+      <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 48 }}>
+        <Text style={{ color: '#9ca3af', fontSize: 13, marginBottom: 12 }}>
+          Appearance, feed filters, notifications, invite code, and account controls.
         </Text>
+
+        <Text style={{ color: '#fff', fontWeight: '700', fontSize: 14, marginBottom: 8 }}>
+          APPEARANCE
+        </Text>
+        <AccentPicker />
+
+        <Text
+          style={{
+            color: '#fff',
+            fontWeight: '700',
+            fontSize: 14,
+            marginTop: 16,
+            marginBottom: 8,
+          }}
+        >
+          PREFERENCES
+        </Text>
+
+        <View
+          style={{
+            backgroundColor: '#14532d33',
+            borderRadius: 12,
+            padding: 12,
+            borderWidth: 1,
+            borderColor: accentColor + '55',
+            marginBottom: 12,
+          }}
+        >
+          <Text style={{ color: '#fff', fontWeight: '700', fontSize: 13 }}>Your feed fingerprint</Text>
+          <Text style={{ color: '#9ca3af', fontSize: 12, marginTop: 4 }}>
+            {[
+              prefs.hidePurchaseRequired ? 'Hide purchase' : null,
+              prefs.hideAdult ? 'Hide 18+' : prefs.adultAlwaysConfirm ? 'Always confirm 18+' : null,
+              prefs.cardDensity === 'compact' ? 'Compact' : null,
+              prefs.sortDefault !== 'ending-soon'
+                ? `Sort: ${SORT_DEFAULT_OPTIONS.find((o) => o.key === prefs.sortDefault)?.label ?? prefs.sortDefault}`
+                : null,
+              prefs.openContestsIn === 'browser' ? 'System browser' : null,
+              quebecSafe ? 'Québec-safe' : null,
+            ]
+              .filter(Boolean)
+              .join(' · ') || 'Defaults — tweak filters below to make Home yours.'}
+          </Text>
+        </View>
+
+        <Text style={{ color: accentColor, fontSize: 11, fontWeight: '700', marginBottom: 6 }}>
+          FEED FILTERS
+        </Text>
+        <PrefSwitch
+          label="Québec-safe"
+          hint="Hide contests that exclude Quebec"
+          value={quebecSafe}
+          accent={accentColor}
+          onChange={(next) => {
+            setQuebecSafe(next)
+            void saveQuebecSafe(next)
+            void updateProfile({
+              settings: { ...(profile?.settings ?? {}), quebecSafe: next },
+            })
+          }}
+        />
+        <PrefSwitch
+          label="Hide purchase-required"
+          hint="Exclude receipt / purchase contests"
+          value={prefs.hidePurchaseRequired}
+          accent={accentColor}
+          onChange={(v) => patchPref({ hidePurchaseRequired: v })}
+        />
+        <PrefSwitch
+          label="Hide 18+ contests"
+          hint="Exclude age-gated contests from Home"
+          value={prefs.hideAdult}
+          accent={accentColor}
+          onChange={(v) => patchPref({ hideAdult: v })}
+        />
+        {!prefs.hideAdult ? (
+          <PrefSwitch
+            label="Always confirm 18+"
+            hint="Re-prompt age gate on every 18+ enter"
+            value={prefs.adultAlwaysConfirm}
+            accent={accentColor}
+            onChange={(v) => patchPref({ adultAlwaysConfirm: v })}
+          />
+        ) : null}
+
+        <Text style={{ color: accentColor, fontSize: 11, fontWeight: '700', marginTop: 4, marginBottom: 6 }}>
+          LAYOUT & SORT
+        </Text>
+        <Text style={{ color: '#9ca3af', fontSize: 12, marginTop: 4, marginBottom: 6 }}>
+          Card density
+        </Text>
+        <View style={{ flexDirection: 'row', gap: 8, marginBottom: 10 }}>
+          {(
+            [
+              ['comfortable', 'Comfortable'],
+              ['compact', 'Compact'],
+            ] as const
+          ).map(([key, label]) => (
+            <TouchableOpacity
+              key={key}
+              onPress={() => patchPref({ cardDensity: key as CardDensity })}
+              style={{
+                flex: 1,
+                paddingVertical: 10,
+                borderRadius: 10,
+                backgroundColor: prefs.cardDensity === key ? accentColor : '#1f2937',
+                borderWidth: 1,
+                borderColor: prefs.cardDensity === key ? accentColor : '#4b5563',
+                alignItems: 'center',
+              }}
+            >
+              <Text
+                style={{
+                  color: prefs.cardDensity === key ? '#111827' : '#d1d5db',
+                  fontWeight: '700',
+                  fontSize: 12,
+                }}
+              >
+                {label}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+
+        <Text style={{ color: '#9ca3af', fontSize: 12, marginBottom: 6 }}>Default sort</Text>
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 10 }}>
+          {SORT_DEFAULT_OPTIONS.map(({ key, label }) => (
+            <TouchableOpacity
+              key={key}
+              onPress={() => patchPref({ sortDefault: key as SortDefault })}
+              style={{
+                paddingHorizontal: 12,
+                paddingVertical: 8,
+                borderRadius: 10,
+                backgroundColor: prefs.sortDefault === key ? accentColor : '#1f2937',
+                borderWidth: 1,
+                borderColor: prefs.sortDefault === key ? accentColor : '#4b5563',
+              }}
+            >
+              <Text
+                style={{
+                  color: prefs.sortDefault === key ? '#111827' : '#d1d5db',
+                  fontWeight: '600',
+                  fontSize: 12,
+                }}
+              >
+                {label}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+
+        <Text style={{ color: accentColor, fontSize: 11, fontWeight: '700', marginTop: 4, marginBottom: 6 }}>
+          HOW CONTESTS OPEN
+        </Text>
+        <Text style={{ color: '#9ca3af', fontSize: 12, marginBottom: 6 }}>Open contests in</Text>
+        <View style={{ flexDirection: 'row', gap: 8, marginBottom: 16 }}>
+          {(
+            [
+              ['webview', 'In-app WebView'],
+              ['browser', 'System browser'],
+            ] as const
+          ).map(([key, label]) => (
+            <TouchableOpacity
+              key={key}
+              onPress={() => patchPref({ openContestsIn: key as OpenContestsIn })}
+              style={{
+                flex: 1,
+                paddingVertical: 10,
+                borderRadius: 10,
+                backgroundColor: prefs.openContestsIn === key ? accentColor : '#1f2937',
+                borderWidth: 1,
+                borderColor: prefs.openContestsIn === key ? accentColor : '#4b5563',
+                alignItems: 'center',
+              }}
+            >
+              <Text
+                style={{
+                  color: prefs.openContestsIn === key ? '#111827' : '#d1d5db',
+                  fontWeight: '700',
+                  fontSize: 12,
+                }}
+              >
+                {label}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+
+        <Text style={{ color: '#fff', fontWeight: '700', fontSize: 14, marginBottom: 8 }}>
+          INVITE CODE
+        </Text>
+        <View
+          style={{
+            backgroundColor: '#1f2937',
+            borderRadius: 12,
+            padding: 14,
+            borderWidth: 1,
+            borderColor: '#4b5563',
+            marginBottom: 16,
+          }}
+        >
+          {inviteCode ? (
+            <>
+              <Text style={{ color: accentColor, fontFamily: 'monospace', fontSize: 18, fontWeight: '700' }}>
+                {inviteCode}
+              </Text>
+              <View style={{ flexDirection: 'row', gap: 8, marginTop: 10 }}>
+                <TouchableOpacity
+                  onPress={() => void copyInvite()}
+                  style={{
+                    flex: 1,
+                    backgroundColor: accentColor,
+                    borderRadius: 10,
+                    paddingVertical: 10,
+                    alignItems: 'center',
+                  }}
+                >
+                  <Text style={{ color: '#111827', fontWeight: '700' }}>Copy / Share code</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => void shareInvite()}
+                  style={{
+                    flex: 1,
+                    borderRadius: 10,
+                    paddingVertical: 10,
+                    alignItems: 'center',
+                    borderWidth: 1,
+                    borderColor: '#4b5563',
+                  }}
+                >
+                  <Text style={{ color: '#fff', fontWeight: '600' }}>Share invite</Text>
+                </TouchableOpacity>
+              </View>
+              {inviteMsg ? (
+                <Text style={{ color: '#9ca3af', fontSize: 12, marginTop: 6 }}>{inviteMsg}</Text>
+              ) : null}
+            </>
+          ) : (
+            <Text style={{ color: '#9ca3af' }}>
+              {user ? 'Generating invite code…' : 'Sign in to get your invite code.'}
+            </Text>
+          )}
+        </View>
 
         <NotificationPreferences />
 
@@ -118,12 +435,12 @@ export default function SettingsScreen({ onClose }: SettingsScreenProps) {
             borderRadius: 12,
             padding: 14,
             borderWidth: 1,
-            borderColor: '#39FF14',
+            borderColor: accentColor,
             marginBottom: 8,
             opacity: busy ? 0.6 : 1,
           }}
         >
-          <Text style={{ color: '#39FF14', fontWeight: '700' }}>Register this device</Text>
+          <Text style={{ color: accentColor, fontWeight: '700' }}>Register this device</Text>
           <Text style={{ color: '#6b7280', fontSize: 12, marginTop: 4 }}>
             Request permission and save Expo push token to Supabase
           </Text>
@@ -199,6 +516,57 @@ export default function SettingsScreen({ onClose }: SettingsScreenProps) {
           )}
         </TouchableOpacity>
       </ScrollView>
+    </View>
+  )
+}
+
+const DEFAULT_SYNC: FeedDisplayPrefs = {
+  hidePurchaseRequired: false,
+  hideAdult: false,
+  adultAlwaysConfirm: false,
+  cardDensity: 'comfortable',
+  sortDefault: 'ending-soon',
+  openContestsIn: 'webview',
+}
+
+function PrefSwitch({
+  label,
+  hint,
+  value,
+  onChange,
+  accent,
+}: {
+  label: string
+  hint: string
+  value: boolean
+  onChange: (v: boolean) => void
+  accent: string
+}) {
+  return (
+    <View
+      style={{
+        backgroundColor: '#1f2937',
+        borderRadius: 12,
+        padding: 14,
+        borderWidth: 1,
+        borderColor: '#4b5563',
+        marginBottom: 8,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: 12,
+      }}
+    >
+      <View style={{ flex: 1 }}>
+        <Text style={{ color: '#fff', fontWeight: '600' }}>{label}</Text>
+        <Text style={{ color: '#6b7280', fontSize: 12, marginTop: 4 }}>{hint}</Text>
+      </View>
+      <Switch
+        value={value}
+        onValueChange={onChange}
+        trackColor={{ false: '#4b5563', true: accent }}
+        thumbColor="#fff"
+      />
     </View>
   )
 }

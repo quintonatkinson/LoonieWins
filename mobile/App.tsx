@@ -18,6 +18,7 @@ import {
   subscribePushRegistrationOnResume,
 } from './src/lib/notifications/registerPush'
 import type { AutoFillData } from './src/types/profile'
+import { resolveFeedDisplayPrefs } from './src/lib/utils/userSettings'
 
 function AppContent() {
   const { session, loading, authReady, profile, user, updateProfile } = useAuth()
@@ -66,15 +67,32 @@ function AppContent() {
     }
   }, [profile])
 
-  const handleOpenOverlay = useCallback((contest: Contest) => {
-    setOverlayContest(contest)
-    setResolvedUrl(null)
-    setResolving(true)
-    resolveContestUrl(contest.url, contest.contentSnippet ?? contest.description)
-      .then((url) => setResolvedUrl(url))
-      .catch(() => setResolvedUrl(contest.url))
-      .finally(() => setResolving(false))
-  }, [])
+  const handleOpenOverlay = useCallback(
+    async (contest: Contest) => {
+      const display = await resolveFeedDisplayPrefs({ settings: profile?.settings })
+      if (display.openContestsIn === 'browser') {
+        try {
+          const url = await resolveContestUrl(
+            contest.url,
+            contest.contentSnippet ?? contest.description
+          )
+          await Linking.openURL(url)
+        } catch {
+          await Linking.openURL(contest.url)
+        }
+        return
+      }
+
+      setOverlayContest(contest)
+      setResolvedUrl(null)
+      setResolving(true)
+      resolveContestUrl(contest.url, contest.contentSnippet ?? contest.description)
+        .then((url) => setResolvedUrl(url))
+        .catch(() => setResolvedUrl(contest.url))
+        .finally(() => setResolving(false))
+    },
+    [profile?.settings]
+  )
 
   const handlePressUrl = useCallback((url: string) => {
     void Linking.openURL(url)

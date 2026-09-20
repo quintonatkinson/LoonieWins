@@ -8,6 +8,8 @@ import {
   ENTRY_COST_BY_TIER,
   entryCostRangeCopy,
 } from '../lib/monetization/entryPointCost'
+import { hasFeature, isProTier } from '../lib/monetization/tiers'
+import SubscriptionModal from '../components/SubscriptionModal'
 import {
   isSandboxOffer,
   openOfferwallSession,
@@ -26,15 +28,21 @@ function TimeIcon({ kind }: { kind: OfferwallOffer['timeKind'] }) {
 }
 
 export default function Earn() {
-  const { balance, addPoints } = useUserEarn()
+  const { balance, addPoints, subscriptionTier, upgradeToPro } = useUserEarn()
   const { user, profile } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
   const [loadingId, setLoadingId] = useState<string | null>(null)
   const [successTask, setSuccessTask] = useState<OfferwallOffer | null>(null)
+  const [showPlanModal, setShowPlanModal] = useState(false)
 
   const playerId = user?.id ?? profile?.id ?? 'guest'
   const session = useMemo(() => openOfferwallSession(playerId), [playerId])
+  const isPro = isProTier(subscriptionTier, profile?.is_premium)
+  const hideEarnAds = hasFeature(profile?.feature_flags, 'hide_earn_ads', {
+    tier: subscriptionTier,
+    isPremium: profile?.is_premium,
+  })
 
   const returnCost =
     typeof (location.state as { entryCostPts?: number } | null)?.entryCostPts === 'number'
@@ -104,6 +112,39 @@ export default function Earn() {
           </button>
         )}
       </div>
+
+      {!hideEarnAds && (
+        <div
+          className="rounded-xl border border-amber-500/40 bg-gradient-to-r from-amber-500/15 to-gray-900/60 p-4"
+          data-earn-promo="house"
+          role="complementary"
+          aria-label="Promotional"
+        >
+          <p className="text-[10px] font-semibold uppercase tracking-wider text-amber-500/80">
+            Ad · Free plan
+          </p>
+          <p className="text-sm font-semibold text-gray-50 mt-1">
+            Skip promo slots + the point grind
+          </p>
+          <p className="text-xs text-gray-400 mt-1">
+            Pro hides this banner and unlocks unlimited entries, New/Ending rails, CSV export, and
+            more — weekly or monthly.
+          </p>
+          <button
+            type="button"
+            onClick={() => setShowPlanModal(true)}
+            className="mt-3 w-full py-2.5 rounded-lg bg-amber-500/25 text-amber-300 font-semibold text-sm border border-amber-500/40 hover:bg-amber-500/35"
+          >
+            {isPro ? 'Manage Pro' : 'Go Pro — ad-free Earn'}
+          </button>
+        </div>
+      )}
+
+      {hideEarnAds && (
+        <p className="text-center text-xs text-win">
+          Pro · Earn promo slots hidden. Offerwall stays available when you want pts.
+        </p>
+      )}
 
       <div className="rounded-xl border border-gray-600/50 bg-gray-900/40 p-3 text-xs text-gray-400 space-y-1">
         <p className="font-semibold text-gray-300 text-sm">Loop when free entries are capped</p>
@@ -193,6 +234,13 @@ export default function Earn() {
           </div>
         </>
       )}
+
+      <SubscriptionModal
+        open={showPlanModal}
+        onClose={() => setShowPlanModal(false)}
+        onSelectPlan={(planId) => void upgradeToPro(planId)}
+        showComparison
+      />
     </div>
   )
 }

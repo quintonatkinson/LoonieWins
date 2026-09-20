@@ -39,5 +39,7 @@ export const supabase = createClient(supabaseUrl ?? '', supabaseAnonKey ?? '', {
   },
 })
 
+export const isSupabaseConfigured = Boolean(supabaseUrl && supabaseAnonKey)
+
 export const tracking = () => supabase.schema('tracking')
 export const giveaways = () => supabase.schema('giveaways')

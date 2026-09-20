@@ -16,7 +16,6 @@ import { resolveContestUrl } from '../lib/rssFetcher'
 import ContestCard from '../components/ContestCard'
 import CountryToggle from '../components/CountryToggle'
 import RadarLoader from '../components/RadarLoader'
-import AccentPicker from '../components/AccentPicker'
 import { useContestPipeline } from '../hooks/useContestPipeline'
 import { useContestEntries } from '../hooks/useContestEntries'
 import { useContestSocialProof } from '../hooks/useContestSocialProof'
@@ -46,12 +45,19 @@ import {
   loadAgeConfirmed,
   saveAgeConfirmed,
 } from '../lib/utils/ageGate'
+import {
+  resolveFeedDisplayPrefs,
+  isPurchaseRequiredContest,
+  isAdultContest,
+  type CardDensity,
+  type SortDefault,
+} from '../lib/utils/userSettings'
+
+type SortFilter = SortDefault
 
 const NEW_RAIL_MS = 48 * 60 * 60 * 1000
 const FREE_RAIL_TEASER = 2
 const PRO_RAIL_LIMIT = 12
-
-type SortFilter = 'high-value' | 'ending-soon' | 'best-odds' | null
 
 const TAG_REQ_FILTERS: { key: string; label: string; match: (c: Contest) => boolean }[] = [
   {
@@ -117,6 +123,10 @@ export default function Dashboard({ onOpenOverlay, onPressUrl, enteredIds: enter
   const [geoFilter, setGeoFilter] = useState<GeoFilterValue>('CA')
   const [homeMode, setHomeMode] = useState<HomeMode>('routine')
   const [autoAdvance, setAutoAdvance] = useState(true)
+  const [hidePurchaseRequired, setHidePurchaseRequired] = useState(false)
+  const [hideAdult, setHideAdult] = useState(false)
+  const [adultAlwaysConfirm, setAdultAlwaysConfirm] = useState(false)
+  const [cardDensity, setCardDensity] = useState<CardDensity>('comfortable')
   const [refreshing, setRefreshing] = useState(false)
   const [hiveResults, setHiveResults] = useState<Contest[]>([])
   const [statusToast, setStatusToast] = useState<string | null>(null)
@@ -130,7 +140,7 @@ export default function Dashboard({ onOpenOverlay, onPressUrl, enteredIds: enter
   useEffect(() => {
     let cancelled = false
     ;(async () => {
-      const [geo, qc, mode, advance] = await Promise.all([
+      const [geo, qc, mode, advance, display] = await Promise.all([
         resolveInitialGeo({
           province: profile?.auto_fill_data?.province,
           settingsGeo: profile?.settings?.geoFilter,
@@ -141,12 +151,18 @@ export default function Dashboard({ onOpenOverlay, onPressUrl, enteredIds: enter
         }),
         loadHomeMode('routine'),
         loadAutoAdvance(true),
+        resolveFeedDisplayPrefs({ settings: profile?.settings }),
       ])
       if (cancelled) return
       setGeoFilter(geo)
       setQuebecSafe(qc)
       setHomeMode(mode)
       setAutoAdvance(advance)
+      setHidePurchaseRequired(display.hidePurchaseRequired)
+      setHideAdult(display.hideAdult)
+      setAdultAlwaysConfirm(display.adultAlwaysConfirm)
+      setCardDensity(display.cardDensity)
+      setSortFilter(display.sortDefault)
       if (qc) {
         void saveQuebecSafe(true)
         void updateProfile({
@@ -158,7 +174,7 @@ export default function Dashboard({ onOpenOverlay, onPressUrl, enteredIds: enter
     return () => {
       cancelled = true
     }
-  }, [profile?.auto_fill_data?.province, profile?.settings?.geoFilter, profile?.settings?.quebecSafe])
+  }, [profile?.auto_fill_data?.province, profile?.settings])
 
   useEffect(() => {
     autoAdvanceRef.current = autoAdvance
@@ -190,7 +206,7 @@ export default function Dashboard({ onOpenOverlay, onPressUrl, enteredIds: enter
 
   const ensureAgeOk = useCallback(async (contest: Contest): Promise<boolean> => {
     if (!contestRequiresAgeGate(contest)) return true
-    if (await loadAgeConfirmed()) return true
+    if (!adultAlwaysConfirm && (await loadAgeConfirmed())) return true
     return new Promise((resolve) => {
       Alert.alert(
         '18+ required',
@@ -210,7 +226,7 @@ export default function Dashboard({ onOpenOverlay, onPressUrl, enteredIds: enter
         ]
       )
     })
-  }, [profile, updateProfile])
+  }, [profile, updateProfile, adultAlwaysConfirm])
 
   // Auto-mark when app returns to foreground after one-tap Enter
   useEffect(() => {
@@ -340,6 +356,8 @@ export default function Dashboard({ onOpenOverlay, onPressUrl, enteredIds: enter
     if (isDeadLink(c)) return false
     if (hideEntered && enteredIds.has(c.id)) return false
     if (quebecSafe && c.restrictions?.includes('no_quebec')) return false
+    if (hidePurchaseRequired && isPurchaseRequiredContest(c)) return false
+    if (hideAdult && isAdultContest(c)) return false
     if (!passesGeo(c, geoFilter)) return false
     if (search.trim()) {
       const q = search.toLowerCase()
@@ -397,11 +415,21 @@ export default function Dashboard({ onOpenOverlay, onPressUrl, enteredIds: enter
         onShare={(contest) => void handleShare(contest)}
         onPressUrl={onPressUrl}
         variant="feed"
+        density={cardDensity}
+        adultAlwaysConfirm={adultAlwaysConfirm}
         daysLeft={daysLeft(c)}
         entered={enteredIds.has(c.id.replace(/^hive-/, ''))}
       />
     ),
-    [handleOpenOverlay, onPressUrl, oneTapEnter, handleShare, enteredIds]
+    [
+      handleOpenOverlay,
+      onPressUrl,
+      oneTapEnter,
+      handleShare,
+      enteredIds,
+      cardDensity,
+      adultAlwaysConfirm,
+    ]
   )
 
   const keyExtractor = useCallback((c: Contest) => c.id, [])
@@ -416,10 +444,9 @@ export default function Dashboard({ onOpenOverlay, onPressUrl, enteredIds: enter
       {!showFullRadar && (
         <>
           <View className="px-4 pt-3 pb-2">
-            <Text className="text-xs font-semibold text-white uppercase tracking-wide mb-2">
-              Appearance
+            <Text className="text-xs text-gray-500 mb-1">
+              Appearance & more filters live in Settings
             </Text>
-            <AccentPicker />
           </View>
           <View className="px-4 pt-3 pb-2 flex-row flex-wrap gap-2 items-center">
             <CountryToggle value={geoFilter} onChange={handleGeoChange} />

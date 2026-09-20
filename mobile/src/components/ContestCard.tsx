@@ -22,6 +22,8 @@ interface ContestCardProps {
   variant: 'routine' | 'feed' | 'ended'
   daysLeft?: number | null
   entered?: boolean
+  density?: 'comfortable' | 'compact'
+  adultAlwaysConfirm?: boolean
 }
 
 export default function ContestCard({
@@ -35,6 +37,7 @@ export default function ContestCard({
   variant,
   daysLeft: daysLeftProp,
   entered = false,
+  density = 'comfortable',
 }: ContestCardProps) {
   const {
     weeklyLimitReached,
@@ -215,7 +218,11 @@ export default function ContestCard({
   }
 
   return (
-    <View className="rounded-xl bg-surface border border-gray-600/50 px-4 py-3 flex-row items-center gap-3 mx-4 mb-2">
+    <View
+      className={`rounded-xl bg-surface border border-gray-600/50 flex-row items-center gap-3 mx-4 mb-2 ${
+        density === 'compact' ? 'px-3 py-2' : 'px-4 py-3'
+      }`}
+    >
       <View className="flex-1 min-w-0">
         <View className="flex-row flex-wrap items-center gap-2">
           {entered && (

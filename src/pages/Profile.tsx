@@ -6,6 +6,7 @@ import {
   Settings,
   Shield,
   Download,
+  FileSpreadsheet,
   Trash2,
   Crown,
   ExternalLink,
@@ -23,18 +24,14 @@ import { useUserLimits } from '../hooks/useUserLimits'
 import SubscriptionModal from '../components/SubscriptionModal'
 import NotificationPreferences from '../components/NotificationPreferences'
 import AccentPicker from '../components/AccentPicker'
+import DisplayPreferences from '../components/DisplayPreferences'
 import type { AutoFillData } from '../types/profile'
 import { downloadWebDataExport, deleteAccountAndLocalData } from '../lib/account/deleteAccount'
+import { downloadAppliedContestsCsv } from '../lib/account/exportAppliedCsv'
 import { SUPPORT_EMAIL } from '../lib/legal/constants'
 import { loadAutoFillData, saveAutoFillData } from '../lib/utils/autoFillStorage'
 import { isSupabaseConfigured } from '../lib/supabase'
-import {
-  loadHomeMode,
-  loadQuebecSafe,
-  saveHomeMode,
-  saveQuebecSafe,
-  type HomeMode,
-} from '../lib/utils/feedPrefs'
+import { hasFeature, PRO_LOCKED_FEATURES } from '../lib/monetization/tiers'
 
 const AUTO_FILL_FIELDS: { key: keyof AutoFillData; label: string }[] = [
   { key: 'firstName', label: 'First Name' },
@@ -79,8 +76,6 @@ export default function Profile() {
   const [entryFilter, setEntryFilter] = useState<'all' | ContestEntryStatus>('all')
   const [entrySearch, setEntrySearch] = useState('')
   const [showPrefs, setShowPrefs] = useState(false)
-  const [quebecSafe, setQuebecSafe] = useState(() => loadQuebecSafe(false))
-  const [homeMode, setHomeMode] = useState<HomeMode>(() => loadHomeMode('routine'))
 
   const autoFillData: Partial<AutoFillData> = useMemo(() => {
     const af = profile?.auto_fill_data
@@ -182,6 +177,29 @@ export default function Profile() {
     await downloadWebDataExport()
   }
 
+  const canExportCsv = hasFeature(profile?.feature_flags, 'export_csv', {
+    tier: subscriptionTier,
+    isPremium: profile?.is_premium,
+  })
+
+  const handleExportCsv = () => {
+    if (!canExportCsv) {
+      setShowPlanModal(true)
+      return
+    }
+    downloadAppliedContestsCsv(
+      entries.map((e) => ({
+        contest_id: e.contest_id,
+        title: e.title,
+        status: e.status,
+        entered_at: e.entered_at,
+        submitted_at: e.submitted_at,
+        prize_value: e.prize_value,
+        contest_url: e.contest_url,
+      }))
+    )
+  }
+
   const handleDelete = async () => {
     setDeleteBusy(true)
     setDeleteMsg(null)
@@ -242,6 +260,33 @@ export default function Profile() {
             </button>
           )}
         </div>
+        {!isPro && (
+          <div className="mt-4 pt-3 border-t border-gray-600/40">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-amber-400/90 mb-2">
+              Locked behind Pro
+            </p>
+            <ul className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+              {PRO_LOCKED_FEATURES.map((f) => (
+                <li key={f.id} className="text-xs text-gray-400 flex gap-1.5">
+                  <span className="text-amber-400/80 shrink-0" aria-hidden>
+                    ·
+                  </span>
+                  <span>
+                    <span className="text-gray-200 font-medium">{f.title}</span>
+                  </span>
+                </li>
+              ))}
+            </ul>
+            <p className="text-[11px] text-gray-500 mt-2">
+              Weekly or monthly only — tap Upgrade for the full checklist.
+            </p>
+          </div>
+        )}
+        {isPro && user && (
+          <p className="mt-3 text-xs text-win border-t border-gray-600/40 pt-3">
+            Priority multi-device sync on — Applied Contests & prefs follow this account.
+          </p>
+        )}
       </section>
 
       <section className="rounded-xl bg-gray-800/80 border border-gray-600/50 p-4 grid grid-cols-3 gap-3 text-center">
@@ -265,14 +310,34 @@ export default function Profile() {
       </section>
 
       <section>
-        <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center justify-between mb-3 gap-2 flex-wrap">
           <div className="flex items-center gap-2">
             <Trophy className="w-5 h-5 text-win" />
             <h2 className="text-sm font-semibold text-white uppercase tracking-wide">
               Applied Contests
             </h2>
           </div>
-          <span className="text-sm text-gray-400">{entries.length} tracked</span>
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-gray-400">{entries.length} tracked</span>
+            <button
+              type="button"
+              onClick={handleExportCsv}
+              disabled={entries.length === 0 && canExportCsv}
+              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${
+                canExportCsv
+                  ? 'border-win/40 text-win hover:bg-win/10 disabled:opacity-40'
+                  : 'border-amber-500/40 text-amber-400 hover:bg-amber-500/10'
+              }`}
+              title={
+                canExportCsv
+                  ? 'Download Applied Contests as CSV'
+                  : 'Pro unlocks CSV export of Applied Contests'
+              }
+            >
+              <FileSpreadsheet className="w-3.5 h-3.5" />
+              {canExportCsv ? 'Export CSV' : 'CSV · Pro'}
+            </button>
+          </div>
         </div>
         <div className="flex flex-wrap gap-2 mb-3">
           {(
@@ -505,73 +570,13 @@ export default function Profile() {
               <Settings className="w-5 h-5 text-gray-400 shrink-0" />
               <div className="flex-1">
                 <p className="text-sm font-medium text-white">Preferences</p>
-                <p className="text-xs text-gray-500">Québec-safe, home mode</p>
+                <p className="text-xs text-gray-500">
+                  Your feed fingerprint — filters, density, sort, open-in, invite
+                </p>
               </div>
               <span className="text-gray-500 text-xs">{showPrefs ? 'Hide' : 'Edit'}</span>
             </button>
-            {showPrefs && (
-              <div className="px-4 pb-4 space-y-3 border-t border-gray-600/40 bg-gray-900/40">
-                <label className="flex items-center justify-between gap-3 pt-3">
-                  <span className="text-sm text-gray-200">
-                    Québec-safe
-                    <span className="block text-xs text-gray-500">Hide contests that exclude Quebec</span>
-                  </span>
-                  <button
-                    type="button"
-                    role="switch"
-                    aria-checked={quebecSafe}
-                    onClick={() => {
-                      const next = !quebecSafe
-                      setQuebecSafe(next)
-                      saveQuebecSafe(next)
-                      void updateProfile({
-                        settings: { ...(profile?.settings ?? {}), quebecSafe: next },
-                      })
-                    }}
-                    className={`relative w-11 h-6 rounded-full transition-colors ${
-                      quebecSafe ? 'bg-win' : 'bg-gray-600'
-                    }`}
-                  >
-                    <span
-                      className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white transition-transform ${
-                        quebecSafe ? 'translate-x-5' : ''
-                      }`}
-                    />
-                  </button>
-                </label>
-                <div>
-                  <p className="text-sm text-gray-200 mb-2">Home screen</p>
-                  <div className="flex gap-2">
-                    {(
-                      [
-                        ['routine', 'Daily Routine'],
-                        ['browse', 'Browse all'],
-                      ] as const
-                    ).map(([key, label]) => (
-                      <button
-                        key={key}
-                        type="button"
-                        onClick={() => {
-                          setHomeMode(key)
-                          saveHomeMode(key)
-                        }}
-                        className={`flex-1 py-2 rounded-lg text-xs font-semibold ${
-                          homeMode === key
-                            ? 'bg-win text-on-win'
-                            : 'bg-gray-800 text-gray-400 border border-gray-600/50'
-                        }`}
-                      >
-                        {label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                <p className="text-xs text-gray-500">
-                  Also available on Home. Province in Smart-Fill sets the default geo filter and turns
-                  Québec-safe on when province is QC. Auto-next advances the Enter queue after mark entered.
-                </p>
-              </div>
-            )}
+            {showPrefs && <DisplayPreferences />}
           </li>
           <li>
             <Link
