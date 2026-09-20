@@ -30,6 +30,9 @@ interface NotificationPrefs {
   newContestsCA: boolean
   newContestsUS: boolean
   endingTonight: boolean
+  quietHoursEnabled: boolean
+  quietHoursStart: string
+  quietHoursEnd: string
 }
 
 interface ContestRow {
@@ -73,6 +76,48 @@ const DEFAULT_PREFS: NotificationPrefs = {
   newContestsCA: true,
   newContestsUS: false,
   endingTonight: true,
+  quietHoursEnabled: false,
+  quietHoursStart: '22:00',
+  quietHoursEnd: '07:00',
+}
+
+const TIME_RE = /^([01]?\d|2[0-3]):([0-5]\d)$/
+
+function normalizeQuietTime(raw: unknown, fallback: string): string {
+  if (typeof raw === 'string' && TIME_RE.test(raw.trim())) {
+    const [h, m] = raw.trim().split(':')
+    return `${h.padStart(2, '0')}:${m}`
+  }
+  return fallback
+}
+
+function quietTimeToMinutes(hhmm: string): number {
+  const [h, m] = hhmm.split(':').map((n) => Number(n))
+  return h * 60 + m
+}
+
+function torontoWallClock(now = new Date()): string {
+  const fmt = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Toronto',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  })
+  const parts = fmt.formatToParts(now)
+  const hour = parts.find((p) => p.type === 'hour')?.value ?? '00'
+  const minute = parts.find((p) => p.type === 'minute')?.value ?? '00'
+  const hNum = Number(hour) % 24
+  return `${String(hNum).padStart(2, '0')}:${minute.padStart(2, '0')}`
+}
+
+function isInQuietHours(prefs: NotificationPrefs, now = new Date()): boolean {
+  if (!prefs.quietHoursEnabled) return false
+  const start = quietTimeToMinutes(normalizeQuietTime(prefs.quietHoursStart, '22:00'))
+  const end = quietTimeToMinutes(normalizeQuietTime(prefs.quietHoursEnd, '07:00'))
+  if (start === end) return false
+  const cur = quietTimeToMinutes(torontoWallClock(now))
+  if (start < end) return cur >= start && cur < end
+  return cur >= start || cur < end
 }
 
 function parsePrefs(settings: Record<string, unknown> | null | undefined): NotificationPrefs {
@@ -85,6 +130,12 @@ function parsePrefs(settings: Record<string, unknown> | null | undefined): Notif
       typeof raw.newContestsUS === 'boolean' ? raw.newContestsUS : DEFAULT_PREFS.newContestsUS,
     endingTonight:
       typeof raw.endingTonight === 'boolean' ? raw.endingTonight : DEFAULT_PREFS.endingTonight,
+    quietHoursEnabled:
+      typeof raw.quietHoursEnabled === 'boolean'
+        ? raw.quietHoursEnabled
+        : DEFAULT_PREFS.quietHoursEnabled,
+    quietHoursStart: normalizeQuietTime(raw.quietHoursStart, DEFAULT_PREFS.quietHoursStart),
+    quietHoursEnd: normalizeQuietTime(raw.quietHoursEnd, DEFAULT_PREFS.quietHoursEnd),
   }
 }
 
@@ -126,6 +177,7 @@ function torontoEndOfDayIso(now = new Date()): string {
 
 function wantsNewContest(c: ContestRow, prefs: NotificationPrefs): boolean {
   if (!prefs.enabled) return false
+  if (isInQuietHours(prefs)) return false
   if (!prefs.newContestsCA && !prefs.newContestsUS) return false
   const elig = (c.eligibility ?? 'Unknown').toUpperCase()
   if (elig === 'CA' || elig === 'UNKNOWN') return prefs.newContestsCA
@@ -296,6 +348,7 @@ Deno.serve(async (req) => {
         for (const uid of sortedUserIds) {
           const prefs = prefsByUser.get(uid) ?? DEFAULT_PREFS
           if (!prefs.enabled || !prefs.endingTonight) continue
+          if (isInQuietHours(prefs)) continue
 
           const pro = isProUser(profileByUser.get(uid))
           if (!pro) {

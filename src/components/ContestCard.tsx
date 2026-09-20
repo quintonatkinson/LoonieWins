@@ -32,6 +32,10 @@ interface ContestCardProps {
   entriesToday?: number | null
   /** Persist age confirm to profile.settings when user confirms */
   onAgeConfirmed?: () => void
+  /** Compact list spacing */
+  density?: 'comfortable' | 'compact'
+  /** Re-prompt 18+ gate even after prior confirm */
+  adultAlwaysConfirm?: boolean
 }
 
 export default function ContestCard({
@@ -44,6 +48,8 @@ export default function ContestCard({
   entered = false,
   entriesToday = null,
   onAgeConfirmed,
+  density = 'comfortable',
+  adultAlwaysConfirm = false,
 }: ContestCardProps) {
   const navigate = useNavigate()
   const {
@@ -83,12 +89,12 @@ export default function ContestCard({
   }, [contest, onOneTapEnter, onOpenOverlay])
 
   const openEntryWithAgeGate = useCallback(() => {
-    if (contestRequiresAgeGate(contest) && !loadAgeConfirmed()) {
+    if (contestRequiresAgeGate(contest) && (adultAlwaysConfirm || !loadAgeConfirmed())) {
       setShowAgeGate(true)
       return
     }
     openEntry()
-  }, [contest, openEntry])
+  }, [contest, openEntry, adultAlwaysConfirm])
 
   const handleEnter = useCallback(() => {
     if (contest.id === '__offline_alert__') return
@@ -329,8 +335,12 @@ export default function ContestCard({
 
   return (
     <>
-      <li className="rounded-xl bg-surface border border-gray-600/50 px-4 py-3 flex items-center gap-3">
-        <div className="flex-1 min-w-0 flex flex-col gap-1">
+      <li
+        className={`rounded-xl bg-surface border border-gray-600/50 flex items-center gap-3 ${
+          density === 'compact' ? 'px-3 py-2' : 'px-4 py-3'
+        }`}
+      >
+        <div className={`flex-1 min-w-0 flex flex-col ${density === 'compact' ? 'gap-0.5' : 'gap-1'}`}>
           <div className="flex items-center gap-2 flex-wrap">
             <span className="text-xs text-gray-500 font-medium">{entryTypeLabel}</span>
             {entered && (
@@ -350,7 +360,13 @@ export default function ContestCard({
                 </span>
               ))}
           </div>
-          <p className="font-semibold text-gray-50 text-sm line-clamp-2">{contest.title}</p>
+          <p
+            className={`font-semibold text-gray-50 ${
+              density === 'compact' ? 'text-sm line-clamp-1' : 'text-sm line-clamp-2'
+            }`}
+          >
+            {contest.title}
+          </p>
           <div className="flex flex-wrap items-center gap-3 mt-1 text-xs text-gray-400">
             {contest.prizeValue != null && (
               <span>

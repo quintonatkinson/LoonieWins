@@ -7,9 +7,11 @@ import {
   type NotificationPrefs,
 } from '../lib/notifications/prefs'
 
-type PrefKey = keyof NotificationPrefs
+type BoolPrefKey = {
+  [K in keyof NotificationPrefs]: NotificationPrefs[K] extends boolean ? K : never
+}[keyof NotificationPrefs]
 
-const TOGGLES: { key: PrefKey; label: string; hint: string }[] = [
+const TOGGLES: { key: BoolPrefKey; label: string; hint: string }[] = [
   {
     key: 'enabled',
     label: 'Push alerts master',
@@ -35,6 +37,11 @@ const TOGGLES: { key: PrefKey; label: string; hint: string }[] = [
     label: 'Weekly digest email',
     hint: 'Email summary: N new CA contests + M ending tonight (Sundays)',
   },
+  {
+    key: 'quietHoursEnabled',
+    label: 'Quiet hours',
+    hint: 'Pause push alerts overnight (Toronto time). Email digest still sends.',
+  },
 ]
 
 /**
@@ -48,14 +55,14 @@ export default function NotificationPreferences() {
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState<string | null>(null)
 
-  const setPref = async (key: PrefKey, value: boolean) => {
+  const setPref = async (patch: Partial<NotificationPrefs>) => {
     if (!user) {
       setMsg('Sign in to sync notification preferences to your account.')
       return
     }
     setBusy(true)
     setMsg(null)
-    const nextSettings = withNotificationPrefs(profile?.settings, { [key]: value })
+    const nextSettings = withNotificationPrefs(profile?.settings, patch)
     const { error } = await updateProfile({ settings: nextSettings })
     setBusy(false)
     if (error) setMsg(error)
@@ -78,7 +85,10 @@ export default function NotificationPreferences() {
         {TOGGLES.map(({ key, label, hint }) => {
           const on = prefs[key]
           const disabledMaster =
-            key !== 'enabled' && key !== 'weeklyDigestEmail' && !prefs.enabled
+            key !== 'enabled' &&
+            key !== 'weeklyDigestEmail' &&
+            key !== 'quietHoursEnabled' &&
+            !prefs.enabled
           return (
             <li key={key} className="flex items-center justify-between gap-3 px-4 py-3">
               <div className="min-w-0">
@@ -94,7 +104,7 @@ export default function NotificationPreferences() {
                 role="switch"
                 aria-checked={on}
                 disabled={busy || disabledMaster}
-                onClick={() => void setPref(key, !on)}
+                onClick={() => void setPref({ [key]: !on })}
                 className={`relative shrink-0 w-11 h-6 rounded-full transition-colors ${
                   on ? 'bg-win' : 'bg-gray-600'
                 } ${busy || disabledMaster ? 'opacity-50' : ''}`}
@@ -108,6 +118,33 @@ export default function NotificationPreferences() {
             </li>
           )
         })}
+        {prefs.quietHoursEnabled && (
+          <li className="px-4 py-3 space-y-2">
+            <p className="text-sm font-medium text-white">Quiet window (Toronto)</p>
+            <div className="flex items-center gap-3 flex-wrap">
+              <label className="text-xs text-gray-400 flex items-center gap-2">
+                From
+                <input
+                  type="time"
+                  value={prefs.quietHoursStart}
+                  disabled={busy}
+                  onChange={(e) => void setPref({ quietHoursStart: e.target.value })}
+                  className="rounded-lg bg-gray-900 border border-gray-600 px-2 py-1.5 text-sm text-white"
+                />
+              </label>
+              <label className="text-xs text-gray-400 flex items-center gap-2">
+                Until
+                <input
+                  type="time"
+                  value={prefs.quietHoursEnd}
+                  disabled={busy}
+                  onChange={(e) => void setPref({ quietHoursEnd: e.target.value })}
+                  className="rounded-lg bg-gray-900 border border-gray-600 px-2 py-1.5 text-sm text-white"
+                />
+              </label>
+            </div>
+          </li>
+        )}
       </ul>
       {msg && <p className="text-xs text-gray-400">{msg}</p>}
     </section>

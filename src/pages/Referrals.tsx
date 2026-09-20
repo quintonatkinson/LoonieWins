@@ -12,6 +12,7 @@ import {
   rpcCreditReferralClick,
   rpcEnsureReferralCode,
 } from '../lib/monetization/progression'
+import ReferralInviteCard from '../components/ReferralInviteCard'
 
 interface ReferralLink {
   id: string
@@ -164,12 +165,10 @@ export default function Referrals() {
         <p className="text-amber-400 text-sm mt-2">Balance: {balance.toLocaleString()} Pts</p>
       </div>
 
-      {myCode && (
-        <div className="glass rounded-xl p-4">
-          <p className="text-xs text-gray-500 uppercase tracking-wide">Your invite code</p>
-          <p className="text-lg font-mono font-bold text-win mt-1">{myCode}</p>
-          <p className="text-xs text-gray-500 mt-1">Share so new signups can apply it once.</p>
-        </div>
+      <ReferralInviteCard />
+
+      {!myCode && user && (
+        <p className="text-xs text-gray-500">Invite code loads after sign-in sync.</p>
       )}
 
       <form onSubmit={(e) => void handleApplyCode(e)} className="glass rounded-xl p-4 space-y-3">
