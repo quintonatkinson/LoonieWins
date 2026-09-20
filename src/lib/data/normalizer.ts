@@ -293,12 +293,37 @@ function resolveEligibility(
   return { eligibility: 'Unknown', eligibilityUnverified: true }
 }
 
+function mergeUnique(base: string[], extras?: string[]): string[] {
+  if (!extras?.length) return base
+  const out = [...base]
+  for (const x of extras) {
+    if (!out.includes(x)) out.push(x)
+  }
+  return out
+}
+
+function applySourceDefaults(
+  tags: string[],
+  requirements: string[],
+  source: Source
+): { tags: string[]; requirements: string[] } {
+  return {
+    tags: mergeUnique(tags, source.defaultTags),
+    requirements: mergeUnique(requirements, source.defaultRequirements),
+  }
+}
+
 export function normalizeJsonItem(item: Rss2JsonItem, source: Source, index: number): Contest {
   const title = cleanTitle(item.title)
   const body = [item.description ?? '', item.content ?? ''].join(' ')
-  const { tags, restrictions } = autoCategorize(item.title, body)
+  const categorized = autoCategorize(item.title, body)
   const scanned = scanForMetadata(item.title, body)
   const { eligibility, eligibilityUnverified } = resolveEligibility(scanned, source)
+  const { tags, requirements } = applySourceDefaults(
+    categorized.tags,
+    scanned.requirements,
+    source
+  )
 
   const imageUrl =
     extractImageFromJsonItem(item, body) ?? SOURCE_FALLBACK_IMAGES[source.id]
@@ -321,10 +346,10 @@ export function normalizeJsonItem(item: Rss2JsonItem, source: Source, index: num
     description: item.description,
     contentSnippet: body,
     tags,
-    restrictions,
+    restrictions: categorized.restrictions,
     eligibility,
     eligibilityUnverified,
-    requirements: scanned.requirements,
+    requirements,
   }
 }
 
@@ -335,9 +360,14 @@ export function normalizeJsonItem(item: Rss2JsonItem, source: Source, index: num
 export function normalizeXmlItem(item: RawFeedItem, source: Source, index: number): Contest {
   const title = cleanTitle(item.title)
   const body = [item.description ?? '', item.contentEncoded ?? '', item.content ?? ''].join(' ')
-  const { tags, restrictions } = autoCategorize(item.title, body)
+  const categorized = autoCategorize(item.title, body)
   const scanned = scanForMetadata(item.title, body)
   const { eligibility, eligibilityUnverified } = resolveEligibility(scanned, source)
+  const { tags, requirements } = applySourceDefaults(
+    categorized.tags,
+    scanned.requirements,
+    source
+  )
 
   const imageUrl =
     extractImage(item) ?? SOURCE_FALLBACK_IMAGES[source.id]
@@ -360,9 +390,9 @@ export function normalizeXmlItem(item: RawFeedItem, source: Source, index: numbe
     description: item.description,
     contentSnippet: body,
     tags,
-    restrictions,
+    restrictions: categorized.restrictions,
     eligibility,
     eligibilityUnverified,
-    requirements: scanned.requirements,
+    requirements,
   }
 }

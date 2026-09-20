@@ -23,9 +23,13 @@ const RSS2JSON_COUNT = import.meta.env.VITE_RSS2JSON_API_KEY ? 100 : 50
 
 /**
  * Try Strategy B (corsproxy XML) first for full feeds, then A (rss2json), then C (no data).
- * rss2json returns only 10 items by default; corsproxy fetches raw XML with all items.
+ * For `rss2json_first` sources (Cloudflare-sensitive hosts), reverse the order.
+ * Free rss2json ≈10 items; with `VITE_RSS2JSON_API_KEY` count rises to 50–100.
  */
-async function fetchWithFallback(feedUrl: string): Promise<FetchResult> {
+async function fetchWithFallback(
+  feedUrl: string,
+  strategy: 'direct_first' | 'rss2json_first' = 'direct_first'
+): Promise<FetchResult> {
   const encodedUrl = encodeURIComponent(feedUrl)
   const cacheBust = '&t=' + Date.now()
   const apiKey = import.meta.env.VITE_RSS2JSON_API_KEY
@@ -33,31 +37,39 @@ async function fetchWithFallback(feedUrl: string): Promise<FetchResult> {
     ? `rss_url=${encodedUrl}&api_key=${apiKey}&count=${RSS2JSON_COUNT}${cacheBust}`
     : `rss_url=${encodedUrl}${cacheBust}`
 
-  try {
-    const resB = await fetch(CORSPROXY_URL + encodedUrl)
-    const xml = await resB.text()
-    const rawItems = parseFeedXml(xml)
-    // Accept any non-empty XML feed (thin sources like ContestCanada.ca still matter)
-    if (rawItems.length >= 1) {
-      console.log('Strategy B (corsproxy)', rawItems.length, 'items')
-      return { strategy: 'B', data: xml }
+  const tryRss2Json = async (): Promise<FetchResult | null> => {
+    try {
+      const resA = await fetch(`${RSS2JSON_URL}?${rss2jsonParams}`)
+      const json = (await resA.json()) as { status?: string; items?: Rss2JsonItem[] }
+      if (json.status === 'ok' && Array.isArray(json.items) && json.items.length > 0) {
+        console.log('Success using Strategy A (rss2json)', json.items.length, 'items')
+        return { strategy: 'A', data: json as { status: string; items: Rss2JsonItem[] } }
+      }
+    } catch (_) {
+      /* fall through */
     }
-  } catch (_) {
-    /* fall through */
+    return null
   }
 
-  try {
-    const resA = await fetch(`${RSS2JSON_URL}?${rss2jsonParams}`)
-    const json = (await resA.json()) as { status?: string; items?: Rss2JsonItem[] }
-    if (json.status === 'ok' && Array.isArray(json.items) && json.items.length > 0) {
-      console.log('Success using Strategy A')
-      return { strategy: 'A', data: json as { status: string; items: Rss2JsonItem[] } }
+  const tryCorsProxy = async (): Promise<FetchResult | null> => {
+    try {
+      const resB = await fetch(CORSPROXY_URL + encodedUrl)
+      const xml = await resB.text()
+      const rawItems = parseFeedXml(xml)
+      if (rawItems.length >= 1) {
+        console.log('Strategy B (corsproxy)', rawItems.length, 'items')
+        return { strategy: 'B', data: xml }
+      }
+    } catch (_) {
+      /* fall through */
     }
-  } catch (_) {
-    /* fall through */
+    return null
   }
 
-  return { strategy: 'C' }
+  if (strategy === 'rss2json_first') {
+    return (await tryRss2Json()) ?? (await tryCorsProxy()) ?? { strategy: 'C' }
+  }
+  return (await tryCorsProxy()) ?? (await tryRss2Json()) ?? { strategy: 'C' }
 }
 
 function parseFeedXml(xml: string): RawFeedItem[] {
@@ -160,7 +172,7 @@ const SAFETY_NET_CONTEST: Contest = {
 async function fetchOneSource(source: Source, results: Contest[]): Promise<void> {
   console.log('Fetching source:', source.name, `(${source.country})`)
   try {
-    const result = await fetchWithFallback(source.url)
+    const result = await fetchWithFallback(source.url, source.fetchStrategy ?? 'direct_first')
     if (result.strategy === 'A') {
       result.data.items.forEach((item, i) => {
         const body = [item.description ?? '', item.content ?? ''].join(' ')

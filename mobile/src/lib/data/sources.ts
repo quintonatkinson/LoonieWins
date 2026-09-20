@@ -6,8 +6,13 @@
  * but are not fetched. Ready to move to Supabase Edge Functions later.
  */
 
-export type SourceType = 'rss_reddit' | 'rss_standard'
+export type SourceType = 'rss_reddit' | 'rss_standard' | 'api_partner' | 'scaffold'
 export type SourceCountry = 'CA' | 'US' | 'BOTH'
+/**
+ * Fetch order for Cloudflare-sensitive hosts.
+ * `rss2json_first` uses the public rss2json API (optional paid key = fatter pages).
+ */
+export type FetchStrategy = 'direct_first' | 'rss2json_first'
 
 export interface Source {
   id: string
@@ -24,6 +29,14 @@ export interface Source {
    * Useful for mixed deal/contest blogs.
    */
   includeKeywords?: string[]
+  /** Override default corsproxy→rss2json order (e.g. CF-blocked category feeds). */
+  fetchStrategy?: FetchStrategy
+  /** Human note for disabled scaffolds / partnership blockers */
+  notes?: string
+  /** Applied when the feed itself is purchase-required (e.g. Bible purchase category). */
+  defaultRequirements?: string[]
+  /** Extra tags always applied for this source (merged after text scan). */
+  defaultTags?: string[]
 }
 
 /** Fallback image URLs per source (when no image in item) */
@@ -59,6 +72,19 @@ export const SOURCE_FALLBACK_IMAGES: Record<string, string> = {
   'reddit-sweepstakes': 'https://www.redditstatic.com/desktop2x/img/favicon/android-icon-192x192.png',
   'reddit-giveaways': 'https://www.redditstatic.com/desktop2x/img/favicon/android-icon-192x192.png',
   'reddit-freebies': 'https://www.redditstatic.com/desktop2x/img/favicon/android-icon-192x192.png',
+  'freestufffinder-giveaways': 'https://www.freestufffinder.com/favicon.ico',
+  'online-sweepstakes-daily': 'https://www.online-sweepstakes.com/favicon.ico',
+  'sweepstakes-bible-ending': 'https://www.sweepstakesbible.com/favicon.ico',
+  'sweepstakes-bible-no-purchase': 'https://www.sweepstakesbible.com/favicon.ico',
+  'sweepstakes-bible-purchase': 'https://www.sweepstakesbible.com/favicon.ico',
+  'southern-savers-sweeps': 'https://www.southernsavers.com/favicon.ico',
+  'gleam-directory': 'https://gleam.io/favicon.ico',
+  'viralsweep-directory': 'https://viralsweep.com/favicon.ico',
+  'woobox-directory': 'https://woobox.com/favicon.ico',
+  'retailer-bestbuy-ca': 'https://www.bestbuy.ca/favicon.ico',
+  'retailer-walmart-ca': 'https://www.walmart.ca/favicon.ico',
+  'retailer-costco-ca': 'https://www.costco.ca/favicon.ico',
+  'brand-official-api': 'https://www.looniewins.com/favicon.ico',
 }
 
 const CONTEST_KEYWORDS = [
@@ -88,6 +114,8 @@ export const MASTER_SOURCES: Source[] = [
     country: 'CA',
     trustScore: 9,
     enabled: true,
+    notes:
+      'Primary CA hub (Atom). XenForo public feed caps ~15 newest threads — includes brand/OEM drops (auto, CPG, radio, Tims co-promos) when posted to Contests. No extra public contest forum feeds beyond f=34; Hot Deals/Automotive are not contest listings.',
   },
   {
     id: 'contestcanada-net',
@@ -240,6 +268,55 @@ export const MASTER_SOURCES: Source[] = [
     enabled: true,
   },
   {
+    id: 'online-sweepstakes-daily',
+    name: 'Online Sweepstakes (Daily Entry)',
+    url: 'https://www.online-sweepstakes.com/daily-entry-sweepstakes/feed/',
+    type: 'rss_standard',
+    country: 'US',
+    trustScore: 8,
+    enabled: true,
+  },
+  {
+    id: 'sweepstakes-bible-ending',
+    name: 'Sweepstakes Bible (Ending Soon)',
+    url: 'https://www.sweepstakesbible.com/category/ending-soon/feed/',
+    type: 'rss_standard',
+    country: 'US',
+    trustScore: 8,
+    enabled: true,
+  },
+  {
+    id: 'sweepstakes-bible-no-purchase',
+    name: 'Sweepstakes Bible (No Purchase)',
+    url: 'https://www.sweepstakesbible.com/category/no-purchase-necessary/feed/',
+    type: 'rss_standard',
+    country: 'US',
+    trustScore: 8,
+    enabled: true,
+    defaultTags: ['⚡ Easy Entry'],
+  },
+  {
+    id: 'sweepstakes-bible-purchase',
+    name: 'Sweepstakes Bible (Purchase Required)',
+    url: 'https://www.sweepstakesbible.com/category/purchase-required/feed/',
+    type: 'rss_standard',
+    country: 'US',
+    trustScore: 7,
+    enabled: true,
+    defaultRequirements: ['Purchase Required'],
+    defaultTags: ['🧾 Purchase', 'Buy to Enter'],
+  },
+  {
+    id: 'southern-savers-sweeps',
+    name: 'Southern Savers (Sweepstakes)',
+    url: 'https://www.southernsavers.com/category/sweepstakes/feed/',
+    type: 'rss_standard',
+    country: 'US',
+    trustScore: 7,
+    enabled: true,
+    includeKeywords: CONTEST_KEYWORDS,
+  },
+  {
     id: 'contestbee',
     name: 'Contest Bee',
     url: 'https://www.contestbee.com/feed/',
@@ -297,8 +374,20 @@ export const MASTER_SOURCES: Source[] = [
     enabled: true,
     includeKeywords: CONTEST_KEYWORDS,
   },
+  // Cloudflare blocks datacenter IPs on this host; rss2json relay works for giveaways category.
+  {
+    id: 'freestufffinder-giveaways',
+    name: 'FreeStuffFinder (Giveaways)',
+    url: 'https://www.freestufffinder.com/category/giveaways/feed/',
+    type: 'rss_standard',
+    country: 'US',
+    trustScore: 8,
+    enabled: true,
+    fetchStrategy: 'rss2json_first',
+    includeKeywords: CONTEST_KEYWORDS,
+  },
 
-  // ——— Disabled / broken (inventory only — not fetched) ———
+  // ——— Disabled / broken / partnership scaffolds (inventory only — not fetched) ———
   {
     id: 'smartcanucks',
     name: 'SmartCanucks (Contests)',
@@ -306,7 +395,9 @@ export const MASTER_SOURCES: Source[] = [
     type: 'rss_standard',
     country: 'CA',
     trustScore: 8,
-    enabled: false, // 403 Cloudflare
+    enabled: false,
+    notes:
+      'Blocked: contests category is Cloudflare 403 (direct + rss2json). Main /feed/ is deals-only; tag/contest RSS is a stale archive (2015–2017). Needs SmartCanucks partnership or an official contests feed URL.',
   },
   {
     id: 'contestgirl-ca',
@@ -370,6 +461,81 @@ export const MASTER_SOURCES: Source[] = [
     country: 'CA',
     trustScore: 7,
     enabled: false, // empty feed
+  },
+
+  // ——— Scaffolds: no public contest listing feed/API (do not scrape) ———
+  {
+    id: 'gleam-directory',
+    name: 'Gleam (Directory — scaffold)',
+    url: 'https://gleam.io/',
+    type: 'scaffold',
+    country: 'BOTH',
+    trustScore: 1,
+    enabled: false,
+    notes:
+      'No public contest listing API. blog.gleam.io is Cloudflare-blocked and marketing-only. Needs Gleam partner API key / affiliate directory access.',
+  },
+  {
+    id: 'viralsweep-directory',
+    name: 'ViralSweep (Directory — scaffold)',
+    url: 'https://viralsweep.com/',
+    type: 'scaffold',
+    country: 'BOTH',
+    trustScore: 1,
+    enabled: false,
+    notes: 'No public sweepstakes listing API. Partner / API key required.',
+  },
+  {
+    id: 'woobox-directory',
+    name: 'Woobox (Directory — scaffold)',
+    url: 'https://woobox.com/blog/feed/',
+    type: 'scaffold',
+    country: 'BOTH',
+    trustScore: 1,
+    enabled: false,
+    notes:
+      'Public blog RSS exists but is product marketing, not contest listings. Needs Woobox partner feed/API.',
+  },
+  {
+    id: 'retailer-bestbuy-ca',
+    name: 'Best Buy Canada Contests (scaffold)',
+    url: 'https://www.bestbuy.ca/',
+    type: 'scaffold',
+    country: 'CA',
+    trustScore: 1,
+    enabled: false,
+    notes: 'No public giveaway RSS/API. Needs retailer partnership.',
+  },
+  {
+    id: 'retailer-walmart-ca',
+    name: 'Walmart Canada Contests (scaffold)',
+    url: 'https://www.walmart.ca/',
+    type: 'scaffold',
+    country: 'CA',
+    trustScore: 1,
+    enabled: false,
+    notes: 'No public giveaway RSS/API. Needs retailer partnership.',
+  },
+  {
+    id: 'retailer-costco-ca',
+    name: 'Costco Canada Contests (scaffold)',
+    url: 'https://www.costco.ca/',
+    type: 'scaffold',
+    country: 'CA',
+    trustScore: 1,
+    enabled: false,
+    notes: 'No public giveaway RSS/API. Needs retailer partnership.',
+  },
+  {
+    id: 'brand-official-api',
+    name: 'Official brand contest APIs (scaffold)',
+    url: 'https://example.com/partner-contests',
+    type: 'api_partner',
+    country: 'BOTH',
+    trustScore: 1,
+    enabled: false,
+    notes:
+      'Placeholder for brand hubs (Tim Hortons, McD, P&G, etc.) once partner API keys exist. Until then use seasonalPromos.ts for known windows.',
   },
 ]
 

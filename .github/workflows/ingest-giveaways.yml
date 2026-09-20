@@ -1,5 +1,9 @@
 # Continuously refresh the giveaway Hive Mind via the ingest Edge Function.
-# Set repository secrets: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY (or ANON key if function allows).
+# Repo secrets (Settings → Secrets and variables → Actions):
+#   SUPABASE_URL              = https://oftunznsumfidavvbqz.supabase.co
+#   SUPABASE_SERVICE_ROLE_KEY = service_role JWT from Supabase → Settings → API
+# Optional Edge secret (supabase secrets set):
+#   RSS2JSON_API_KEY          = paid rss2json key for fatter pages (count=100)
 name: Ingest giveaways
 
 on:
@@ -24,4 +28,4 @@ jobs:
             -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
             -H "Content-Type: application/json" \
             -d '{}' | tee /tmp/ingest.json
-          python3 -c "import json; d=json.load(open('/tmp/ingest.json')); print('upserted', d.get('upserted'), 'ok', d.get('ok')); raise SystemExit(0 if d.get('ok') else 1)"
+          python3 -c "import json; d=json.load(open('/tmp/ingest.json')); print('upserted', d.get('upserted'), 'ok', d.get('ok'), 'sources', d.get('sources')); raise SystemExit(0 if d.get('ok') else 1)"
