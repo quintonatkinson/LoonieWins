@@ -46,6 +46,30 @@ export function useUserLimits() {
   const weeklyLimitReached = userIsFree && !unlimited && weeklyUsed >= (cap as number)
   const canEnterFree = unlimited || (userIsFree && !weeklyLimitReached)
 
+  const smartFillsRemaining = profile?.smart_fills_remaining ?? 0
+  const smartFillsUnlimited =
+    unlimited ||
+    hasFeature(flags, 'unlimited_smart_fills', {
+      tier: subscriptionTier,
+      isPremium: profile?.is_premium,
+    }) ||
+    hasFeature(flags, 'extra_smart_fills', {
+      tier: subscriptionTier,
+      isPremium: profile?.is_premium,
+    })
+  const smartFillsBlocked = !smartFillsUnlimited && smartFillsRemaining <= 0
+
+  const hasNewEndingRails =
+    !userIsFree ||
+    hasFeature(flags, 'new_ending_rails', {
+      tier: subscriptionTier,
+      isPremium: profile?.is_premium,
+    }) ||
+    hasFeature(flags, 'priority_sources', {
+      tier: subscriptionTier,
+      isPremium: profile?.is_premium,
+    })
+
   const spendForEntry = useMemo(
     () => () => spendPointsForEntry(ENTRY_COST_PTS),
     [spendPointsForEntry]
@@ -64,5 +88,9 @@ export function useUserLimits() {
     spendPointsForEntry: spendForEntry,
     useFreeEntry,
     hasUnlimitedEntries: unlimited,
+    smartFillsRemaining,
+    smartFillsUnlimited,
+    smartFillsBlocked,
+    hasNewEndingRails,
   }
 }

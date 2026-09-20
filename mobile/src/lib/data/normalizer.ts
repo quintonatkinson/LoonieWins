@@ -26,6 +26,7 @@ export interface Contest {
   eligibilityUnverified?: boolean
   requirements?: string[]
   linkStatus?: number
+  createdAt?: string
 }
 
 export interface RawFeedItem {
