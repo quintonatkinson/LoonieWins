@@ -2,6 +2,8 @@ import { isSupabaseConfigured, supabase } from '../supabase'
 import {
   XP_ENTERED,
   XP_SUBMITTED,
+  COMEBACK_BONUS_XP,
+  COMEBACK_BONUS_POINTS,
   levelForXp,
   startOfUtcWeek,
   type FeatureFlags,
@@ -15,6 +17,10 @@ export interface ProgressResult {
   streak?: number
   reason?: string
   local?: boolean
+  used_grace?: boolean
+  comeback_points?: number
+  comeback_xp?: number
+  streak_grace_available?: boolean
 }
 
 export interface ConsumeEntryResult {
@@ -39,52 +45,168 @@ type ProfileLike = {
   level: number
   streak: number
   last_streak_at?: string | null
+  streak_grace_available?: boolean
+  last_comeback_bonus_at?: string | null
   weekly_entries_used?: number
   weekly_entries_reset_at?: string | null
   smart_fills_remaining?: number
   subscription_tier?: string
   is_premium?: boolean
   feature_flags?: FeatureFlags
+  points_balance?: number
 }
 
+function utcDateOffset(days: number, from = new Date()): string {
+  const d = new Date(from)
+  d.setUTCDate(d.getUTCDate() + days)
+  return d.toISOString().slice(0, 10)
+}
+
+/** Local/guest streak rules mirroring award_entry_progress (grace + comeback). */
+export function nextStreakWithGrace(
+  lastStreakAt: string | null | undefined,
+  current: number,
+  graceAvailable = true,
+  lastComebackAt?: string | null
+): {
+  streak: number
+  last_streak_at: string
+  streak_grace_available: boolean
+  used_grace: boolean
+  comeback_xp: number
+  comeback_points: number
+  last_comeback_bonus_at: string | null
+} {
+  const todayIso = utcDateOffset(0)
+  const yIso = utcDateOffset(-1)
+  const graceIso = utcDateOffset(-2)
+
+  if (!lastStreakAt) {
+    return {
+      streak: 1,
+      last_streak_at: todayIso,
+      streak_grace_available: true,
+      used_grace: false,
+      comeback_xp: 0,
+      comeback_points: 0,
+      last_comeback_bonus_at: lastComebackAt ?? null,
+    }
+  }
+  if (lastStreakAt === todayIso) {
+    return {
+      streak: Math.max(current, 1),
+      last_streak_at: todayIso,
+      streak_grace_available: graceAvailable,
+      used_grace: false,
+      comeback_xp: 0,
+      comeback_points: 0,
+      last_comeback_bonus_at: lastComebackAt ?? null,
+    }
+  }
+  if (lastStreakAt === yIso) {
+    return {
+      streak: current + 1,
+      last_streak_at: todayIso,
+      streak_grace_available: graceAvailable,
+      used_grace: false,
+      comeback_xp: 0,
+      comeback_points: 0,
+      last_comeback_bonus_at: lastComebackAt ?? null,
+    }
+  }
+  if (lastStreakAt === graceIso && graceAvailable) {
+    return {
+      streak: current + 1,
+      last_streak_at: todayIso,
+      streak_grace_available: false,
+      used_grace: true,
+      comeback_xp: 0,
+      comeback_points: 0,
+      last_comeback_bonus_at: lastComebackAt ?? null,
+    }
+  }
+
+  const giveComeback =
+    current >= 3 && (!lastComebackAt || lastComebackAt < todayIso)
+  return {
+    streak: 1,
+    last_streak_at: todayIso,
+    streak_grace_available: true,
+    used_grace: false,
+    comeback_xp: giveComeback ? COMEBACK_BONUS_XP : 0,
+    comeback_points: giveComeback ? COMEBACK_BONUS_POINTS : 0,
+    last_comeback_bonus_at: giveComeback ? todayIso : lastComebackAt ?? null,
+  }
+}
+
+// keep nextStreak available for any legacy callers
 function nextStreak(lastStreakAt: string | null | undefined, current: number): {
   streak: number
   last_streak_at: string
 } {
-  const today = new Date()
-  const todayIso = today.toISOString().slice(0, 10)
-  const yesterday = new Date(today)
-  yesterday.setUTCDate(yesterday.getUTCDate() - 1)
-  const yIso = yesterday.toISOString().slice(0, 10)
-
-  if (!lastStreakAt) return { streak: 1, last_streak_at: todayIso }
-  if (lastStreakAt === todayIso) return { streak: Math.max(current, 1), last_streak_at: todayIso }
-  if (lastStreakAt === yIso) return { streak: current + 1, last_streak_at: todayIso }
-  return { streak: 1, last_streak_at: todayIso }
+  const r = nextStreakWithGrace(lastStreakAt, current, true)
+  return { streak: r.streak, last_streak_at: r.last_streak_at }
 }
 
-/** Local/guest fallback mirroring RPC award_entry_progress rules. */
+export { nextStreak }
 export function computeLocalProgress(
   profile: ProfileLike,
   opts: { firstEnter: boolean; firstSubmit: boolean }
-): { xp: number; level: number; streak: number; last_streak_at: string; xp_gained: number } {
+): {
+  xp: number
+  level: number
+  streak: number
+  last_streak_at: string
+  xp_gained: number
+  streak_grace_available: boolean
+  used_grace: boolean
+  comeback_points: number
+  comeback_xp: number
+  last_comeback_bonus_at: string | null
+  points_balance?: number
+} {
   let xpGain = 0
   if (opts.firstEnter) xpGain += XP_ENTERED
   if (opts.firstSubmit) xpGain += XP_SUBMITTED
-  const xp = profile.xp + xpGain
-  const streakPatch =
-    xpGain > 0
-      ? nextStreak(profile.last_streak_at, profile.streak)
-      : {
-          streak: profile.streak,
-          last_streak_at: profile.last_streak_at || new Date().toISOString().slice(0, 10),
-        }
+
+  if (xpGain <= 0) {
+    return {
+      xp: profile.xp,
+      level: profile.level,
+      streak: profile.streak,
+      last_streak_at: profile.last_streak_at || utcDateOffset(0),
+      xp_gained: 0,
+      streak_grace_available: profile.streak_grace_available ?? true,
+      used_grace: false,
+      comeback_points: 0,
+      comeback_xp: 0,
+      last_comeback_bonus_at: profile.last_comeback_bonus_at ?? null,
+      points_balance: profile.points_balance,
+    }
+  }
+
+  const streakPatch = nextStreakWithGrace(
+    profile.last_streak_at,
+    profile.streak,
+    profile.streak_grace_available ?? true,
+    profile.last_comeback_bonus_at
+  )
+  const xp = profile.xp + xpGain + streakPatch.comeback_xp
   return {
     xp,
     level: levelForXp(xp),
     streak: streakPatch.streak,
     last_streak_at: streakPatch.last_streak_at,
-    xp_gained: xpGain,
+    xp_gained: xpGain + streakPatch.comeback_xp,
+    streak_grace_available: streakPatch.streak_grace_available,
+    used_grace: streakPatch.used_grace,
+    comeback_points: streakPatch.comeback_points,
+    comeback_xp: streakPatch.comeback_xp,
+    last_comeback_bonus_at: streakPatch.last_comeback_bonus_at,
+    points_balance:
+      profile.points_balance != null
+        ? profile.points_balance + streakPatch.comeback_points
+        : undefined,
   }
 }
 

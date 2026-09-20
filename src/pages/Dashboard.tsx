@@ -14,6 +14,11 @@ import type { AutoFillData } from '../types/profile'
 import { loadAutoFillData } from '../lib/utils/autoFillStorage'
 import { rpcConsumeSmartFill } from '../lib/monetization/progression'
 import { isSupabaseConfigured } from '../lib/supabase'
+import {
+  canAccessProRails,
+  endingTonightContests,
+  newRailContests,
+} from '../lib/feed/proRails'
 
 type SortFilter = 'high-value' | 'ending-soon' | 'best-odds' | 'most-popular'
 
@@ -51,6 +56,7 @@ export default function Dashboard() {
   const { enteredIds, markEntered: persistEntered } = useContestEntries()
   const { smartFillsBlocked, smartFillsUnlimited, smartFillsRemaining } = useUserLimits()
   const [showSmartFillPaywall, setShowSmartFillPaywall] = useState(false)
+  const [showRailsPaywall, setShowRailsPaywall] = useState(false)
   const { upgradeToPro } = useUserEarn()
 
   const [search, setSearch] = useState('')
@@ -134,6 +140,13 @@ export default function Dashboard() {
   }, [profile, updateProfile, smartFillsBlocked, smartFillsUnlimited])
 
   const routineContests = liveContests.filter((c) => enteredIds.has(c.id)).slice(0, 10)
+
+  const proRails = canAccessProRails(profile?.feature_flags, {
+    tier: profile?.subscription_tier,
+    isPremium: profile?.is_premium,
+  })
+  const newRail = useMemo(() => newRailContests(liveContests, 12), [liveContests])
+  const endingRail = useMemo(() => endingTonightContests(liveContests, 12), [liveContests])
 
   let feedContests = liveContests.filter((c) => {
     if (hideEntered && enteredIds.has(c.id)) return false
@@ -232,6 +245,69 @@ export default function Dashboard() {
             ))
           )}
         </div>
+      </section>
+
+      {/* Pro rails: New + Ending Tonight (paywalled for free) */}
+      <section className="px-4 pt-2 space-y-4">
+        {(['new', 'ending'] as const).map((rail) => {
+          const title = rail === 'new' ? 'New' : 'Ending Tonight'
+          const items = rail === 'new' ? newRail : endingRail
+          return (
+            <div key={rail}>
+              <div className="flex items-center justify-between mb-2">
+                <h2 className="text-base font-bold text-gray-50 flex items-center gap-2">
+                  <span className="text-amber-400" aria-hidden>
+                    {rail === 'new' ? '✨' : '⏰'}
+                  </span>
+                  {title}
+                  {!proRails && (
+                    <span className="text-[10px] uppercase tracking-wide text-amber-400/90 border border-amber-500/30 rounded px-1.5 py-0.5">
+                      Pro
+                    </span>
+                  )}
+                </h2>
+                {!proRails && (
+                  <button
+                    type="button"
+                    onClick={() => setShowRailsPaywall(true)}
+                    className="text-xs font-medium text-amber-400 hover:text-amber-300"
+                  >
+                    Unlock
+                  </button>
+                )}
+              </div>
+              {!proRails ? (
+                <button
+                  type="button"
+                  onClick={() => setShowRailsPaywall(true)}
+                  className="w-full rounded-xl border border-dashed border-gray-600/60 bg-gray-900/40 px-4 py-6 text-left"
+                >
+                  <p className="text-sm text-gray-300">
+                    {rail === 'new'
+                      ? 'Fresh finds from the Hive Mind — Pro unlocks this rail.'
+                      : 'Contests closing in the next 24h + priority ending-tonight push.'}
+                  </p>
+                  <p className="text-xs text-amber-400 mt-2 font-medium">Upgrade to Pro →</p>
+                </button>
+              ) : items.length === 0 ? (
+                <p className="text-gray-500 text-sm py-3">Nothing here right now.</p>
+              ) : (
+                <div className="flex gap-4 overflow-x-auto pb-2 -mx-4 px-4 scrollbar-thin">
+                  {items.map((c) => (
+                    <ContestCard
+                      key={`${rail}-${c.id}`}
+                      contest={c}
+                      onOpenOverlay={setOverlayContest}
+                      variant="routine"
+                      daysLeft={daysLeft(c) ?? undefined}
+                      entered={enteredIds.has(c.id)}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+          )
+        })}
       </section>
 
       {/* Search bar */}
@@ -421,8 +497,11 @@ export default function Dashboard() {
       />
 
       <SubscriptionModal
-        open={showSmartFillPaywall}
-        onClose={() => setShowSmartFillPaywall(false)}
+        open={showSmartFillPaywall || showRailsPaywall}
+        onClose={() => {
+          setShowSmartFillPaywall(false)
+          setShowRailsPaywall(false)
+        }}
         onSelectPlan={(planId) => void upgradeToPro(planId)}
         showComparison
       />
