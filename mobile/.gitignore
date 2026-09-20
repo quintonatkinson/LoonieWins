@@ -39,3 +39,8 @@ yarn-error.*
 # generated native folders
 /ios
 /android
+
+# Firebase / FCM (real file — copy from google-services.json.example)
+google-services.json
+GoogleService-Info.plist
+

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import ContestCard from '../components/ContestCard'
 import { getPastContests } from '../hooks/useContestVault'
 import type { Contest } from '../lib/rssFetcher'
+import { getExpirySortKey } from '../lib/utils/expiryDate'
 
 export default function PastContests() {
   const [pastContests, setPastContests] = useState<Contest[]>([])
@@ -20,11 +21,9 @@ export default function PastContests() {
     }
   }, [])
 
-  const sorted = [...pastContests].sort((a, b) => {
-    const da = a.expiryDate ? new Date(a.expiryDate).getTime() : 0
-    const db = b.expiryDate ? new Date(b.expiryDate).getTime() : 0
-    return db - da
-  })
+  const sorted = [...pastContests].sort(
+    (a, b) => getExpirySortKey(b.expiryDate) - getExpirySortKey(a.expiryDate)
+  )
 
   return (
     <div className="flex flex-col bg-gray-900">

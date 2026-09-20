@@ -1,51 +1,49 @@
 import { useState, useEffect } from 'react'
 import { Text, View } from 'react-native'
-import { getMillisUntilExpiry } from '../lib/utils/expiryDate'
+import { getCountdownLabel, type CountdownLabel } from '../lib/utils/countdownLabel'
 
 interface CountdownTimerProps {
   targetDate: string
+  variant?: 'card' | 'detail'
 }
 
-const MS_24_HOURS = 24 * 60 * 60 * 1000
-const MS_1_HOUR = 60 * 60 * 1000
-
-function formatRemaining(ms: number): string {
-  if (ms <= 0) return 'Ended'
-  const sec = Math.floor((ms / 1000) % 60)
-  const min = Math.floor((ms / (1000 * 60)) % 60)
-  const hour = Math.floor((ms / (1000 * 60 * 60)) % 24)
-  const day = Math.floor(ms / (1000 * 60 * 60 * 24))
-  const parts: string[] = []
-  if (day > 0) parts.push(`${day}d`)
-  parts.push(`${hour}h`)
-  parts.push(`${min}m`)
-  parts.push(`${sec}s`)
-  return parts.join(' ')
+function rnColor(urgency: CountdownLabel['urgency']): string {
+  switch (urgency) {
+    case 'ended':
+      return '#ef4444'
+    case 'critical':
+      return '#f87171'
+    case 'tonight':
+      return '#fb923c'
+    case 'soon':
+      return '#fbbf24'
+    case 'days':
+      return '#9ca3af'
+    default:
+      return '#6b7280'
+  }
 }
 
-function colorClass(ms: number): string {
-  if (ms <= 0) return 'text-red-500'
-  if (ms < MS_1_HOUR) return 'text-red-400'
-  if (ms < MS_24_HOURS) return 'text-orange-400'
-  return 'text-gray-400'
-}
-
-export default function CountdownTimer({ targetDate }: CountdownTimerProps) {
-  const [ms, setMs] = useState(() => getMillisUntilExpiry(targetDate))
+export default function CountdownTimer({ targetDate, variant = 'card' }: CountdownTimerProps) {
+  const [info, setInfo] = useState<CountdownLabel>(() => getCountdownLabel(targetDate))
 
   useEffect(() => {
-    setMs(getMillisUntilExpiry(targetDate))
-    const id = setInterval(() => setMs(getMillisUntilExpiry(targetDate)), 1000)
+    setInfo(getCountdownLabel(targetDate))
+    const id = setInterval(() => setInfo(getCountdownLabel(targetDate)), 1000)
     return () => clearInterval(id)
   }, [targetDate])
 
-  const text = formatRemaining(ms)
-  const cn = colorClass(ms)
+  const text = variant === 'detail' ? `${info.label} · ${info.precise}` : info.label
+  const color = rnColor(info.urgency)
+  const urgent = info.urgency === 'tonight' || info.urgency === 'critical'
 
   return (
-    <View className="flex-row items-center gap-1">
-      <Text className="text-gray-400">🕐</Text>
-      <Text className={`text-xs ${cn}`}>{text}</Text>
+    <View
+      className={
+        urgent ? 'rounded-full px-2 py-0.5 border border-orange-500/30 bg-orange-500/15' : undefined
+      }
+    >
+      <Text style={{ color, fontSize: 12, fontWeight: '500' }}>🕐 {text}</Text>
     </View>
   )
 }

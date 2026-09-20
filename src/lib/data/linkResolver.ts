@@ -134,7 +134,8 @@ function extractMainContentHtml(html: string): string {
     ]
     for (const sel of selectors) {
       const el = doc.querySelector(sel)
-      if (el?.innerHTML?.length > 200) return el.innerHTML
+      const htmlLen = el?.innerHTML?.length ?? 0
+      if (el && htmlLen > 200) return el.innerHTML
     }
   } catch (_) {
     /* fall through */
