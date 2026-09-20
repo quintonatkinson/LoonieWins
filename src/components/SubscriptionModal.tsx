@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { FREE_TIER_PERKS, PRO_TIER_PERKS } from '../lib/monetization/tiers'
+import { FREE_TIER_PERKS, PRO_LOCKED_FEATURES } from '../lib/monetization/tiers'
 import {
   billingStatusNotice,
   isIapConfigured,
@@ -70,12 +70,31 @@ export default function SubscriptionModal({
         aria-labelledby="subscription-title"
       >
         <h2 id="subscription-title" className="text-lg font-bold text-gray-50">
-          Go Pro — clear the caps
+          Go Pro — unlock everything
         </h2>
         <p className="text-sm text-gray-400 mt-2 mb-4">
-          Unlimited entries &amp; Smart-Fills, priority ending-tonight alerts, and Pro New / Ending
-          rails.
+          Weekly or monthly subscription. Not a one-time buy — cancel anytime in the store.
         </p>
+
+        {/* Scannable list of everything locked behind Pro */}
+        <div className="mb-4 rounded-xl border border-amber-500/30 bg-amber-500/5 p-4">
+          <p className="text-xs font-semibold text-amber-400 uppercase tracking-wide mb-2">
+            Locked behind Pro
+          </p>
+          <ul className="space-y-2.5">
+            {PRO_LOCKED_FEATURES.map((f) => (
+              <li key={f.id} className="flex gap-2.5 text-sm">
+                <span className="text-amber-400 shrink-0 mt-0.5" aria-hidden>
+                  ✓
+                </span>
+                <span>
+                  <span className="font-semibold text-gray-50 block">{f.title}</span>
+                  <span className="text-gray-400 text-xs leading-snug">{f.detail}</span>
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
 
         {showComparison && (
           <div className="mb-4 space-y-3 rounded-xl border border-gray-600/50 p-4 bg-gray-900/50">
@@ -85,21 +104,13 @@ export default function SubscriptionModal({
               </p>
               <ul className="text-sm text-gray-400 space-y-0.5">
                 {FREE_TIER_PERKS.map((line) => (
-                  <li key={line}>{line}</li>
+                  <li key={line}>· {line}</li>
                 ))}
               </ul>
             </div>
-            <div>
-              <p className="text-xs font-semibold text-amber-400 uppercase tracking-wide mb-1">
-                Pro Plan
-              </p>
-              <ul className="text-sm text-gray-300 space-y-0.5">
-                {PRO_TIER_PERKS.map((line) => (
-                  <li key={line}>{line}</li>
-                ))}
-              </ul>
-              <p className="text-amber-400 text-sm mt-2 font-medium">From $1.49/week or $4.99/mo</p>
-            </div>
+            <p className="text-amber-400 text-sm font-medium">
+              From {PLAN_DISPLAY.weekly.priceLabel} or {PLAN_DISPLAY.monthly.priceLabel}
+            </p>
           </div>
         )}
 
@@ -115,6 +126,9 @@ export default function SubscriptionModal({
               <p className="font-semibold text-gray-50">{PLAN_DISPLAY[planId].title}</p>
               <p className="text-amber-400 text-sm mt-0.5">
                 {busy === planId ? 'Processing…' : PLAN_DISPLAY[planId].priceLabel}
+              </p>
+              <p className="text-[11px] text-gray-500 mt-1">
+                Auto-renewing {planId === 'weekly' ? 'weekly' : 'monthly'} · not a one-time purchase
               </p>
             </button>
           ))}

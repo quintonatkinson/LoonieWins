@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useCallback, useMemo } from 'react'
 import { useUserEarn } from '../contexts/UserEarnContext'
 import { useAuth } from '../contexts/AuthContext'
 import {
@@ -9,6 +9,10 @@ import {
   normalizeWeeklyUsage,
   weeklyEntryCap,
 } from '../lib/monetization/tiers'
+import {
+  entryPointCost,
+  type EntryCostInput,
+} from '../lib/monetization/entryPointCost'
 
 export { ENTRY_COST_PTS }
 
@@ -70,8 +74,13 @@ export function useUserLimits() {
       isPremium: profile?.is_premium,
     })
 
-  const spendForEntry = useMemo(
-    () => () => spendPointsForEntry(ENTRY_COST_PTS),
+  const getEntryCost = useCallback(
+    (contest: EntryCostInput) => entryPointCost(contest),
+    []
+  )
+
+  const spendForEntry = useCallback(
+    (cost?: number) => spendPointsForEntry(cost ?? ENTRY_COST_PTS),
     [spendPointsForEntry]
   )
 
@@ -85,6 +94,7 @@ export function useUserLimits() {
     entriesUsedToday: Boolean(lastDailyEntryAt),
     canEnterFree,
     entryCostPts: ENTRY_COST_PTS,
+    getEntryCost,
     spendPointsForEntry: spendForEntry,
     useFreeEntry,
     hasUnlimitedEntries: unlimited,

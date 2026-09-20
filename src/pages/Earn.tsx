@@ -1,8 +1,13 @@
 import { useState, useCallback, useMemo } from 'react'
 import confetti from 'canvas-confetti'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { useUserEarn } from '../contexts/UserEarnContext'
 import { useAuth } from '../contexts/AuthContext'
 import { ENTRY_COST_PTS } from '../hooks/useUserLimits'
+import {
+  ENTRY_COST_BY_TIER,
+  entryCostRangeCopy,
+} from '../lib/monetization/entryPointCost'
 import {
   isSandboxOffer,
   openOfferwallSession,
@@ -23,13 +28,21 @@ function TimeIcon({ kind }: { kind: OfferwallOffer['timeKind'] }) {
 export default function Earn() {
   const { balance, addPoints } = useUserEarn()
   const { user, profile } = useAuth()
+  const navigate = useNavigate()
+  const location = useLocation()
   const [loadingId, setLoadingId] = useState<string | null>(null)
   const [successTask, setSuccessTask] = useState<OfferwallOffer | null>(null)
 
   const playerId = user?.id ?? profile?.id ?? 'guest'
   const session = useMemo(() => openOfferwallSession(playerId), [playerId])
 
-  const entriesFromBalance = Math.floor(balance / ENTRY_COST_PTS)
+  const returnCost =
+    typeof (location.state as { entryCostPts?: number } | null)?.entryCostPts === 'number'
+      ? (location.state as { entryCostPts: number }).entryCostPts
+      : null
+  const targetCost = returnCost ?? ENTRY_COST_PTS
+  const entriesFromBalance = Math.floor(balance / ENTRY_COST_BY_TIER.micro)
+  const canCoverTarget = balance >= targetCost
 
   const handleOfferClick = useCallback(
     (offer: OfferwallOffer) => {
@@ -66,17 +79,42 @@ export default function Earn() {
           {balance.toLocaleString()} Pts
         </p>
         <p className="text-gray-400 text-sm mt-2">
-          That&apos;s enough for{' '}
-          <span className="text-amber-400 font-semibold">{entriesFromBalance} Contest Entries</span>!
+          Prize-tiered entries after your free weekly cap:{' '}
+          <span className="text-amber-400 font-semibold">{entryCostRangeCopy()}</span>
+          {' '}(Tims → vehicle). Enough for ~{entriesFromBalance} coffee-tier unlocks.
         </p>
+        {returnCost != null && (
+          <p className="text-sm mt-2 text-gray-300">
+            Contest you came from needs{' '}
+            <span className="text-amber-400 font-semibold">{returnCost} pts</span>
+            {canCoverTarget ? ' — you can enter now.' : ' — keep earning.'}
+          </p>
+        )}
         <p className="text-xs text-gray-500 mt-2">
           Provider: <span className="text-gray-300">{session.provider}</span>
           {session.configured ? ' (live)' : ' (sandbox fallback)'}
         </p>
+        {canCoverTarget && (
+          <button
+            type="button"
+            onClick={() => navigate('/')}
+            className="mt-3 w-full py-2.5 rounded-lg bg-win text-on-win font-semibold text-sm"
+          >
+            Back to feed — spend pts &amp; enter
+          </button>
+        )}
+      </div>
+
+      <div className="rounded-xl border border-gray-600/50 bg-gray-900/40 p-3 text-xs text-gray-400 space-y-1">
+        <p className="font-semibold text-gray-300 text-sm">Loop when free entries are capped</p>
+        <p>1. Complete AdGem offers / rewarded tasks → earn pts</p>
+        <p>2. Return to the contest → spend prize-tiered pts to unlock</p>
+        <p>3. Or go Pro (weekly/monthly) to skip the grind entirely</p>
       </div>
 
       <p className="text-center text-sm text-gray-400">
-        1 Survey ≈ 2–3 Entries · {ENTRY_COST_PTS} pts per extra entry
+        Micro {ENTRY_COST_BY_TIER.micro} · Standard {ENTRY_COST_BY_TIER.standard} · Mega{' '}
+        {ENTRY_COST_BY_TIER.mega} pts
       </p>
 
       {session.wallUrl && (
@@ -85,7 +123,7 @@ export default function Earn() {
           onClick={() => window.open(session.wallUrl!, '_blank', 'noopener,noreferrer')}
           className="w-full py-3 rounded-xl bg-amber-500/20 text-amber-400 font-semibold border border-amber-500/40"
         >
-          Open live offerwall
+          Open live AdGem offerwall
         </button>
       )}
 
@@ -132,12 +170,25 @@ export default function Earn() {
           <div className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-50 rounded-2xl glass border border-amber-500/30 p-6 text-center min-w-[240px]">
             <p className="text-2xl font-bold text-amber-400">Success!</p>
             <p className="text-gray-50 mt-1">+{successTask.reward.toLocaleString()} Pts</p>
+            <p className="text-xs text-gray-400 mt-2">
+              Head back to the contest and spend pts to enter — or keep earning.
+            </p>
+            <button
+              type="button"
+              onClick={() => {
+                closeSuccess()
+                navigate('/')
+              }}
+              className="mt-4 w-full py-2.5 rounded-lg bg-win text-on-win font-semibold"
+            >
+              Back to feed
+            </button>
             <button
               type="button"
               onClick={closeSuccess}
-              className="mt-4 w-full py-2.5 rounded-lg bg-amber-500/20 text-amber-400 font-semibold border border-amber-500/40"
+              className="mt-2 w-full py-2.5 rounded-lg bg-amber-500/20 text-amber-400 font-semibold border border-amber-500/40"
             >
-              Done
+              Keep earning
             </button>
           </div>
         </>
