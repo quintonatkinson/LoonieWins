@@ -465,11 +465,14 @@ export default function Dashboard() {
     const cutoff = Date.now() - NEW_RAIL_MS
     return [...railBase]
       .filter((c) => {
-        if (!c.createdAt) return false
-        const t = Date.parse(c.createdAt)
+        const ts = c.createdAt ?? c.postedAt
+        if (!ts) return false
+        const t = Date.parse(ts)
         return Number.isFinite(t) && t >= cutoff
       })
-      .sort((a, b) => compareCreatedDescending(a.createdAt, b.createdAt))
+      .sort((a, b) =>
+        compareCreatedDescending(a.createdAt ?? a.postedAt, b.createdAt ?? b.postedAt)
+      )
       .slice(0, PRO_RAIL_LIMIT)
   }, [railBase])
 
@@ -689,31 +692,89 @@ export default function Dashboard() {
         </div>
       </section>
 
-      {/* Pro-gated New / Ending rails */}
+      {/* Pro-gated New / Ending rails (+ #19 Upgrade/Unlock CTAs) */}
       <section className="px-4 pt-4 space-y-4">
         <div>
           <div className="flex items-center justify-between gap-2 mb-2">
-            <h2 className="text-sm font-bold text-gray-50">
+            <h2 className="text-sm font-bold text-gray-50 flex items-center gap-2">
+              <span className="text-amber-400" aria-hidden>
+                ✨
+              </span>
               New{' '}
               {!hasNewEndingRails && (
-                <span className="text-[10px] font-semibold uppercase text-amber-400 ml-1">Pro</span>
+                <span className="text-[10px] uppercase tracking-wide text-amber-400/90 border border-amber-500/30 rounded px-1.5 py-0.5">
+                  Pro
+                </span>
               )}
             </h2>
-            <span className="text-[11px] text-gray-500">Last 48h</span>
+            <div className="flex items-center gap-2">
+              <span className="text-[11px] text-gray-500">Last 48h</span>
+              {!hasNewEndingRails && (
+                <button
+                  type="button"
+                  onClick={() => setShowRailsPaywall(true)}
+                  className="text-xs font-medium text-amber-400 hover:text-amber-300"
+                >
+                  Unlock
+                </button>
+              )}
+            </div>
           </div>
-          {renderRailCards(newRail, !hasNewEndingRails)}
+          {!hasNewEndingRails && newRail.length === 0 ? (
+            <button
+              type="button"
+              onClick={() => setShowRailsPaywall(true)}
+              className="w-full rounded-xl border border-dashed border-gray-600/60 bg-gray-900/40 px-4 py-6 text-left"
+            >
+              <p className="text-sm text-gray-300">
+                Fresh finds from the Hive Mind — Pro unlocks this rail.
+              </p>
+              <p className="text-xs text-amber-400 mt-2 font-medium">Upgrade to Pro →</p>
+            </button>
+          ) : (
+            renderRailCards(newRail, !hasNewEndingRails)
+          )}
         </div>
         <div>
           <div className="flex items-center justify-between gap-2 mb-2">
-            <h2 className="text-sm font-bold text-gray-50">
+            <h2 className="text-sm font-bold text-gray-50 flex items-center gap-2">
+              <span className="text-amber-400" aria-hidden>
+                ⏰
+              </span>
               Ending tonight{' '}
               {!hasNewEndingRails && (
-                <span className="text-[10px] font-semibold uppercase text-amber-400 ml-1">Pro</span>
+                <span className="text-[10px] uppercase tracking-wide text-amber-400/90 border border-amber-500/30 rounded px-1.5 py-0.5">
+                  Pro
+                </span>
               )}
             </h2>
-            <span className="text-[11px] text-gray-500">Toronto day</span>
+            <div className="flex items-center gap-2">
+              <span className="text-[11px] text-gray-500">Toronto day</span>
+              {!hasNewEndingRails && (
+                <button
+                  type="button"
+                  onClick={() => setShowRailsPaywall(true)}
+                  className="text-xs font-medium text-amber-400 hover:text-amber-300"
+                >
+                  Unlock
+                </button>
+              )}
+            </div>
           </div>
-          {renderRailCards(endingRail, !hasNewEndingRails)}
+          {!hasNewEndingRails && endingRail.length === 0 ? (
+            <button
+              type="button"
+              onClick={() => setShowRailsPaywall(true)}
+              className="w-full rounded-xl border border-dashed border-gray-600/60 bg-gray-900/40 px-4 py-6 text-left"
+            >
+              <p className="text-sm text-gray-300">
+                Contests closing in the next 24h + priority ending-tonight push.
+              </p>
+              <p className="text-xs text-amber-400 mt-2 font-medium">Upgrade to Pro →</p>
+            </button>
+          ) : (
+            renderRailCards(endingRail, !hasNewEndingRails)
+          )}
         </div>
       </section>
 

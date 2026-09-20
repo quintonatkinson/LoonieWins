@@ -104,7 +104,7 @@ export function openOfferwallSession(playerId: string | null | undefined): Offer
           provider: 'adgem',
         },
       ],
-      note: 'Live AdGem wall. Credits via postback (type=offerwall).',
+      note: 'Live AdGem wall. Credits via verified server postback (adgem-postback Edge Function).',
     }
   }
   return {

@@ -27,6 +27,7 @@ export interface Contest {
   requirements?: string[]
   linkStatus?: number
   createdAt?: string
+  postedAt?: string
 }
 
 export interface RawFeedItem {
@@ -331,6 +332,7 @@ export function normalizeJsonItem(item: Rss2JsonItem, source: Source, index: num
     eligibility,
     eligibilityUnverified,
     requirements,
+    postedAt: postedAtIso,
   }
 }
 
@@ -375,5 +377,6 @@ export function normalizeXmlItem(item: RawFeedItem, source: Source, index: numbe
     eligibility,
     eligibilityUnverified,
     requirements,
+    postedAt: postedAtIso,
   }
 }

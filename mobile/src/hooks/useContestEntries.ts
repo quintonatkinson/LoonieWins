@@ -99,6 +99,9 @@ export function useContestEntries() {
         level: next.level,
         streak: next.streak,
         last_streak_at: next.last_streak_at,
+        streak_grace_available: next.streak_grace_available,
+        last_comeback_bonus_at: next.last_comeback_bonus_at,
+        ...(next.points_balance != null ? { points_balance: next.points_balance } : {}),
       })
     },
     [user, profile, updateProfile, refreshProfile]

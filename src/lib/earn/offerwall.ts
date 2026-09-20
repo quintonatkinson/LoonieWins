@@ -135,7 +135,7 @@ export function openOfferwallSession(playerId: string | null | undefined): Offer
           provider: 'adgem',
         },
       ],
-      note: 'Rewards credit via AdGem postback → tracking.transactions (type=offerwall). Wire server postback with VITE_ADGEM_API_KEY / service role.',
+      note: 'Rewards credit via AdGem server postback → Edge Function adgem-postback (HMAC verified, service_role server-only).',
     }
   }
 
