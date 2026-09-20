@@ -3,7 +3,7 @@
  * Submit → pending queue → mod approve → public.contests (Hive Mind).
  */
 
-import { supabase } from './supabase'
+import { isSupabaseConfigured, requireSupabase } from './supabase'
 import { sanitizeContestUrl } from './utils/sanitizeContestUrl'
 import { syncToVault, fetchFromCloud } from '../hooks/useContestVault'
 import type { Contest } from './rssFetcher'
@@ -81,7 +81,8 @@ export function validateSubmissionTitle(title: string): string | null {
 }
 
 export async function getSessionUserId(): Promise<string | null> {
-  const { data } = await supabase.auth.getSession()
+  if (!isSupabaseConfigured) return null
+  const { data } = await requireSupabase().auth.getSession()
   return data.session?.user?.id ?? null
 }
 
@@ -91,7 +92,7 @@ export async function fetchMyModerationFlags(): Promise<{
 } | null> {
   const uid = await getSessionUserId()
   if (!uid) return null
-  const { data, error } = await supabase
+  const { data, error } = await requireSupabase()
     .from('profiles')
     .select('is_admin, is_moderator')
     .eq('id', uid)
@@ -120,6 +121,10 @@ export async function submitContestSuggestion(input: {
   const urlCheck = validateSubmissionUrl(input.url)
   if (!urlCheck.ok) return { id: null, error: urlCheck.error }
 
+  if (!isSupabaseConfigured) {
+    return { id: null, error: 'Supabase is not configured — run the UGC migration on a live project.' }
+  }
+
   const uid = await getSessionUserId()
   if (!uid) return { id: null, error: 'Sign in to submit a contest.' }
 
@@ -130,7 +135,7 @@ export async function submitContestSuggestion(input: {
     expiry = d.toISOString()
   }
 
-  const { data, error } = await supabase.rpc('submit_contest_suggestion', {
+  const { data, error } = await requireSupabase().rpc('submit_contest_suggestion', {
     p_title: input.title.trim(),
     p_url: urlCheck.url,
     p_eligibility: input.eligibility,
@@ -142,7 +147,8 @@ export async function submitContestSuggestion(input: {
 }
 
 export async function listMySubmissions(): Promise<ContestSubmission[]> {
-  const { data, error } = await supabase
+  if (!isSupabaseConfigured) return []
+  const { data, error } = await requireSupabase()
     .from('contest_submissions')
     .select('*')
     .order('created_at', { ascending: false })
@@ -155,7 +161,8 @@ export async function listMySubmissions(): Promise<ContestSubmission[]> {
 }
 
 export async function listPendingSubmissions(): Promise<ContestSubmission[]> {
-  const { data, error } = await supabase
+  if (!isSupabaseConfigured) return []
+  const { data, error } = await requireSupabase()
     .from('contest_submissions')
     .select('*')
     .eq('status', 'pending')
@@ -174,7 +181,10 @@ export async function moderateSubmission(
   action: 'approve' | 'reject',
   rejectionReason?: string
 ): Promise<{ result: ModerateResult | null; error: string | null }> {
-  const { data, error } = await supabase.rpc('moderate_contest_submission', {
+  if (!isSupabaseConfigured) {
+    return { result: null, error: 'Supabase is not configured' }
+  }
+  const { data, error } = await requireSupabase().rpc('moderate_contest_submission', {
     p_submission_id: submissionId,
     p_action: action,
     p_rejection_reason: rejectionReason ?? null,
