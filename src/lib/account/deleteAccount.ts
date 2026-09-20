@@ -75,12 +75,13 @@ export async function exportAccountData(): Promise<Record<string, unknown>> {
     out.userId = user.id
     out.email = user.email
 
-    const [profile, entries, txs, referrals, wins] = await Promise.all([
+    const [profile, entries, txs, referrals, wins, pushTokens] = await Promise.all([
       supabase.from('profiles').select('*').eq('id', user.id).maybeSingle(),
       tracking().from('contest_entries').select('*').eq('user_id', user.id),
       tracking().from('transactions').select('*').eq('user_id', user.id),
       giveaways().from('referral_pool').select('*').eq('referrer_id', user.id),
       giveaways().from('user_wins').select('*').eq('user_id', user.id),
+      supabase.from('push_tokens').select('*').eq('user_id', user.id),
     ])
 
     out.profile = profile.data
@@ -88,6 +89,7 @@ export async function exportAccountData(): Promise<Record<string, unknown>> {
     out.transactions = txs.data
     out.referral_pool = referrals.data
     out.user_wins = wins.data
+    out.push_tokens = pushTokens.data
   } catch (err) {
     out.exportError = err instanceof Error ? err.message : String(err)
   }
@@ -109,6 +111,8 @@ export async function downloadWebDataExport(): Promise<void> {
 async function wipeUserRowsFallback(userId: string): Promise<void> {
   if (!supabase) return
   await Promise.all([
+    supabase.from('push_alert_log').delete().eq('user_id', userId),
+    supabase.from('push_tokens').delete().eq('user_id', userId),
     tracking().from('contest_entries').delete().eq('user_id', userId),
     tracking().from('transactions').delete().eq('user_id', userId),
     giveaways().from('user_wins').delete().eq('user_id', userId),

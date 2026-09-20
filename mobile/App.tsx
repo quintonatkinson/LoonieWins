@@ -1,5 +1,5 @@
 import './global.css'
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import { StatusBar } from 'expo-status-bar'
 import { View, ActivityIndicator, TouchableOpacity, Text } from 'react-native'
 import { Linking } from 'react-native'
@@ -11,13 +11,27 @@ import AuthScreen from './src/components/AuthScreen'
 import Dashboard from './src/screens/Dashboard'
 import ContestBrowser from './src/screens/ContestBrowser'
 import SettingsScreen from './src/screens/SettingsScreen'
+import { parseNotificationPrefs } from './src/lib/notifications/prefs'
+import { registerForPushNotifications } from './src/lib/notifications/registerPush'
 
 function AppContent() {
-  const { session, loading, authReady, profile } = useAuth()
+  const { session, loading, authReady, profile, user } = useAuth()
   const [overlayContest, setOverlayContest] = useState<Contest | null>(null)
   const [resolvedUrl, setResolvedUrl] = useState<string | null>(null)
   const [resolving, setResolving] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
+
+  // Register Expo push token when signed in and alerts are enabled
+  useEffect(() => {
+    if (!user?.id) return
+    const prefs = parseNotificationPrefs(profile?.settings)
+    if (!prefs.enabled) return
+    void registerForPushNotifications(user.id).then((r) => {
+      if (r.error && !r.token) {
+        console.warn('[Push]', r.error)
+      }
+    })
+  }, [user?.id, profile?.settings])
 
   const autoFillData = {
     name:

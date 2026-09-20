@@ -392,4 +392,6 @@ comment on function public.delete_own_account() is
 -- Additive migrations (run after this bootstrap / full Hive Mind schema):
 --   supabase/migrations/20260920_user_contest_submissions.sql
 --   → public.contest_submissions + is_admin/is_moderator + submit/moderate RPCs
+--   supabase/migrations/20260920_push_notifications.sql
+--   → public.push_tokens + push_alert_log + notification prefs defaults
 -- =============================================================================

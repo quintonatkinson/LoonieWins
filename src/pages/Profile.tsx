@@ -3,7 +3,6 @@ import { Link, useNavigate } from 'react-router-dom'
 import {
   User,
   Trophy,
-  Settings,
   Shield,
   Download,
   Trash2,
@@ -20,6 +19,7 @@ import { useUserEarn } from '../contexts/UserEarnContext'
 import { useAuth } from '../contexts/AuthContext'
 import { useContestEntries, type ContestEntryStatus } from '../hooks/useContestEntries'
 import SubscriptionModal from '../components/SubscriptionModal'
+import NotificationPreferences from '../components/NotificationPreferences'
 import type { AutoFillData } from '../types/profile'
 import { downloadWebDataExport, deleteAccountAndLocalData } from '../lib/account/deleteAccount'
 import { SUPPORT_EMAIL } from '../lib/legal/constants'
@@ -444,21 +444,11 @@ export default function Profile() {
         </ul>
       </section>
 
+      <NotificationPreferences />
+
       <section>
         <h2 className="text-sm font-semibold text-white uppercase tracking-wide mb-3">Settings</h2>
         <ul className="rounded-xl bg-gray-800/80 border border-gray-600/50 divide-y divide-gray-600/50 overflow-hidden">
-          <li>
-            <button
-              type="button"
-              className="flex items-center gap-3 w-full text-left px-4 py-3 hover:bg-white/5 transition-colors"
-            >
-              <Settings className="w-5 h-5 text-gray-400 shrink-0" />
-              <div>
-                <p className="text-sm font-medium text-white">Preferences</p>
-                <p className="text-xs text-gray-500">Quebec filter, notifications</p>
-              </div>
-            </button>
-          </li>
           <li>
             <Link
               to="/privacy"
