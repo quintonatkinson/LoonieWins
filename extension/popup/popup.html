@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>LoonieWins Autofill</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <header>
+      <div class="brand">
+        <img src="../icons/icon32.png" alt="" width="24" height="24" />
+        <div>
+          <strong>LoonieWins</strong>
+          <span>Autofill</span>
+        </div>
+      </div>
+      <a href="../options/options.html" target="_blank" rel="noreferrer">Options</a>
+    </header>
+
+    <p id="status" class="status" role="status"></p>
+
+    <form id="profile-form">
+      <label>Full name <input name="name" autocomplete="name" /></label>
+      <div class="row">
+        <label>First <input name="firstName" autocomplete="given-name" /></label>
+        <label>Last <input name="lastName" autocomplete="family-name" /></label>
+      </div>
+      <label>Email <input name="email" type="email" autocomplete="email" /></label>
+      <label>Phone <input name="phone" type="tel" autocomplete="tel" /></label>
+      <label>Address <input name="address" autocomplete="street-address" /></label>
+      <div class="row">
+        <label>City <input name="city" autocomplete="address-level2" /></label>
+        <label>Province <input name="province" autocomplete="address-level1" /></label>
+      </div>
+      <label>Postal code <input name="postalCode" autocomplete="postal-code" /></label>
+
+      <div class="actions">
+        <button type="submit" class="primary">Save profile</button>
+        <button type="button" id="fill-btn" class="accent">Fill this page</button>
+      </div>
+      <div class="actions secondary">
+        <button type="button" id="sync-tab-btn">Sync from LoonieWins tab</button>
+        <button type="button" id="sync-cloud-btn">Pull from Supabase</button>
+      </div>
+    </form>
+
+    <footer>
+      <small id="sync-meta">Not synced yet</small>
+      <small>Shortcut: Alt+Shift+L · Never paste a service_role key</small>
+    </footer>
+
+    <script type="module" src="popup.js"></script>
+  </body>
+</html>

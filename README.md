@@ -63,6 +63,10 @@ Canadian + American contest aggregator & offerwall — Win More, Work Less.
 - **Legal / store:** `/privacy`, `/terms`, `/support`, `/delete-account` + `public/legal/*.html`.
 - **Account deletion:** `public.delete_own_account()` in bootstrap (also `supabase/account_deletion.sql`).
 
+## Browser extension
+
+Chrome/Edge Manifest V3 autofill for giveaway forms lives in [`extension/`](./extension/). Load unpacked from that folder; see [`extension/README.md`](./extension/README.md) for install, sync (`looniewins_autofill` / Supabase anon), and security notes.
+
 ## Database
 
 Canonical bootstrap: `supabase/schema.sql` (TEXT-id Hive Mind `public.contests` + account/tracking/giveaways tables + RLS + delete RPC).
