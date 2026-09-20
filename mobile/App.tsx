@@ -1,5 +1,5 @@
 import './global.css'
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useMemo } from 'react'
 import { StatusBar } from 'expo-status-bar'
 import { View, ActivityIndicator, TouchableOpacity, Text } from 'react-native'
 import { Linking } from 'react-native'
@@ -7,30 +7,35 @@ import type { Contest } from './src/lib/rssFetcher'
 import { resolveContestUrl } from './src/lib/rssFetcher'
 import { AuthProvider, useAuth } from './src/contexts/AuthContext'
 import { UserEarnProvider } from './src/contexts/UserEarnContext'
+import { useContestEntries } from './src/hooks/useContestEntries'
 import AuthScreen from './src/components/AuthScreen'
 import Dashboard from './src/screens/Dashboard'
 import ContestBrowser from './src/screens/ContestBrowser'
 import SettingsScreen from './src/screens/SettingsScreen'
+import type { AutoFillData } from './src/types/profile'
 
 function AppContent() {
-  const { session, loading, authReady, profile } = useAuth()
+  const { session, loading, authReady, profile, updateProfile } = useAuth()
+  const { enteredIds, markEntered } = useContestEntries()
   const [overlayContest, setOverlayContest] = useState<Contest | null>(null)
   const [resolvedUrl, setResolvedUrl] = useState<string | null>(null)
   const [resolving, setResolving] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
 
-  const autoFillData = {
-    name:
-      profile?.auto_fill_data?.name ||
-      profile?.display_name ||
-      '',
-    email: profile?.auto_fill_data?.email || profile?.email || '',
-    address: profile?.auto_fill_data?.address || '',
-    phone: profile?.auto_fill_data?.phone,
-    city: profile?.auto_fill_data?.city,
-    province: profile?.auto_fill_data?.province,
-    postalCode: profile?.auto_fill_data?.postalCode,
-  }
+  const autoFillData: AutoFillData = useMemo(() => {
+    const data = profile?.auto_fill_data ?? {}
+    return {
+      name: data.name || profile?.display_name || '',
+      firstName: data.firstName,
+      lastName: data.lastName,
+      email: data.email || profile?.email || '',
+      address: data.address || '',
+      phone: data.phone,
+      city: data.city,
+      province: data.province,
+      postalCode: data.postalCode,
+    }
+  }, [profile])
 
   const handleOpenOverlay = useCallback((contest: Contest) => {
     setOverlayContest(contest)
@@ -50,6 +55,20 @@ function AppContent() {
     setOverlayContest(null)
     setResolvedUrl(null)
   }, [])
+
+  const handleMarkEntered = useCallback(
+    async (contest: Contest, status: 'entered' | 'submitted' = 'entered') => {
+      await markEntered(contest, status)
+    },
+    [markEntered]
+  )
+
+  const handleAutoFillUsed = useCallback(() => {
+    const remaining = profile?.smart_fills_remaining
+    if (typeof remaining === 'number' && remaining > 0) {
+      void updateProfile({ smart_fills_remaining: remaining - 1 })
+    }
+  }, [profile?.smart_fills_remaining, updateProfile])
 
   if (!authReady || loading) {
     return (
@@ -90,7 +109,11 @@ function AppContent() {
             <Text style={{ color: '#39FF14', fontSize: 13, fontWeight: '600' }}>Settings</Text>
           </TouchableOpacity>
         </View>
-        <Dashboard onOpenOverlay={handleOpenOverlay} onPressUrl={handlePressUrl} />
+        <Dashboard
+          onOpenOverlay={handleOpenOverlay}
+          onPressUrl={handlePressUrl}
+          enteredIds={enteredIds}
+        />
         {resolving && overlayContest && (
           <View
             style={{
@@ -108,7 +131,14 @@ function AppContent() {
           </View>
         )}
         {showBrowser && (
-          <ContestBrowser url={resolvedUrl} onClose={handleCloseOverlay} autoFillData={autoFillData} />
+          <ContestBrowser
+            url={resolvedUrl}
+            contest={overlayContest}
+            onClose={handleCloseOverlay}
+            autoFillData={autoFillData}
+            onMarkEntered={handleMarkEntered}
+            onAutoFillUsed={handleAutoFillUsed}
+          />
         )}
         <StatusBar style="light" />
       </View>
