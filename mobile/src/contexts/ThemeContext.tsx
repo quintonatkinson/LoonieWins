@@ -47,6 +47,7 @@ async function writeLocalAccent(id: AccentId): Promise<void> {
 }
 
 async function readRemoteAccent(): Promise<AccentId | null> {
+  if (!supabase) return null
   try {
     const { data: sessionData } = await supabase.auth.getSession()
     const userId = sessionData.session?.user?.id
@@ -65,6 +66,7 @@ async function readRemoteAccent(): Promise<AccentId | null> {
 }
 
 async function writeRemoteAccent(id: AccentId): Promise<void> {
+  if (!supabase) return
   try {
     const { data: sessionData } = await supabase.auth.getSession()
     const userId = sessionData.session?.user?.id
