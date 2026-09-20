@@ -1,5 +1,6 @@
 /**
  * Freemium tier rules + paywalled feature flags (mobile).
+ * Extra entries after free weekly cap: prize-tiered via entryPointCost.ts.
  */
 
 export const ENTRY_COST_PTS = 200
@@ -13,6 +14,34 @@ export const REFERRAL_SIGNUP_REFEREE_POINTS = 250
 export const XP_PER_LEVEL = 100
 export const COMEBACK_BONUS_XP = 50
 export const COMEBACK_BONUS_POINTS = 100
+
+export const PRO_LOCKED_FEATURES = [
+  {
+    id: 'unlimited_entries',
+    title: 'Unlimited contest entries',
+    detail: 'No weekly free-entry cap — never grind points to enter',
+  },
+  {
+    id: 'skip_point_grind',
+    title: 'Skip the point grind',
+    detail: 'Prize-tiered entry costs (75–1000 pts) do not apply to Pro',
+  },
+  {
+    id: 'unlimited_smart_fills',
+    title: 'Unlimited Smart-Fills',
+    detail: 'No 3-fill free cap — autofill every contest',
+  },
+  {
+    id: 'new_ending_rails',
+    title: 'New + Ending Tonight rails',
+    detail: 'Pro-only feed rails on Home for fresh drops and last-chance contests',
+  },
+  {
+    id: 'priority_push',
+    title: 'Priority ending-tonight push',
+    detail: 'Higher-urgency alerts when contests expire tonight',
+  },
+] as const
 
 export type SubscriptionTier = 'free' | 'weekly' | 'monthly'
 
@@ -92,16 +121,15 @@ export function levelForXp(xp: number): number {
 
 export const FREE_TIER_PERKS = [
   `${FREE_WEEKLY_ENTRY_CAP} free contest entries per week`,
-  `Extra entries: ${ENTRY_COST_PTS} pts each`,
+  'Extra entries: prize-tiered pts (75 Tims → 1000 vehicle)',
   `${FREE_SMART_FILLS_DEFAULT} Smart-Fills (then Pro)`,
+  'Earn pts via AdGem offers / rewarded path',
   'Standard push alerts',
   'Main Opportunity feed only',
 ] as const
 
 export const PRO_TIER_PERKS = [
-  'Unlimited contest entries — no weekly cap, no points to enter',
-  'Unlimited Smart-Fills',
-  'Priority ending-tonight push alerts',
-  'New + Ending Tonight Pro feed rails',
+  ...PRO_LOCKED_FEATURES.map((f) => `${f.title} — ${f.detail}`),
+  'Weekly or monthly subscription (not a one-time buy)',
   'Support LoonieWins development',
 ] as const

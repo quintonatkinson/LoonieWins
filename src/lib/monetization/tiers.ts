@@ -1,6 +1,10 @@
 /**
  * Freemium tier rules + paywalled feature flags.
  * Single source of truth for free caps / Pro unlocks.
+ *
+ * Extra entries after the free weekly cap use prize-tiered costs —
+ * see `entryPointCost.ts` (vehicle >> Tims). `ENTRY_COST_PTS` is the
+ * mid / default tier used in Earn copy and as the standard band.
  */
 
 export const ENTRY_COST_PTS = 200
@@ -15,6 +19,35 @@ export const XP_PER_LEVEL = 100
 /** XP + points granted when returning after a broken streak (prev streak ≥ 3). */
 export const COMEBACK_BONUS_XP = 50
 export const COMEBACK_BONUS_POINTS = 100
+
+/** Everything locked behind Pro — scannable list for Upgrade / SubscriptionModal. */
+export const PRO_LOCKED_FEATURES = [
+  {
+    id: 'unlimited_entries',
+    title: 'Unlimited contest entries',
+    detail: 'No weekly free-entry cap — never grind points to enter',
+  },
+  {
+    id: 'skip_point_grind',
+    title: 'Skip the point grind',
+    detail: 'Prize-tiered entry costs (75–1000 pts) do not apply to Pro',
+  },
+  {
+    id: 'unlimited_smart_fills',
+    title: 'Unlimited Smart-Fills',
+    detail: 'No 3-fill free cap — autofill every contest',
+  },
+  {
+    id: 'new_ending_rails',
+    title: 'New + Ending Tonight rails',
+    detail: 'Pro-only feed rails on Home for fresh drops and last-chance contests',
+  },
+  {
+    id: 'priority_push',
+    title: 'Priority ending-tonight push',
+    detail: 'Higher-urgency alerts when contests expire tonight',
+  },
+] as const
 
 export type SubscriptionTier = 'free' | 'weekly' | 'monthly'
 
@@ -97,16 +130,15 @@ export function levelForXp(xp: number): number {
 /** Copy for paywall / comparison UI */
 export const FREE_TIER_PERKS = [
   `${FREE_WEEKLY_ENTRY_CAP} free contest entries per week`,
-  `Extra entries: ${ENTRY_COST_PTS} pts each`,
+  'Extra entries: prize-tiered pts (75 Tims → 1000 vehicle)',
   `${FREE_SMART_FILLS_DEFAULT} Smart-Fills (then Pro)`,
+  'Earn pts via AdGem offers / rewarded path',
   'Standard push alerts',
   'Main Opportunity feed only',
 ] as const
 
 export const PRO_TIER_PERKS = [
-  'Unlimited contest entries — no weekly cap, no points to enter',
-  'Unlimited Smart-Fills',
-  'Priority ending-tonight push alerts',
-  'New + Ending Tonight Pro feed rails',
+  ...PRO_LOCKED_FEATURES.map((f) => `${f.title} — ${f.detail}`),
+  'Weekly or monthly subscription (not a one-time buy)',
   'Support LoonieWins development',
 ] as const
