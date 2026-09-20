@@ -6,24 +6,69 @@
     "scheme": "looniewins",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/icon.png",
+    "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "splash": {
-      "image": "./assets/images/splash-icon.png",
+      "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
       "backgroundColor": "#171717"
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.quinton.looniewins"
+      "bundleIdentifier": "com.quinton.looniewins",
+      "buildNumber": "1",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false,
+        "CFBundleDisplayName": "LoonieWins",
+        "UIBackgroundModes": ["remote-notification"]
+      },
+      "privacyManifests": {
+        "NSPrivacyAccessedAPITypes": [
+          {
+            "NSPrivacyAccessedAPIType": "NSPrivacyAccessedAPICategoryUserDefaults",
+            "NSPrivacyAccessedAPITypeReasons": ["CA92.1"]
+          }
+        ],
+        "NSPrivacyTracking": false
+      }
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/images/adaptive-icon.png",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png",
         "backgroundColor": "#171717"
       },
-      "package": "com.quinton.looniewins"
+      "package": "com.quinton.looniewins",
+      "versionCode": 1,
+      "permissions": [
+        "android.permission.POST_NOTIFICATIONS",
+        "android.permission.RECEIVE_BOOT_COMPLETED",
+        "android.permission.VIBRATE"
+      ],
+      "blockedPermissions": [
+        "android.permission.RECORD_AUDIO",
+        "android.permission.CAMERA",
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.READ_CONTACTS",
+        "com.google.android.gms.permission.AD_ID"
+      ]
+    },
+    "plugins": [
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/icon.png",
+          "color": "#39FF14",
+          "defaultChannel": "looniewins-alerts",
+          "sounds": []
+        }
+      ]
+    ],
+    "web": {
+      "favicon": "./assets/favicon.png"
     },
     "updates": {
       "fallbackToCacheTimeout": 0,
@@ -32,6 +77,13 @@
     "extra": {
       "eas": {
         "projectId": "dadf1677-cf3d-4425-a302-dc8d9378d952"
+      },
+      "legal": {
+        "privacyPolicyUrl": "REPLACE_WITH_HTTPS_ORIGIN/legal/privacy.html",
+        "termsUrl": "REPLACE_WITH_HTTPS_ORIGIN/legal/terms.html",
+        "supportUrl": "REPLACE_WITH_HTTPS_ORIGIN/legal/support.html",
+        "deleteAccountUrl": "REPLACE_WITH_HTTPS_ORIGIN/legal/delete-account.html",
+        "supportEmail": "REPLACE_WITH_SUPPORT_EMAIL"
       }
     },
     "owner": "quintonatkinson",

@@ -1,17 +1,63 @@
+import { useState } from 'react'
+import { FREE_TIER_PERKS, PRO_TIER_PERKS } from '../lib/monetization/tiers'
+import {
+  billingStatusNotice,
+  isIapConfigured,
+  restorePurchases,
+  type BillingPlanId,
+} from '../lib/billing/iap'
+import { PLAN_DISPLAY } from '../lib/billing/products'
+import { useAuth } from '../contexts/AuthContext'
+
 interface SubscriptionModalProps {
   open: boolean
   onClose: () => void
-  onSelectPlan?: (planId: 'weekly' | 'monthly') => void
+  onSelectPlan?: (planId: BillingPlanId) => void | Promise<void>
   /** When true, show Free vs Pro comparison (perks + pricing) at the top */
   showComparison?: boolean
 }
 
-export default function SubscriptionModal({ open, onClose, onSelectPlan, showComparison = false }: SubscriptionModalProps) {
+export default function SubscriptionModal({
+  open,
+  onClose,
+  onSelectPlan,
+  showComparison = true,
+}: SubscriptionModalProps) {
+  const { user } = useAuth()
+  const [busy, setBusy] = useState<BillingPlanId | 'restore' | null>(null)
+  const [error, setError] = useState<string | null>(null)
+
   if (!open) return null
 
-  const handleSelect = (planId: 'weekly' | 'monthly') => {
-    onSelectPlan?.(planId)
-    onClose()
+  const handleSelect = async (planId: BillingPlanId) => {
+    setError(null)
+    setBusy(planId)
+    try {
+      await onSelectPlan?.(planId)
+      onClose()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Purchase failed')
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  const handleRestore = async () => {
+    setError(null)
+    setBusy('restore')
+    try {
+      const res = await restorePurchases({ appUserId: user?.id })
+      if (!res.ok || !res.planId) {
+        setError(res.message)
+        return
+      }
+      await onSelectPlan?.(res.planId)
+      onClose()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Restore failed')
+    } finally {
+      setBusy(null)
+    }
   }
 
   return (
@@ -24,30 +70,33 @@ export default function SubscriptionModal({ open, onClose, onSelectPlan, showCom
         aria-labelledby="subscription-title"
       >
         <h2 id="subscription-title" className="text-lg font-bold text-gray-50">
-          Tired of grinding points?
+          Go Pro — clear the caps
         </h2>
         <p className="text-sm text-gray-400 mt-2 mb-4">
-          Unlimited Entries. No Points Needed.
+          Unlimited entries &amp; Smart-Fills, priority ending-tonight alerts, and Pro New / Ending
+          rails.
         </p>
 
         {showComparison && (
           <div className="mb-4 space-y-3 rounded-xl border border-gray-600/50 p-4 bg-gray-900/50">
             <div>
-              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Free Plan</p>
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">
+                Free Plan
+              </p>
               <ul className="text-sm text-gray-400 space-y-0.5">
-                <li>1 free contest entry per day</li>
-                <li>Extra entries: 200 pts each</li>
-                <li>Earn points via surveys & tasks</li>
-                <li>3 Smart-Fills per day</li>
+                {FREE_TIER_PERKS.map((line) => (
+                  <li key={line}>{line}</li>
+                ))}
               </ul>
             </div>
             <div>
-              <p className="text-xs font-semibold text-amber-400 uppercase tracking-wide mb-1">Pro Plan</p>
+              <p className="text-xs font-semibold text-amber-400 uppercase tracking-wide mb-1">
+                Pro Plan
+              </p>
               <ul className="text-sm text-gray-300 space-y-0.5">
-                <li>Unlimited contest entries</li>
-                <li>No points required</li>
-                <li>Unlimited Smart-Fills</li>
-                <li>Support development</li>
+                {PRO_TIER_PERKS.map((line) => (
+                  <li key={line}>{line}</li>
+                ))}
               </ul>
               <p className="text-amber-400 text-sm mt-2 font-medium">From $1.49/week or $4.99/mo</p>
             </div>
@@ -55,23 +104,36 @@ export default function SubscriptionModal({ open, onClose, onSelectPlan, showCom
         )}
 
         <div className="space-y-3">
-          <button
-            type="button"
-            onClick={() => handleSelect('weekly')}
-            className="w-full rounded-xl glass border border-amber-500/20 p-4 text-left hover:border-amber-500/40 transition-colors"
-          >
-            <p className="font-semibold text-gray-50">Bi-Weekly Coffee</p>
-            <p className="text-amber-400 text-sm mt-0.5">$1.49 / week</p>
-          </button>
-          <button
-            type="button"
-            onClick={() => handleSelect('monthly')}
-            className="w-full rounded-xl glass border border-amber-500/20 p-4 text-left hover:border-amber-500/40 transition-colors"
-          >
-            <p className="font-semibold text-gray-50">Monthly Saver</p>
-            <p className="text-amber-400 text-sm mt-0.5">$4.99 / mo</p>
-          </button>
+          {(['weekly', 'monthly'] as const).map((planId) => (
+            <button
+              key={planId}
+              type="button"
+              disabled={busy != null}
+              onClick={() => void handleSelect(planId)}
+              className="w-full rounded-xl glass border border-amber-500/20 p-4 text-left hover:border-amber-500/40 transition-colors disabled:opacity-60"
+            >
+              <p className="font-semibold text-gray-50">{PLAN_DISPLAY[planId].title}</p>
+              <p className="text-amber-400 text-sm mt-0.5">
+                {busy === planId ? 'Processing…' : PLAN_DISPLAY[planId].priceLabel}
+              </p>
+            </button>
+          ))}
         </div>
+
+        {isIapConfigured() && (
+          <button
+            type="button"
+            disabled={busy != null}
+            onClick={() => void handleRestore()}
+            className="mt-3 w-full py-2 rounded-lg text-sm text-gray-300 hover:text-gray-50 disabled:opacity-60"
+          >
+            {busy === 'restore' ? 'Restoring…' : 'Restore purchases'}
+          </button>
+        )}
+
+        {error && <p className="mt-3 text-sm text-red-400">{error}</p>}
+
+        <p className="mt-3 text-[11px] text-gray-500 leading-snug">{billingStatusNotice()}</p>
 
         <button
           type="button"
