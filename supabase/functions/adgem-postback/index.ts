@@ -10,7 +10,7 @@
  *   ADGEM_POSTBACK_KEY   (AdGem dashboard Postback Key for HMAC)
  * Optional:
  *   ADGEM_APP_ID         (reject mismatched app_id)
- *   ADGEM_POINTS_PER_USD (default 1000 — maps payout dollars → in-app points)
+ *   ADGEM_POINTS_PER_USD (default 1000 — maps payout USD → pts; prefer payout over amount)
  *
  * AdGem Postback URL (v2 GET example):
  *   https://oftunznsumfidavvbqz.supabase.co/functions/v1/adgem-postback
@@ -60,15 +60,22 @@ function json(status: number, body: Record<string, unknown>): Response {
   })
 }
 
+/**
+ * Prefer AdGem `payout` (true publisher USD) × POINTS_PER_USD so credits track
+ * Quinton's revenue even if the dashboard virtual-currency `amount` rate drifts.
+ * Fall back to `amount` only when payout is missing.
+ */
 function pointsFromPayload(
   amountRaw: string | null,
   payoutRaw: string | null,
   pointsPerUsd: number
 ): number {
+  const payout = Number(payoutRaw)
+  if (Number.isFinite(payout) && payout > 0) {
+    return Math.max(1, Math.round(payout * pointsPerUsd))
+  }
   const amount = Number(amountRaw)
   if (Number.isFinite(amount) && amount > 0) return Math.round(amount)
-  const payout = Number(payoutRaw)
-  if (Number.isFinite(payout) && payout > 0) return Math.max(1, Math.round(payout * pointsPerUsd))
   return 0
 }
 

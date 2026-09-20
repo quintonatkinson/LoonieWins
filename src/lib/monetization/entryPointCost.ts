@@ -20,20 +20,24 @@ export type EntryCostTier =
   | 'premium'
   | 'mega'
 
-/** Points charged per tier after free weekly entries are exhausted. */
+/**
+ * Points charged per tier after free weekly entries are exhausted.
+ * Calibrated so Tims ≈ 2–3 rewarded videos (~$0.05) and vehicle ≈ 1 strong CPI (~$3).
+ * See `pointsEconomy.ts` + store docs/points-economy.md.
+ */
 export const ENTRY_COST_BY_TIER: Record<EntryCostTier, number> = {
-  /** Tims, coffee, small gift cards */
-  micro: 75,
-  /** Everyday CPG / low ARV */
+  /** Tims, coffee, small gift cards — ~$0.05 publisher revenue */
+  micro: 50,
+  /** Everyday CPG / low ARV — ~$0.10 */
   low: 100,
-  /** Default / mid-value (~electronics small) */
+  /** Default / mid-value (~electronics small) — ~$0.25 */
   standard: ENTRY_COST_PTS,
-  /** Trips, bigger electronics */
-  high: 400,
-  /** High-ticket non-vehicle */
-  premium: 600,
-  /** Vehicles, house, mega jackpots */
-  mega: 1000,
+  /** Trips, bigger electronics — ~$0.75 */
+  high: 750,
+  /** High-ticket non-vehicle — ~$1.50 (1 typical CPI) */
+  premium: 1500,
+  /** Vehicles, house, mega jackpots — ~$3.00 (1 strong CPI) */
+  mega: 3000,
 }
 
 export const ENTRY_COST_TIER_LABELS: Record<EntryCostTier, string> = {
