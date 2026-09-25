@@ -18,7 +18,7 @@ export function reportUrl(url: string): void {
   set.add(url.trim())
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify([...set]))
-  } catch (_) {
+  } catch {
     /* ignore */
   }
 }

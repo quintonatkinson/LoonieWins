@@ -7,14 +7,25 @@ export interface TagResult {
   restrictions: string[]
 }
 
-const DAILY_PATTERNS = /\b(daily|every day|24h|\[daily\])\b/i
-const INSTANT_PATTERNS = /\b(instant|iw)\b/i
-const QUEBEC_EXCLUDED_PATTERNS = /\b(no qc|void in qc|excl quebec|excl\.?\s*quebec|rest of canada|quebec excluded|qc excluded|\[no qc\])\b/i
+// Note: `\b` next to non-word chars ("18+", "[daily]", "$10,000") never matches, so those
+// alternatives are anchored with explicit boundaries instead.
+const DAILY_PATTERNS = /\b(daily|every day|24h)\b|\[daily\]/i
+const INSTANT_PATTERNS = /\binstant[\s-]?win|\bwin instantly\b|\biw\b/i
+const QUEBEC_EXCLUDED_PATTERNS =
+  /\b(no qc|void in (qc|quebec)|excl\.?\s*(qc|quebec)|excluding (the province of )?(qc|quebec)|except (in )?(qc|quebec)|other than (qc|quebec)|rest of canada|quebec excluded|qc excluded|(qc|quebec) residents (are )?not eligible|not open to (residents of )?(qc|quebec))\b|\[no qc\]/i
 const HIGH_VALUE_PATTERNS =
-  /\b(car|truck|vehicle|trip|vacation|cruise|\$10,?000|\$1,?000,?000|cash|ram\b|f-?150|silverado)\b/i
-const MATH_PATTERNS = /\b(math|skill testing|equation|answer correctly)\b/i
-const AGE_PATTERNS = /\b(18\+|21\+|18 years|21 years|age of majority)\b/i
-const SINGLE_ENTRY_PATTERNS = /\b(single entry|one time|one entry|1 entry per person|\[once\])\b/i
+  /\b(car|truck|suv|vehicle|trip|vacation|cruise|cash|ram|f-?150|silverado)\b|\$\s?(\d{2,3},?\d{3}|\d(,\d{3}){2})\b/i
+const MATH_PATTERNS = /\b(math|skill[\s-]testing|equation|answer correctly)\b/i
+const AGE_PATTERNS = /(^|[^\d])(18|19|21)\+|\b(18|19|21) years|\bage of majority\b/i
+const SINGLE_ENTRY_PATTERNS = /\b(single entry|one time|one entry|1 entry per person)\b|\[once\]/i
+
+/** Lowercase + strip accents so "Québec" matches "quebec". */
+function foldText(text: string): string {
+  return text
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+}
 const WEEKLY_PATTERNS = /\b(weekly|every week)\b/i
 
 /** Explicit buy-to-enter / purchase-required (avoid matching "No Purchase Necessary"). */
@@ -53,7 +64,7 @@ function hasHeavyRequirements(text: string): boolean {
 export function autoCategorize(title: string, body: string): TagResult {
   const tags: string[] = []
   const restrictions: string[] = []
-  const text = `${title} ${body}`.toLowerCase()
+  const text = foldText(`${title} ${body}`)
 
   if (DAILY_PATTERNS.test(text)) tags.push('Daily')
   if (INSTANT_PATTERNS.test(text)) tags.push('Instant Win')
@@ -74,9 +85,12 @@ export function autoCategorize(title: string, body: string): TagResult {
 }
 
 // Eligibility: NA first (multi-country), then US (strict), then CA
-const ELIG_NA = /\b(us and canada|north america|us\/ca|us\s*&\s*canada)\b/i
-const ELIG_US = /\b(50 us|us only|united states only|residents of the us|us residents only)\b/i
-const ELIG_CA = /\b(residents of canada|canada only|canadian residents)\b/i
+const ELIG_NA =
+  /\b(us and canada|canada and (the )?(us|united states)|north america|us\/ca|us\s*&\s*canada|canada\s*&\s*(the )?us)\b/i
+const ELIG_US =
+  /\b(50 us|50 united states|us only|u\.s\. only|united states only|residents of the (us|u\.s\.|united states)|us residents only|u\.s\. residents|legal residents of the 50)\b/i
+const ELIG_CA =
+  /\b(residents of canada|canada only|canadian residents|open to (all )?canadians|canada[\s-]wide|residents of (ontario|quebec|british columbia|alberta|manitoba|saskatchewan|nova scotia|new brunswick|newfoundland|prince edward island))\b/i
 
 export interface MetadataResult {
   eligibility: 'CA' | 'US' | 'NA' | 'Unknown'
@@ -89,7 +103,7 @@ export interface MetadataResult {
  * USA detection is strict to avoid false positives for Canadian users.
  */
 export function scanForMetadata(title: string, body: string): MetadataResult {
-  const text = `${title} ${body}`.toLowerCase()
+  const text = foldText(`${title} ${body}`)
   let eligibility: 'CA' | 'US' | 'NA' | 'Unknown' = 'Unknown'
   let eligibilityUnverified = false
   const requirements: string[] = []

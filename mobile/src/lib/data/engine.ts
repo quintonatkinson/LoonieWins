@@ -10,6 +10,7 @@ import type { Contest, RawFeedItem, Rss2JsonItem } from './normalizer'
 import { normalizeJsonItem, normalizeXmlItem } from './normalizer'
 import { deepScrape } from './linkResolver'
 import { estimatePrizeValue } from './valuationDictionary'
+import { DOMParser as XmlDOMParser } from '@xmldom/xmldom'
 
 const RSS2JSON_URL = 'https://api.rss2json.com/v1/api.json'
 const CORSPROXY_URL = 'https://corsproxy.io/?'
@@ -19,7 +20,7 @@ type FetchResult =
   | { strategy: 'B'; data: string }
   | { strategy: 'C' }
 
-const RSS2JSON_COUNT = import.meta.env.VITE_RSS2JSON_API_KEY ? 100 : 50
+const RSS2JSON_COUNT = process.env.EXPO_PUBLIC_RSS2JSON_API_KEY ? 100 : 50
 
 /**
  * Try Strategy B (corsproxy XML) first for full feeds, then A (rss2json), then C (no data).
@@ -32,7 +33,7 @@ async function fetchWithFallback(
 ): Promise<FetchResult> {
   const encodedUrl = encodeURIComponent(feedUrl)
   const cacheBust = '&t=' + Date.now()
-  const apiKey = import.meta.env.VITE_RSS2JSON_API_KEY
+  const apiKey = process.env.EXPO_PUBLIC_RSS2JSON_API_KEY
   const rss2jsonParams = apiKey
     ? `rss_url=${encodedUrl}&api_key=${apiKey}&count=${RSS2JSON_COUNT}${cacheBust}`
     : `rss_url=${encodedUrl}${cacheBust}`
@@ -45,7 +46,7 @@ async function fetchWithFallback(
         console.log('Success using Strategy A (rss2json)', json.items.length, 'items')
         return { strategy: 'A', data: json as { status: string; items: Rss2JsonItem[] } }
       }
-    } catch (_) {
+    } catch {
       /* fall through */
     }
     return null
@@ -60,7 +61,7 @@ async function fetchWithFallback(
         console.log('Strategy B (corsproxy)', rawItems.length, 'items')
         return { strategy: 'B', data: xml }
       }
-    } catch (_) {
+    } catch {
       /* fall through */
     }
     return null
@@ -72,23 +73,53 @@ async function fetchWithFallback(
   return (await tryCorsProxy()) ?? (await tryRss2Json()) ?? { strategy: 'C' }
 }
 
+type XmlEl = {
+  textContent: string | null
+  getAttribute(name: string): string | null
+  getElementsByTagName(name: string): { length: number; [i: number]: XmlEl }
+}
+
+/** First descendant matching any tag name (qualified names like `content:encoded` work in xmldom). */
+function firstEl(root: XmlEl, ...names: string[]): XmlEl | undefined {
+  for (const name of names) {
+    const found = root.getElementsByTagName(name)
+    if (found.length > 0) return found[0]
+  }
+  return undefined
+}
+
+function textOf(root: XmlEl, ...names: string[]): string | undefined {
+  for (const name of names) {
+    const t = firstEl(root, name)?.textContent?.trim()
+    if (t) return t
+  }
+  return undefined
+}
+
+function listOf(root: XmlEl, name: string): XmlEl[] {
+  const found = root.getElementsByTagName(name)
+  const out: XmlEl[] = []
+  for (let i = 0; i < found.length; i++) out.push(found[i])
+  return out
+}
+
+/** React Native has no DOMParser/querySelector — parse RSS/Atom with xmldom. */
 function parseFeedXml(xml: string): RawFeedItem[] {
-  const parser = new DOMParser()
-  const doc = parser.parseFromString(xml, 'text/xml')
-  const itemNodes = doc.querySelectorAll('item')
-  const atomNodes = doc.querySelectorAll('entry')
-  const nodes = itemNodes.length ? itemNodes : atomNodes
+  const parser = new XmlDOMParser({ errorHandler: { warning: () => {}, error: () => {} } })
+  const doc = parser.parseFromString(xml, 'text/xml') as unknown as XmlEl
+  const itemNodes = listOf(doc, 'item')
+  const nodes = itemNodes.length ? itemNodes : listOf(doc, 'entry')
   const entries: RawFeedItem[] = []
 
   const feedLinkPattern = /\/(feed|rss)(\/|$)|atom\.xml$/i
 
   nodes.forEach((item) => {
-    const title = item.querySelector('title')?.textContent?.trim() ?? ''
-    const linkEls = item.querySelectorAll('link')
+    const title = textOf(item, 'title') ?? ''
+    const linkEls = listOf(item, 'link')
     let link = ''
     for (const el of linkEls) {
       if (el.getAttribute('rel') === 'self') continue
-      const href = (el.getAttribute('href') ?? el.textContent?.trim() ?? '').trim()
+      const href = (el.getAttribute('href') || el.textContent?.trim() || '').trim()
       if (!href) continue
       if (feedLinkPattern.test(href)) continue
       link = href
@@ -96,33 +127,17 @@ function parseFeedXml(xml: string): RawFeedItem[] {
     }
     if (!link && linkEls.length > 0) {
       const first = linkEls[0]
-      link = (first?.getAttribute('href') ?? first?.textContent?.trim() ?? '').trim()
+      link = (first.getAttribute('href') || first.textContent?.trim() || '').trim()
     }
-    const description =
-      item.querySelector('description')?.textContent?.trim() ??
-      item.querySelector('summary')?.textContent?.trim()
-    const pubDate =
-      item.querySelector('pubDate')?.textContent?.trim() ??
-      item.querySelector('published')?.textContent?.trim() ??
-      item.querySelector('updated')?.textContent?.trim()
-    const enc = item.querySelector('enclosure')
-    const enclosure = enc?.getAttribute('url') ?? undefined
+    const description = textOf(item, 'description', 'summary')
+    const pubDate = textOf(item, 'pubDate', 'published', 'updated', 'dc:date')
+    const enclosure = firstEl(item, 'enclosure')?.getAttribute('url') || undefined
     const mediaContent =
-      item.querySelector('media\\:content')?.getAttribute('url') ??
-      item.querySelector('content')?.getAttribute('url') ??
+      firstEl(item, 'media:content')?.getAttribute('url') ||
+      firstEl(item, 'content')?.getAttribute('url') ||
       undefined
-    const contentEncoded = item.querySelector('content\\:encoded')?.textContent?.trim()
-    let content = item.querySelector('content')?.textContent?.trim()
-    if (!content && item.getElementsByTagName('content').length > 0) {
-      content = item.getElementsByTagName('content')[0]?.textContent?.trim() ?? undefined
-    }
-    if (!content) {
-      const atomContent = item.getElementsByTagNameNS('http://www.w3.org/2005/Atom', 'content')[0]
-      content = atomContent?.textContent?.trim() ?? undefined
-    }
-    if (!content) {
-      content = item.querySelector('summary')?.textContent?.trim() ?? undefined
-    }
+    const contentEncoded = textOf(item, 'content:encoded')
+    const content = textOf(item, 'content', 'summary')
 
     if (title && link) {
       entries.push({
@@ -239,7 +254,7 @@ export async function fetchAllContests(): Promise<{
     for (const c of results) {
       if (!byUrl.has(c.url)) byUrl.set(c.url, c)
     }
-    let list = [...byUrl.values()]
+    const list = [...byUrl.values()]
     list.sort((a, b) => {
       const da = a.expiryDate ? new Date(a.expiryDate).getTime() : 0
       const db = b.expiryDate ? new Date(b.expiryDate).getTime() : 0
@@ -305,7 +320,7 @@ export async function fetchRawContests(): Promise<{
   for (const c of results) {
     if (!byUrl.has(c.url)) byUrl.set(c.url, c)
   }
-  let list = [...byUrl.values()]
+  const list = [...byUrl.values()]
   list.sort((a, b) => {
     const da = a.expiryDate ? new Date(a.expiryDate).getTime() : 0
     const db = b.expiryDate ? new Date(b.expiryDate).getTime() : 0
@@ -342,9 +357,17 @@ export async function enrichContest(contest: Contest): Promise<Contest> {
     prizeValue = result.scrapedValue
   }
 
-  const eligibility = result.scrapedEligibility ?? contest.eligibility
-  const eligibilityUnverified = result.scrapedEligibilityUnverified ?? contest.eligibilityUnverified
-  const requirements = result.scrapedRequirements ?? contest.requirements ?? []
+  // A page that doesn't restate eligibility (cookie wall, short post, blocked fetch) scans as
+  // 'Unknown' — never let that erase the feed's own CA/US signal.
+  const scrapedElig = result.scrapedEligibility
+  const useScraped = scrapedElig != null && scrapedElig !== 'Unknown'
+  const eligibility = useScraped ? scrapedElig : contest.eligibility
+  const eligibilityUnverified = useScraped
+    ? result.scrapedEligibilityUnverified
+    : contest.eligibilityUnverified
+  const requirements = [
+    ...new Set([...(contest.requirements ?? []), ...(result.scrapedRequirements ?? [])]),
+  ]
   const rssTags = contest.tags ?? []
   const rssRestrictions = contest.restrictions ?? []
   const scrapedTags = result.scrapedTags ?? []

@@ -221,7 +221,7 @@ export function syncToVault(enrichedContests: Contest[]): void {
 /**
  * Returns vault contests that are still live (from local storage).
  * - expiryDate > now OR undefined
- * - linkStatus is not 403, 404, or 500
+ * - linkStatus is not a proven-dead status (404 / 410)
  */
 export function getLiveContests(): Contest[] {
   const vault = loadVault()
@@ -253,7 +253,7 @@ export function getPastContests(): Contest[] {
 
 /**
  * Search Hive Mind history: local vault + Supabase contests table.
- * Dead links (403/404/410/5xx) are buried from primary results.
+ * Dead links (404/410) are buried from primary results.
  */
 export async function searchHiveMind(
   query: string,

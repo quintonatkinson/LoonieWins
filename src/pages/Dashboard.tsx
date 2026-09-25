@@ -23,6 +23,14 @@ import {
 } from '../lib/utils/expiryDate'
 import { isEndingTonight } from '../lib/utils/countdownLabel'
 import { isDeadLink } from '../lib/utils/linkHealth'
+import {
+  TAG_REQ_FILTERS,
+  buildEnterNextQueue,
+  contestPassesFeedFilters,
+  passesBaseFilters,
+  sortByBestOdds,
+  type FeedFilterOptions,
+} from '../lib/feed/filters'
 import { saveAgeConfirmed } from '../lib/utils/ageGate'
 import {
   loadHomeMode,
@@ -42,8 +50,6 @@ import {
   resolveFeedDisplayPrefs,
   saveFeedDisplayPrefsLocal,
   withFeedDisplayPrefs,
-  isPurchaseRequiredContest,
-  isAdultContest,
   type CardDensity,
   type SortDefault,
 } from '../lib/utils/userSettings'
@@ -60,45 +66,6 @@ function compareCreatedDescending(a?: string | null, b?: string | null): number 
   const va = Number.isFinite(ta) ? ta : 0
   const vb = Number.isFinite(tb) ? tb : 0
   return vb - va
-}
-
-/** Filter by tag or requirement — matches contest.tags or contest.requirements */
-const TAG_REQ_FILTERS: { key: string; label: string; match: (c: Contest) => boolean }[] = [
-  {
-    key: 'easy',
-    label: '⚡ Easy Entry',
-    match: (c) => {
-      const tags = c.tags ?? []
-      const reqs = c.requirements ?? []
-      if (tags.includes('⚡ Easy Entry')) return true
-      if (reqs.length === 0 && !tags.includes('🧾 Purchase')) return true
-      return false
-    },
-  },
-  { key: 'purchase', label: 'Purchase Required', match: (c) => (c.requirements ?? []).includes('Purchase Required') },
-  { key: 'app', label: 'App Download', match: (c) => (c.requirements ?? []).includes('App Download') },
-  { key: 'social', label: 'Social Follow', match: (c) => (c.requirements ?? []).includes('Social Action') },
-  { key: 'creative', label: 'Creative', match: (c) => (c.requirements ?? []).includes('Creative Submission') },
-  { key: 'newsletter', label: 'Newsletter', match: (c) => (c.requirements ?? []).includes('Newsletter Signup') },
-  { key: 'daily', label: 'Daily', match: (c) => (c.tags ?? []).includes('Daily') },
-  { key: 'instant', label: 'Instant Win', match: (c) => (c.tags ?? []).includes('Instant Win') },
-  { key: 'highvalue', label: 'High Value', match: (c) => (c.tags ?? []).includes('High Value') },
-  { key: 'math', label: 'Math', match: (c) => (c.tags ?? []).includes('🧠 Math') },
-  { key: '18plus', label: '18+', match: (c) => (c.tags ?? []).includes('18+') },
-  { key: 'single', label: 'Single Entry', match: (c) => (c.tags ?? []).includes('1 Single Entry') },
-  { key: 'weekly', label: 'Weekly', match: (c) => (c.tags ?? []).includes('Weekly') },
-]
-
-function passesGeo(c: Contest, geoFilter: GeoFilterValue): boolean {
-  if (geoFilter === 'CA') {
-    const elig = c.eligibility ?? 'Unknown'
-    if (elig === 'US') return false
-  }
-  if (geoFilter === 'US') {
-    const elig = c.eligibility ?? 'Unknown'
-    if (elig === 'CA') return false
-  }
-  return true
 }
 
 export default function Dashboard() {
@@ -181,7 +148,7 @@ export default function Dashboard() {
       } catch {
         /* ignore */
       }
-      if (qc) {
+      if (qc && profile.settings?.quebecSafe !== true) {
         saveQuebecSafe(true)
         void updateProfile({
           settings: { ...(profile.settings ?? {}), quebecSafe: true },
@@ -431,36 +398,23 @@ export default function Dashboard() {
     }
   }, [search])
 
-  const filterContest = useCallback(
-    (c: Contest, opts?: { ignoreEntered?: boolean }) => {
-      if (isDeadLink(c)) return false
-      if (!opts?.ignoreEntered && hideEntered && enteredIds.has(c.id)) return false
-      if (quebecSafe && c.restrictions?.includes('no_quebec')) return false
-      if (hidePurchaseRequired && isPurchaseRequiredContest(c)) return false
-      if (hideAdult && isAdultContest(c)) return false
-      if (!passesGeo(c, geoFilter)) return false
-      if (search.trim()) {
-        const q = search.toLowerCase()
-        if (!c.title.toLowerCase().includes(q) && !(c.source ?? '').toLowerCase().includes(q)) {
-          return false
-        }
-      }
-      if (tagFilters.size > 0) {
-        const matchesAny = TAG_REQ_FILTERS.some((f) => tagFilters.has(f.key) && f.match(c))
-        if (!matchesAny) return false
-      }
-      return true
-    },
-    [
-      hideEntered,
-      enteredIds,
+  const filterOpts = useMemo<FeedFilterOptions>(
+    () => ({
+      geoFilter,
       quebecSafe,
       hidePurchaseRequired,
       hideAdult,
-      geoFilter,
+      hideEntered,
+      enteredIds,
       search,
       tagFilters,
-    ]
+    }),
+    [geoFilter, quebecSafe, hidePurchaseRequired, hideAdult, hideEntered, enteredIds, search, tagFilters]
+  )
+
+  const filterContest = useCallback(
+    (c: Contest, opts?: { ignoreEntered?: boolean }) => contestPassesFeedFilters(c, filterOpts, opts),
+    [filterOpts]
   )
 
   const sortFeed = useCallback(
@@ -479,23 +433,19 @@ export default function Dashboard() {
       if (sortFilter === 'ending-soon') {
         return [...list].sort((a, b) => compareExpiryAscending(a.expiryDate, b.expiryDate))
       }
+      if (sortFilter === 'best-odds') {
+        return sortByBestOdds(list, social.countFor)
+      }
       return list
     },
     [sortFilter, social]
   )
 
-  /** Enter-next queue: not-yet-entered, Quebec/geo aware, ending soon first; bury dead links */
-  const enterNextQueue = useMemo(() => {
-    const base = liveContests.filter(
-      (c) =>
-        !enteredIds.has(c.id) &&
-        c.id !== '__offline_alert__' &&
-        !isDeadLink(c) &&
-        passesGeo(c, geoFilter) &&
-        !(quebecSafe && c.restrictions?.includes('no_quebec'))
-    )
-    return [...base].sort((a, b) => compareExpiryAscending(a.expiryDate, b.expiryDate)).slice(0, 25)
-  }, [liveContests, enteredIds, geoFilter, quebecSafe])
+  /** Enter-next queue: not yet entered, honours every hide pref, ending soon first */
+  const enterNextQueue = useMemo(
+    () => buildEnterNextQueue(liveContests, filterOpts),
+    [liveContests, filterOpts]
+  )
 
   useEffect(() => {
     enterNextQueueRef.current = enterNextQueue
@@ -503,15 +453,10 @@ export default function Dashboard() {
 
   const nextContest = enterNextQueue[0] ?? null
 
-  const railBase = useMemo(() => {
-    return liveContests.filter(
-      (c) =>
-        c.id !== '__offline_alert__' &&
-        !isDeadLink(c) &&
-        passesGeo(c, geoFilter) &&
-        !(quebecSafe && c.restrictions?.includes('no_quebec'))
-    )
-  }, [liveContests, geoFilter, quebecSafe])
+  const railBase = useMemo(
+    () => liveContests.filter((c) => c.id !== '__offline_alert__' && passesBaseFilters(c, filterOpts)),
+    [liveContests, filterOpts]
+  )
 
   const newRail = useMemo(() => {
     const cutoff = Date.now() - NEW_RAIL_MS

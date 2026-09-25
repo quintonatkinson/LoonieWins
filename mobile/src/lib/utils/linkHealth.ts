@@ -2,7 +2,11 @@
  * Dead / blocked contest URL detection for primary rails and Hive search.
  */
 
-export const DEAD_LINK_STATUSES = [403, 404, 410, 500, 502, 503] as const
+/**
+ * Only statuses that prove the page is gone. 403 / 5xx come back from the CORS proxy when it
+ * is rate-limited or the host blocks bots, so they must not hide (or persist as dead) a live contest.
+ */
+export const DEAD_LINK_STATUSES = [404, 410] as const
 
 export function isDeadLinkStatus(status?: number | null): boolean {
   if (status == null) return false

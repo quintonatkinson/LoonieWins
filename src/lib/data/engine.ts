@@ -45,7 +45,7 @@ async function fetchWithFallback(
         console.log('Success using Strategy A (rss2json)', json.items.length, 'items')
         return { strategy: 'A', data: json as { status: string; items: Rss2JsonItem[] } }
       }
-    } catch (_) {
+    } catch {
       /* fall through */
     }
     return null
@@ -60,7 +60,7 @@ async function fetchWithFallback(
         console.log('Strategy B (corsproxy)', rawItems.length, 'items')
         return { strategy: 'B', data: xml }
       }
-    } catch (_) {
+    } catch {
       /* fall through */
     }
     return null
@@ -239,7 +239,7 @@ export async function fetchAllContests(): Promise<{
     for (const c of results) {
       if (!byUrl.has(c.url)) byUrl.set(c.url, c)
     }
-    let list = [...byUrl.values()]
+    const list = [...byUrl.values()]
     list.sort((a, b) => {
       const da = a.expiryDate ? new Date(a.expiryDate).getTime() : 0
       const db = b.expiryDate ? new Date(b.expiryDate).getTime() : 0
@@ -305,7 +305,7 @@ export async function fetchRawContests(): Promise<{
   for (const c of results) {
     if (!byUrl.has(c.url)) byUrl.set(c.url, c)
   }
-  let list = [...byUrl.values()]
+  const list = [...byUrl.values()]
   list.sort((a, b) => {
     const da = a.expiryDate ? new Date(a.expiryDate).getTime() : 0
     const db = b.expiryDate ? new Date(b.expiryDate).getTime() : 0
@@ -342,9 +342,17 @@ export async function enrichContest(contest: Contest): Promise<Contest> {
     prizeValue = result.scrapedValue
   }
 
-  const eligibility = result.scrapedEligibility ?? contest.eligibility
-  const eligibilityUnverified = result.scrapedEligibilityUnverified ?? contest.eligibilityUnverified
-  const requirements = result.scrapedRequirements ?? contest.requirements ?? []
+  // A page that doesn't restate eligibility (cookie wall, short post, blocked fetch) scans as
+  // 'Unknown' — never let that erase the feed's own CA/US signal.
+  const scrapedElig = result.scrapedEligibility
+  const useScraped = scrapedElig != null && scrapedElig !== 'Unknown'
+  const eligibility = useScraped ? scrapedElig : contest.eligibility
+  const eligibilityUnverified = useScraped
+    ? result.scrapedEligibilityUnverified
+    : contest.eligibilityUnverified
+  const requirements = [
+    ...new Set([...(contest.requirements ?? []), ...(result.scrapedRequirements ?? [])]),
+  ]
   const rssTags = contest.tags ?? []
   const rssRestrictions = contest.restrictions ?? []
   const scrapedTags = result.scrapedTags ?? []

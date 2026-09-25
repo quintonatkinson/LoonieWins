@@ -137,7 +137,7 @@ function extractMainContentHtml(html: string): string {
       const htmlLen = el?.innerHTML?.length ?? 0
       if (el && htmlLen > 200) return el.innerHTML
     }
-  } catch (_) {
+  } catch {
     /* fall through */
   }
   return html
@@ -202,7 +202,7 @@ async function extractFinalUrl(html: string, baseUrl: string): Promise<string> {
       clearTimeout(t)
       const body = await res.text()
       if (looksLikeContestPage(body)) return url
-    } catch (_) {
+    } catch {
       /* try next candidate */
     }
   }
@@ -255,7 +255,7 @@ function extractExpiryFromHtml(html: string): string | undefined {
         if (!Number.isNaN(d.getTime())) return d.toISOString()
       }
     }
-  } catch (_) {
+  } catch {
     // fall through
   }
   return undefined
@@ -335,7 +335,7 @@ export async function deepScrape(url: string, rssContent?: string): Promise<Deep
 
     cache.set(cacheKey, { result, ts: Date.now() })
     return result
-  } catch (_) {
+  } catch {
     const fallback: DeepScrapeResult = { finalUrl: cleanUrl, status: 500 }
     cache.set(cacheKey, { result: fallback, ts: Date.now() })
     return fallback

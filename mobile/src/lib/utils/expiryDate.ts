@@ -1,41 +1,56 @@
 /**
  * Expiry date helpers: normalize date-only strings to end-of-day EST.
+ * If contest says "Ends Jan 1", assume Jan 1 11:59 PM EST.
  */
 
 const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/
 const DATE_SPACE_TIME = /^(\d{4}-\d{2}-\d{2})[ T](\d{2}:\d{2}(?::\d{2})?(?:\.\d+)?)/
 
+/**
+ * Parse expiry date. If date-only (no time), treat as end-of-day EST (11:59 PM).
+ * Full ISO with time is used as-is. Invalid → NaN Date.
+ */
 export function toExpiryEndOfDay(dateStr: string): Date {
   const s = dateStr.trim()
   if (!s) return new Date(NaN)
 
+  // Pure date-only: end of day Eastern
   if (DATE_ONLY.test(s) || (!/[T ]\d{2}:/.test(s) && !/T/.test(s))) {
+    // Prefer YYYY-MM-DD; also handle "Mar 22, 2026" via Date parse + EOD if no time
     if (DATE_ONLY.test(s)) {
       return new Date(`${s}T23:59:59-05:00`)
     }
     const parsed = new Date(s)
     if (Number.isNaN(parsed.getTime())) return new Date(NaN)
+    // Rebuild as date-only in local calendar → EOD EST
     const y = parsed.getFullYear()
     const m = String(parsed.getMonth() + 1).padStart(2, '0')
     const d = String(parsed.getDate()).padStart(2, '0')
     return new Date(`${y}-${m}-${d}T23:59:59-05:00`)
   }
 
+  // "YYYY-MM-DD HH:mm" without timezone → assume Eastern
   const space = s.match(DATE_SPACE_TIME)
   if (space && !/[zZ]|[+-]\d{2}:?\d{2}$/.test(s)) {
     const time = space[2].length === 5 ? `${space[2]}:00` : space[2]
     return new Date(`${space[1]}T${time}-05:00`)
   }
 
-  return new Date(s)
+  const d = new Date(s)
+  return d
 }
 
+/**
+ * Milliseconds until expiry. Negative if already expired.
+ * Returns 0 for invalid dates (treat as unknown / not sortable as soon).
+ */
 export function getMillisUntilExpiry(dateStr: string): number {
   const end = toExpiryEndOfDay(dateStr)
   if (Number.isNaN(end.getTime())) return NaN
   return end.getTime() - Date.now()
 }
 
+/** Sort key: sooner expiry first. Missing/invalid → +Infinity (end of list). */
 export function getExpirySortKey(dateStr?: string | null): number {
   if (!dateStr?.trim()) return Number.POSITIVE_INFINITY
   const end = toExpiryEndOfDay(dateStr)
@@ -43,14 +58,31 @@ export function getExpirySortKey(dateStr?: string | null): number {
   return end.getTime()
 }
 
-export function compareExpiryAscending(a?: string | null, b?: string | null): number {
+/** Ascending expiry sort (ending soon). Stable for missing dates. */
+export function compareExpiryAscending(
+  a?: string | null,
+  b?: string | null
+): number {
   return getExpirySortKey(a) - getExpirySortKey(b)
 }
 
+/** Whole days remaining (ceil). null if unknown; 0 if expired. */
 export function daysLeftUntilExpiry(dateStr?: string | null): number | null {
   if (!dateStr?.trim()) return null
   const ms = getMillisUntilExpiry(dateStr)
   if (!Number.isFinite(ms)) return null
   if (ms <= 0) return 0
   return Math.max(0, Math.ceil(ms / (1000 * 60 * 60 * 24)))
+}
+
+export function isExpired(dateStr?: string | null, now = new Date()): boolean {
+  if (!dateStr?.trim()) return false
+  const end = toExpiryEndOfDay(dateStr)
+  if (Number.isNaN(end.getTime())) return false
+  return end.getTime() <= now.getTime()
+}
+
+/** Ascending expiry sort for feed lists (ending soon). Missing/invalid → last. */
+export function sortByEndingSoon<T extends { expiryDate?: string }>(list: T[]): T[] {
+  return [...list].sort((a, b) => compareExpiryAscending(a.expiryDate, b.expiryDate))
 }

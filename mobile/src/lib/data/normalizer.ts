@@ -109,8 +109,10 @@ function detectTimezone(text: string, matchIndex: number): string {
   return ' EST' // default for Canadian contests
 }
 
+// Colon optional: feeds write "Ends: Mar 5", "Contest ends March 5", "closes on 2026-10-01", ...
 const DATE_PREFIX =
-  '(?:draw date|draws on|entries accepted until|giveaway over on|ends?|closes?|expires?):'
+  '(?:draw date|draws on|entries accepted until|giveaway over on|end date|deadline|ends?(?: on)?|ended(?: on)?|ending(?: on)?|closes?(?: on)?|closed(?: on)?|closing(?: date)?|expires?(?: on)?|expired(?: on)?|until)\\s*:?'
+const WEEKDAY_OPT = '(?:(?:mon|tue|wed|thu|fri|sat|sun)[a-z]*\\.?,?\\s+)?'
 
 /**
  * Extract expiry date from content/description text. Does not throw on invalid dates.
@@ -134,21 +136,47 @@ function extractExpiryDate(
     return { expiryDate: d.toISOString(), is_estimated_expiry: false }
   }
 
+  /** Year omitted: "Ends Jan 15" read in December means next January, not last. */
+  const withInferredYear = (month: number, day: number, year?: number): Date => {
+    if (year != null) return new Date(year, month, day)
+    const d = new Date(currentYear, month, day)
+    if (now.getTime() - d.getTime() > 60 * 24 * 60 * 60 * 1000) d.setFullYear(currentYear + 1)
+    return d
+  }
+  const monthIndex = (name: string): number | undefined => {
+    const key = name.toLowerCase().slice(0, 3)
+    return MONTHS[key] ?? MONTHS[key + 'uary']
+  }
+
   try {
-    // Month name + day: "Draw date: Jan 15" / "Draws on: March 20, 2025"
+    // Month name + day: "Draw date: Jan 15" / "Contest ends Friday, March 20, 2026"
     const monthDayRe = new RegExp(
-      `\\b${DATE_PREFIX}\\s*(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\\s+(\\d{1,2})(?:,?\\s*(\\d{4}))?`,
+      `\\b${DATE_PREFIX}\\s*${WEEKDAY_OPT}(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\\.?\\s+(\\d{1,2})(?:st|nd|rd|th)?(?:,?\\s*(\\d{4}))?`,
       'i'
     )
     const monthDay = text.match(monthDayRe)
     if (monthDay) {
-      const monthStr = monthDay[2].toLowerCase().slice(0, 3)
-      const month = MONTHS[monthStr] ?? MONTHS[monthStr + 'uary']
-      const day = parseInt(monthDay[3], 10)
-      const year = monthDay[4] ? parseInt(monthDay[4], 10) : currentYear
+      const month = monthIndex(monthDay[1])
+      const day = parseInt(monthDay[2], 10)
+      const year = monthDay[3] ? parseInt(monthDay[3], 10) : undefined
       if (month != null && day >= 1 && day <= 31) {
-        const d = new Date(year, month, day)
-        const result = tryParse(d)
+        const result = tryParse(withInferredYear(month, day, year))
+        if (result) return result
+      }
+    }
+
+    // Day-first (common in Canadian rules): "Closes 20 March 2026"
+    const dayMonthRe = new RegExp(
+      `\\b${DATE_PREFIX}\\s*${WEEKDAY_OPT}(\\d{1,2})(?:st|nd|rd|th)?\\s+(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\\.?(?:,?\\s*(\\d{4}))?`,
+      'i'
+    )
+    const dayMonth = text.match(dayMonthRe)
+    if (dayMonth) {
+      const month = monthIndex(dayMonth[2])
+      const day = parseInt(dayMonth[1], 10)
+      const year = dayMonth[3] ? parseInt(dayMonth[3], 10) : undefined
+      if (month != null && day >= 1 && day <= 31) {
+        const result = tryParse(withInferredYear(month, day, year))
         if (result) return result
       }
     }
@@ -158,28 +186,27 @@ function extractExpiryDate(
     const isoMatch = text.match(isoRe)
     if (isoMatch) {
       const d = new Date(
-        parseInt(isoMatch[2], 10),
-        parseInt(isoMatch[3], 10) - 1,
-        parseInt(isoMatch[4], 10)
+        parseInt(isoMatch[1], 10),
+        parseInt(isoMatch[2], 10) - 1,
+        parseInt(isoMatch[3], 10)
       )
       const result = tryParse(d)
       if (result) return result
     }
 
-    // Slash: "Expires: 1/15" or "1/15/2024"
+    // Slash (North American month/day): "Expires: 1/15" or "1/15/2024"
     const slashRe = new RegExp(
       `\\b${DATE_PREFIX}\\s*(\\d{1,2})/(\\d{1,2})(?:/(\\d{2,4}))?`,
       'i'
     )
     const slashMatch = text.match(slashRe)
     if (slashMatch) {
-      let year = parseInt(slashMatch[4], 10) || currentYear
-      if (year < 100) year += year < 50 ? 2000 : 1900
-      const month = parseInt(slashMatch[2], 10) - 1
-      const day = parseInt(slashMatch[3], 10)
+      let year: number | undefined = slashMatch[3] ? parseInt(slashMatch[3], 10) : undefined
+      if (year != null && year < 100) year += year < 50 ? 2000 : 1900
+      const month = parseInt(slashMatch[1], 10) - 1
+      const day = parseInt(slashMatch[2], 10)
       if (month >= 0 && month <= 11 && day >= 1 && day <= 31) {
-        const d = new Date(year, month, day)
-        const result = tryParse(d)
+        const result = tryParse(withInferredYear(month, day, year))
         if (result) return result
       }
     }
@@ -195,7 +222,7 @@ function extractExpiryDate(
       const result = tryParse(d)
       if (result) return result
     }
-  } catch (_) {
+  } catch {
     // invalid date handling: fall through to no-guess result
   }
 
@@ -237,7 +264,7 @@ function extractPrizeValue(text: string): number | undefined {
     for (const { pattern, value } of PRIZE_KEYWORDS) {
       if (pattern.test(text)) return value
     }
-  } catch (_) {
+  } catch {
     // fall through
   }
   return undefined

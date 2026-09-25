@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { fetchRawContests, enrichContest, type Contest } from '../lib/rssFetcher'
 import { toExpiryEndOfDay } from '../lib/utils/expiryDate'
+import { isDeadLink } from '../lib/utils/linkHealth'
 import { getSeasonalPromos } from '../lib/data/seasonalPromos'
 import { syncToVault, syncToCloud, fetchFromCloud, getLiveContests, isVaultEmpty } from './useContestVault'
 
@@ -88,7 +89,7 @@ export function useContestPipeline() {
         setIsFinished(true)
         return
       }
-    } catch (_) {
+    } catch {
       setIsScanning(false)
       setIsFinished(true)
       return
@@ -119,19 +120,11 @@ export function useContestPipeline() {
               return !Number.isNaN(end.getTime()) && end <= new Date()
             })()
           if (expired) return
-          // Drop dead links: 404, 403 (Cloudflare blocked), 410, 5xx
-          if (
-            enriched.linkStatus === 404 ||
-            enriched.linkStatus === 403 ||
-            enriched.linkStatus === 410 ||
-            enriched.linkStatus === 500 ||
-            enriched.linkStatus === 502 ||
-            enriched.linkStatus === 503
-          )
-            return
+          // Drop proven-dead links only (404/410); proxy 403/5xx are transient
+          if (isDeadLink(enriched)) return
 
           collected.push(enriched)
-        } catch (_) {
+        } catch {
           // skip failed enrichment
         }
       }

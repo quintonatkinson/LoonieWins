@@ -81,9 +81,10 @@ export function useContestSocialProof(contestIds?: string[]) {
     setLoading(false)
   }, [])
 
+  const idsKey = contestIds?.join('|')
   useEffect(() => {
     void refresh()
-  }, [refresh, contestIds?.join('|')])
+  }, [refresh, idsKey])
 
   const countFor = useCallback(
     (contestId: string): number => map[contestId] ?? 0,
