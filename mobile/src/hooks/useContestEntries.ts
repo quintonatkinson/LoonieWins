@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { Contest } from '../lib/rssFetcher'
 import { tracking } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
-import { getItem, setItem } from '../lib/utils/storage'
+import { storage } from '../lib/utils/storage'
 import {
   computeLocalProgress,
   rpcAwardEntryProgress,
@@ -24,9 +24,9 @@ const LOCAL_KEY = 'looniewins_contest_entries'
 
 async function loadLocal(): Promise<ContestEntry[]> {
   try {
-    const raw = await getItem(LOCAL_KEY)
+    const raw = await storage.getItem(LOCAL_KEY)
     if (!raw) {
-      const legacy = await getItem('looniewins_entered')
+      const legacy = await storage.getItem('looniewins_entered')
       if (!legacy) return []
       const ids = JSON.parse(legacy) as string[]
       return ids.map((id) => ({
@@ -47,8 +47,8 @@ async function loadLocal(): Promise<ContestEntry[]> {
 
 async function saveLocal(entries: ContestEntry[]) {
   try {
-    await setItem(LOCAL_KEY, JSON.stringify(entries))
-    await setItem('looniewins_entered', JSON.stringify(entries.map((e) => e.contest_id)))
+    await storage.setItem(LOCAL_KEY, JSON.stringify(entries))
+    await storage.setItem('looniewins_entered', JSON.stringify(entries.map((e) => e.contest_id)))
   } catch {
     /* ignore */
   }

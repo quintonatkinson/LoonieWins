@@ -1,7 +1,6 @@
 /**
  * Link Resolver (Deep Scrape): fetches the page, finds final URL, extracts expiry/value/eligibility.
  */
-import '../dom-polyfill'
 import { sanitizeContestUrl } from '../utils/sanitizeContestUrl'
 import { scanForMetadata, autoCategorize } from './tagger'
 
@@ -113,21 +112,27 @@ function isExternalLink(href: string, baseUrl: string): boolean {
   }
 }
 
+/**
+ * React Native has no HTML DOM (xmldom has no querySelector), so isolate the post body with
+ * lightweight markup scanning. Output only feeds URL-candidate scoring, so a bounded slice is enough.
+ */
 function extractMainContentHtml(html: string): string {
-  try {
-    const { DOMParser } = require('@xmldom/xmldom') as { DOMParser: typeof import('@xmldom/xmldom').DOMParser }
-    const parser = new DOMParser()
-    const doc = parser.parseFromString(html, 'text/html')
-    const selectors = [
-      'article', 'main', '[role="main"]', '.entry-content', '.post-content', '.content',
-      '.article-body', '.post-body', '.article-content', '.single-post',
-      '[itemprop="articleBody"]', '#content', '.blog-post',
-    ]
-    for (const sel of selectors) {
-      const el = doc.querySelector(sel)
-      if (el?.innerHTML?.length && el.innerHTML.length > 200) return el.innerHTML
-    }
-  } catch (_) {}
+  const tagMatch = /<(article|main)\b[^>]*>([\s\S]*?)<\/\1>/i.exec(html)
+  if (tagMatch && tagMatch[2].length > 200) return tagMatch[2]
+  const markers = [
+    /role=["']main["']/i,
+    /class=["'][^"']*\b(entry-content|post-content|article-body|post-body|article-content|single-post|blog-post)\b/i,
+    /itemprop=["']articleBody["']/i,
+    /id=["']content["']/i,
+  ]
+  for (const marker of markers) {
+    const m = marker.exec(html)
+    if (!m) continue
+    const openEnd = html.indexOf('>', m.index)
+    if (openEnd < 0) continue
+    const slice = html.slice(openEnd + 1, openEnd + 1 + 60_000)
+    if (slice.length > 200) return slice
+  }
   return html
 }
 
@@ -189,7 +194,7 @@ async function extractFinalUrl(html: string, baseUrl: string): Promise<string> {
       clearTimeout(t)
       const body = await res.text()
       if (looksLikeContestPage(body)) return url
-    } catch (_) {}
+    } catch {}
   }
   return baseUrl
 }
@@ -232,7 +237,7 @@ function extractExpiryFromHtml(html: string): string | undefined {
         if (!Number.isNaN(d.getTime())) return d.toISOString()
       }
     }
-  } catch (_) {}
+  } catch {}
   return undefined
 }
 
@@ -298,7 +303,7 @@ export async function deepScrape(url: string, rssContent?: string): Promise<Deep
 
     cache.set(cacheKey, { result, ts: Date.now() })
     return result
-  } catch (_) {
+  } catch {
     const fallback: DeepScrapeResult = { finalUrl: cleanUrl, status: 500 }
     cache.set(cacheKey, { result: fallback, ts: Date.now() })
     return fallback

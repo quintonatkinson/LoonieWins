@@ -115,8 +115,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   }, [])
 
   // NativeWind reads CSS vars from style when supported; also expose hex via context.
-  const cssVarStyle = {
-    // @ts-expect-error CSS custom properties for NativeWind
+  const cssVarStyle: Record<string, string> = {
     '--color-win': theme.winRgb,
     '--accent-win': theme.win,
     '--color-on-win': theme.onWinRgb,

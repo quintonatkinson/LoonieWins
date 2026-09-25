@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { fetchRawContests, enrichContest, type Contest } from '../lib/rssFetcher'
 import { toExpiryEndOfDay } from '../lib/utils/expiryDate'
+import { isDeadLink } from '../lib/utils/linkHealth'
 import { getSeasonalPromos } from '../lib/data/seasonalPromos'
 import { syncToVault, syncToCloud, fetchFromCloud, getLiveContests, isVaultEmpty } from './useContestVault'
 
@@ -50,7 +51,7 @@ export function useContestPipeline() {
   const [isSyncingCloud, setIsSyncingCloud] = useState(false)
   const [isFinished, setIsFinished] = useState(false)
   const [offlineMode, setOfflineMode] = useState(false)
-  const [phaseMessage, setPhaseMessage] = useState(PHRASES[0])
+  const [phaseMessage] = useState(PHRASES[0])
   const abortRef = useRef(false)
 
   const runPipeline = useCallback(async () => {
@@ -80,7 +81,7 @@ export function useContestPipeline() {
         setIsFinished(true)
         return
       }
-    } catch (_) {
+    } catch {
       setIsScanning(false)
       setIsFinished(true)
       return
@@ -109,10 +110,11 @@ export function useContestPipeline() {
               return !Number.isNaN(end.getTime()) && end <= new Date()
             })()
           if (expired) return
-          if (enriched.linkStatus === 404 || enriched.linkStatus === 403 || enriched.linkStatus === 500) return
+          // Drop proven-dead links only (404/410); proxy 403/5xx are transient
+          if (isDeadLink(enriched)) return
 
           collected.push(enriched)
-        } catch (_) {}
+        } catch {}
       }
     }
 
