@@ -1,0 +1,78 @@
+# Checks every push / PR: web (lint, types, unit tests, build), mobile (types + Metro bundle),
+# browser extension syntax, shared autofill engine sync, and the Supabase schema + economy
+# security tests against a real Postgres.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npx tsc -b
+      - run: npm test
+      - run: node scripts/sync-autofill.mjs --check
+      - run: npm run build
+      - name: Extension syntax
+        run: for f in $(find extension -name '*.js'); do node --check "$f"; done
+
+  mobile:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mobile
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+      - run: npm ci
+      - run: npx tsc --noEmit -p .
+      - name: Metro bundle (Android)
+        run: npx expo export --platform android --output-dir /tmp/expo-out
+        env:
+          EXPO_OFFLINE: '1'
+          CI: '1'
+
+  database:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      PGHOST: localhost
+      PGUSER: postgres
+      PGPASSWORD: postgres
+      PGDATABASE: postgres
+    steps:
+      - uses: actions/checkout@v4
+      - name: Apply schema + migrations twice (idempotency) and run economy tests
+        run: |
+          set -euo pipefail
+          P="psql -v ON_ERROR_STOP=1 -q"
+          $P -f supabase/tests/00_supabase_stub.sql
+          for pass in 1 2; do
+            $P -f supabase/schema.sql
+            for f in supabase/migrations/*.sql; do
+              case "$f" in *cron*) continue ;; esac   # pg_cron is Supabase-hosted only
+              $P -f "$f"
+            done
+          done
+          $P -f supabase/tests/economy_hardening.test.sql

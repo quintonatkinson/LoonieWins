@@ -20,21 +20,33 @@ Canadian + American contest aggregator & offerwall — Win More, Work Less.
 3. Run **`supabase/schema.sql`** in the SQL Editor (full bootstrap). Expose schemas `public`, `tracking`, `giveaways`. Enable Email auth (Confirm email off for local testing).
 4. `npm run dev` — with Supabase configured: Create account / Log in; without keys: guest mode.
 5. **Server ingest (recommended):** follow [`docs/ingest-deploy.md`](./docs/ingest-deploy.md) (`supabase functions deploy ingest-giveaways` + cron / GitHub Action).
-6. **Additive migrations** (after bootstrap): UGC, push, freemium SQL under `supabase/migrations/`.
+6. **Additive migrations** (after bootstrap): run every file in `supabase/migrations/` in filename order — freemium, UGC, push, feed leveling, Pro/IAP, and **`20260925_economy_hardening.sql` (required: makes points / Pro / XP server-owned)**.
+7. **Scheduled functions** (`ingest-giveaways`, `send-push-alerts`, `send-weekly-digest`) reject callers without `Authorization: Bearer <SUPABASE_SERVICE_ROLE_KEY>` (or `<CRON_SECRET>` if you set that function secret).
 
 ## Features
 
 - **Auth:** Sign-up, login, session restore, logout (web + Expo). Guest mode when env keys are missing.
-- **Dashboard:** Contest feed, geo filter (CA / US / ANY), Entered badges, Daily Routine / Enter-next home modes, Hive Mind search, ending-soon sort.
+- **Dashboard:** Contest feed, geo filter (CA / US / ANY), Québec-safe, Entered badges, Daily Routine / Enter-next home modes (honours every hide preference), Hive Mind search (accent-insensitive, matches tags too), sorts: ending soon / high value / most popular / best odds.
 - **Smart-Fill / entry:** Hardened autofill injection, expanded copy chips, Open & Enter with mark-entered / submitted prompts, share.
 - **Tracking:** Per-account `tracking.contest_entries` (entered / submitted / won / lost / expired) with local fallback.
 - **Profile:** Plan, applied contests with status actions, autofill, geo/Quebec prefs, export, delete account.
 - **Submit a contest (moderated UGC):** `/submit` — title, URL, country eligibility, optional expiry. Mods approve via `/moderate` → Hive Mind `contests` (`source = user-submitted`). SQL: `supabase/migrations/20260920_user_contest_submissions.sql`.
 - **Push notifications:** Profile prefs (`newContestsCA` / `newContestsUS` / `endingTonight` / `weeklyDigestEmail`) + Expo token registration; Edge Functions `send-push-alerts` (Pro priority ending-tonight) + `send-weekly-digest` (Resend). SQL: `supabase/migrations/20260920_push_notifications.sql`, `20260920_weekly_digest_email.sql`. Ops: [`docs/push-digest.md`](./docs/push-digest.md).
-- **Freemium / earn:** Weekly entry caps, Smart-Fill paywall, AdGem offerwall (sandbox without keys), XP/streak on enter/submit, paid referrals. SQL: `supabase/migrations/20260320000000_freemium_monetization.sql`.
+- **Freemium / earn:** Weekly entry caps, Smart-Fill paywall, AdGem offerwall (sandbox demo offers credit guests only; signed-in balances change only via RPCs / AdGem postbacks), XP/streak on enter/submit (idempotent, 60 XP entries/day cap), paid referrals. SQL: `supabase/migrations/20260320000000_freemium_monetization.sql`.
 - **Referrals / Winners / Earn:** Backed by `giveaways.*` and `tracking.transactions`.
 - **Legal / store:** `/privacy`, `/terms`, `/support`, `/delete-account` + `public/legal/*.html`.
 - **Account deletion:** `public.delete_own_account()` in bootstrap (also `supabase/account_deletion.sql`).
+
+## Development checks
+
+- `npm test` — unit tests (tagging, expiry parsing, feed filters / sorts, entry costs, sources, enrichment, autofill engine in jsdom)
+- `npm run check` — lint + types + tests + autofill sync check (what CI runs for web)
+- `supabase/tests/` — schema + economy security assertions against plain Postgres (see `.github/workflows/ci.yml`)
+- Mobile: `cd mobile && npx tsc --noEmit -p . && npx expo export --platform android`
+
+## Autofill engine (shared)
+
+`shared/autofill/engine.js` is the single form-filling engine used by the web app, the Expo WebView and the browser extension. Edit it there, then run `npm run sync:autofill` to regenerate `src/lib/autofill/engine.generated.ts`, `mobile/src/lib/autofill/engine.generated.ts` and `extension/lib/engine.generated.js` (CI fails if they drift). It never overwrites values the user typed, skips friend/referral, promo, username, company and address-line-2 fields, maps province/state codes ↔ names (EN/FR) for selects, fills country, and formats postal codes / phone numbers to the field's length.
 
 ## Browser extension
 
