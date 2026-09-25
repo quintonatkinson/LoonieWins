@@ -10,6 +10,7 @@
  */
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.0'
+import { isAuthorizedCronRequest, unauthorizedResponse } from '../_shared/cronAuth.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -193,7 +194,7 @@ async function fetchFeedItems(source: Source): Promise<FeedItem[]> {
     const direct = await fetchDirect(source)
     if (direct.length > 0) return direct
     return await fetchRss2Json(source)
-  } catch (_) {
+  } catch {
     try {
       return strategy === 'rss2json_first' ? await fetchDirect(source) : await fetchRss2Json(source)
     } catch {
@@ -206,6 +207,7 @@ Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
   }
+  if (!isAuthorizedCronRequest(req)) return unauthorizedResponse(corsHeaders)
 
   const supabaseUrl = Deno.env.get('SUPABASE_URL')
   const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')

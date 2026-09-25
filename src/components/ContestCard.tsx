@@ -60,7 +60,7 @@ export default function ContestCard({
     balance,
     getEntryCost,
     spendPointsForEntry,
-    useFreeEntry,
+    consumeFreeEntry,
     weeklyEntriesUsed,
     weeklyEntryCap,
   } = useUserLimits()
@@ -116,13 +116,13 @@ export default function ContestCard({
       // Open first so guest/demo never blocks on bookkeeping
       openEntryWithAgeGate()
       try {
-        void useFreeEntry()
-      } catch (_) {}
+        void consumeFreeEntry()
+      } catch {}
       return
     }
     if (weeklyLimitReached && userIsFree) {
       // Cap hit: spend prize-tiered pts, or push Earn → then return to enter
-      if (canAffordEntry && spendPointsForEntry(entryCostPts)) {
+      if (canAffordEntry && spendPointsForEntry(entryCostPts, contest.id)) {
         openEntryWithAgeGate()
         setToast(true)
       } else {
@@ -142,7 +142,7 @@ export default function ContestCard({
     canAffordEntry,
     entryCostPts,
     spendPointsForEntry,
-    useFreeEntry,
+    consumeFreeEntry,
     openEntryWithAgeGate,
   ])
 
@@ -251,7 +251,7 @@ export default function ContestCard({
             type="button"
             onClick={() => {
               setShowInsufficient(false)
-              if (spendPointsForEntry(entryCostPts)) {
+              if (spendPointsForEntry(entryCostPts, contest.id)) {
                 openEntryWithAgeGate()
                 setToast(true)
               }

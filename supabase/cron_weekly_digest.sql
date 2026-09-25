@@ -15,7 +15,7 @@
 --     url := 'https://PROJECT_REF.supabase.co/functions/v1/send-weekly-digest',
 --     headers := jsonb_build_object(
 --       'Content-Type', 'application/json',
---       'Authorization', 'Bearer SERVICE_ROLE_OR_ANON_KEY'
+--       'Authorization', 'Bearer SERVICE_ROLE_KEY_OR_CRON_SECRET'
 --     ),
 --     body := '{}'::jsonb
 --   );

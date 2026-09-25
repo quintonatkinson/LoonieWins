@@ -7,7 +7,7 @@ import {
   type ReactNode,
 } from 'react'
 import { useAuth, type SubscriptionTier } from './AuthContext'
-import { tracking } from '../lib/supabase'
+import { isSupabaseConfigured, supabase } from '../lib/supabase'
 import {
   FREE_WEEKLY_ENTRY_CAP,
   isProTier,
@@ -28,9 +28,18 @@ interface UserEarnContextValue {
   setBalance: (n: number | ((prev: number) => number)) => void
   setLastDailyEntryAt: (iso: string | null) => void
   setSubscriptionTier: (tier: SubscriptionTier) => void
-  addPoints: (amount: number, meta?: { type?: string; description?: string }) => void
-  useFreeEntry: () => Promise<boolean>
-  spendPointsForEntry: (cost: number) => boolean
+  /**
+   * Local-only credit (guest / sandbox demo). Returns false for signed-in cloud accounts:
+   * their balance is server-owned and only changes via RPCs / provider postbacks.
+   */
+  addPoints: (amount: number, meta?: { type?: string; description?: string }) => boolean
+  /** True when the balance lives in Supabase (signed in + configured). */
+  isCloudAccount: boolean
+  /** Consume one free weekly slot (RPC when signed in). Returns false if paywalled. */
+  consumeFreeEntry: () => Promise<boolean>
+  /** Optimistic sync check (so the entry window opens inside the click); debit settles via RPC. */
+  spendPointsForEntry: (cost: number, contestId?: string) => boolean
+  /** StoreKit/Play via RevenueCat (or QA stub) → flips subscription_tier / is_premium */
   upgradeToPro: (planId: BillingPlanId) => Promise<void>
 }
 
@@ -47,19 +56,32 @@ export function UserEarnProvider({ children }: { children: ReactNode }) {
     isPremium: profile?.is_premium,
   })
   const syncing = useRef(false)
+  const isCloudAccount = Boolean(user && isSupabaseConfigured && supabase)
 
+  // Ensure new accounts start with a small welcome balance once (0 → 1250)
   useEffect(() => {
-    if (!user || !profile || syncing.current) return
-    if (profile.points_balance === 0 && !profile.settings?.welcome_granted) {
-      syncing.current = true
-      void updateProfile({
-        points_balance: 1250,
-        settings: { ...profile.settings, welcome_granted: true },
-      }).finally(() => {
-        syncing.current = false
-      })
+    if (!profile || syncing.current) return
+    if (profile.points_balance !== 0 || profile.settings?.welcome_granted) return
+    syncing.current = true
+    if (isCloudAccount && supabase) {
+      // Server grants once per account (ledger-keyed), so reloads / tabs cannot double-claim.
+      void Promise.resolve(supabase.rpc('claim_welcome_bonus'))
+        .then(({ error }) => {
+          if (error) console.warn('[Earn] welcome bonus:', error.message)
+          return refreshProfile()
+        })
+        .finally(() => {
+          syncing.current = false
+        })
+      return
     }
-  }, [user, profile, updateProfile])
+    void updateProfile({
+      points_balance: 1250,
+      settings: { ...profile.settings, welcome_granted: true },
+    }).finally(() => {
+      syncing.current = false
+    })
+  }, [profile, updateProfile, refreshProfile, isCloudAccount])
 
   const setBalance = useCallback(
     (n: number | ((prev: number) => number)) => {
@@ -94,6 +116,14 @@ export function UserEarnProvider({ children }: { children: ReactNode }) {
         if (result.cancelled) return
         throw new Error(result.message)
       }
+      if (isCloudAccount) {
+        // Entitlement is written server-side by the RevenueCat webhook; pick it up as it lands.
+        for (const delayMs of [0, 1500, 3000, 5000, 8000]) {
+          if (delayMs) await new Promise((r) => setTimeout(r, delayMs))
+          await refreshProfile()
+        }
+        return
+      }
       await updateProfile({
         subscription_tier: planId,
         is_premium: true,
@@ -106,39 +136,39 @@ export function UserEarnProvider({ children }: { children: ReactNode }) {
         ...(result.productId ? { iap_product_id: result.productId } : {}),
       })
     },
-    [user?.id, profile?.feature_flags, updateProfile]
+    [user?.id, profile?.feature_flags, updateProfile, refreshProfile, isCloudAccount]
   )
 
   const addPoints = useCallback(
-    (amount: number, meta?: { type?: string; description?: string }) => {
-      if (!user || !profile) return
+    (amount: number, meta?: { type?: string; description?: string }): boolean => {
+      if (!profile) return false
+      if (isCloudAccount) {
+        console.warn('[Earn] cloud balances are server-owned; ignored local credit:', meta?.description)
+        return false
+      }
       void updateProfile({ points_balance: Math.max(0, profile.points_balance + amount) })
-      void tracking()
-        .from('transactions')
-        .insert({
-          user_id: user.id,
-          amount,
-          type: meta?.type ?? 'bonus',
-          description: meta?.description ?? 'Points earned',
-        })
+      return true
     },
-    [user, profile, updateProfile]
+    [profile, updateProfile, isCloudAccount]
   )
 
-  const useFreeEntry = useCallback(async (): Promise<boolean> => {
+  const consumeFreeEntry = useCallback(async (): Promise<boolean> => {
     if (!profile) return false
     if (isProTier(profile.subscription_tier, profile.is_premium)) {
       void updateProfile({ last_daily_entry_at: new Date().toISOString() })
       return true
     }
+
     const cap = weeklyEntryCapValue ?? FREE_WEEKLY_ENTRY_CAP
-    if (user) {
+
+    if (user && isSupabaseConfigured) {
       const res = await rpcConsumeFreeEntry(cap)
       if (!res.local) {
         await refreshProfile()
         return Boolean(res.ok)
       }
     }
+
     const local = localConsumeWeeklyEntry(
       profile.weekly_entries_used ?? 0,
       profile.weekly_entries_reset_at,
@@ -154,42 +184,42 @@ export function UserEarnProvider({ children }: { children: ReactNode }) {
   }, [profile, user, weeklyEntryCapValue, updateProfile, refreshProfile])
 
   const spendPointsForEntry = useCallback(
-    (cost: number): boolean => {
-      if (!user || !profile || profile.points_balance < cost) return false
-      void updateProfile({ points_balance: Math.max(0, profile.points_balance - cost) })
-      void tracking()
-        .from('transactions')
-        .insert({
-          user_id: user.id,
-          amount: -cost,
-          type: 'entry_spend',
-          description: 'Contest entry',
+    (cost: number, contestId?: string): boolean => {
+      if (!profile) return false
+      if (profile.points_balance < cost) return false
+      if (isCloudAccount && supabase) {
+        void Promise.resolve(
+          supabase.rpc('spend_points_for_entry', { p_cost: cost, p_contest_id: contestId ?? null })
+        ).then(({ data, error }) => {
+          const res = (data ?? {}) as { ok?: boolean; reason?: string }
+          if (error || !res.ok) console.warn('[Earn] spend:', error?.message ?? res.reason)
+          return refreshProfile()
         })
+        return true
+      }
+      void updateProfile({ points_balance: Math.max(0, profile.points_balance - cost) })
       return true
     },
-    [user, profile, updateProfile]
+    [profile, updateProfile, refreshProfile, isCloudAccount]
   )
 
-  return (
-    <UserEarnContext.Provider
-      value={{
-        balance,
-        lastDailyEntryAt,
-        subscriptionTier,
-        weeklyEntriesUsed,
-        weeklyEntryCapValue,
-        setBalance,
-        setLastDailyEntryAt,
-        setSubscriptionTier,
-        addPoints,
-        useFreeEntry,
-        spendPointsForEntry,
-        upgradeToPro,
-      }}
-    >
-      {children}
-    </UserEarnContext.Provider>
-  )
+  const value: UserEarnContextValue = {
+    balance,
+    lastDailyEntryAt,
+    subscriptionTier,
+    weeklyEntriesUsed,
+    weeklyEntryCapValue,
+    setBalance,
+    setLastDailyEntryAt,
+    setSubscriptionTier,
+    addPoints,
+    isCloudAccount,
+    consumeFreeEntry,
+    spendPointsForEntry,
+    upgradeToPro,
+  }
+
+  return <UserEarnContext.Provider value={value}>{children}</UserEarnContext.Provider>
 }
 
 export function useUserEarn(): UserEarnContextValue {

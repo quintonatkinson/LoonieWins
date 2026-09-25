@@ -18,7 +18,7 @@
 --     url := 'https://PROJECT_REF.supabase.co/functions/v1/send-push-alerts',
 --     headers := jsonb_build_object(
 --       'Content-Type', 'application/json',
---       'Authorization', 'Bearer SERVICE_ROLE_OR_ANON_KEY'
+--       'Authorization', 'Bearer SERVICE_ROLE_KEY_OR_CRON_SECRET'
 --     ),
 --     body := jsonb_build_object('modes', jsonb_build_array('new_contests', 'ending_tonight'))
 --   );
@@ -34,7 +34,7 @@
 --     url := 'https://PROJECT_REF.supabase.co/functions/v1/send-push-alerts',
 --     headers := jsonb_build_object(
 --       'Content-Type', 'application/json',
---       'Authorization', 'Bearer SERVICE_ROLE_OR_ANON_KEY'
+--       'Authorization', 'Bearer SERVICE_ROLE_KEY_OR_CRON_SECRET'
 --     ),
 --     body := jsonb_build_object('modes', jsonb_build_array('ending_tonight'))
 --   );

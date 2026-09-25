@@ -24,7 +24,7 @@ export function useUserLimits() {
     weeklyEntriesUsed,
     weeklyEntryCapValue,
     spendPointsForEntry,
-    useFreeEntry,
+    consumeFreeEntry,
   } = useUserEarn()
   const { profile } = useAuth()
 
@@ -80,7 +80,7 @@ export function useUserLimits() {
   )
 
   const spendForEntry = useCallback(
-    (cost?: number) => spendPointsForEntry(cost ?? ENTRY_COST_PTS),
+    (cost?: number, contestId?: string) => spendPointsForEntry(cost ?? ENTRY_COST_PTS, contestId),
     [spendPointsForEntry]
   )
 
@@ -96,7 +96,7 @@ export function useUserLimits() {
     entryCostPts: ENTRY_COST_PTS,
     getEntryCost,
     spendPointsForEntry: spendForEntry,
-    useFreeEntry,
+    consumeFreeEntry,
     hasUnlimitedEntries: unlimited,
     smartFillsRemaining,
     smartFillsUnlimited,

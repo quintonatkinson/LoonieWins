@@ -28,11 +28,12 @@ function TimeIcon({ kind }: { kind: OfferwallOffer['timeKind'] }) {
 }
 
 export default function Earn() {
-  const { balance, addPoints, subscriptionTier, upgradeToPro } = useUserEarn()
+  const { balance, addPoints, subscriptionTier, upgradeToPro, isCloudAccount } = useUserEarn()
   const { user, profile } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
   const [loadingId, setLoadingId] = useState<string | null>(null)
+  const [sandboxNotice, setSandboxNotice] = useState(false)
   const [successTask, setSuccessTask] = useState<OfferwallOffer | null>(null)
   const [showPlanModal, setShowPlanModal] = useState(false)
 
@@ -62,6 +63,12 @@ export default function Earn() {
         return
       }
 
+      // Sandbox offers are a demo: they can only credit a local guest balance.
+      if (isCloudAccount) {
+        setSandboxNotice(true)
+        return
+      }
+
       setLoadingId(offer.id)
       setTimeout(() => {
         addPoints(offer.reward, {
@@ -73,7 +80,7 @@ export default function Earn() {
         confetti({ particleCount: 80, spread: 60, origin: { y: 0.7 } })
       }, SIMULATE_MS)
     },
-    [addPoints, loadingId]
+    [addPoints, loadingId, isCloudAccount]
   )
 
   const closeSuccess = useCallback(() => setSuccessTask(null), [])
@@ -102,6 +109,12 @@ export default function Earn() {
           Provider: <span className="text-gray-300">{session.provider}</span>
           {session.configured ? ' (live)' : ' (sandbox fallback)'}
         </p>
+        {sandboxNotice && (
+          <p role="status" className="text-xs text-amber-300 mt-2">
+            These are demo offers — real points credit only from live AdGem completions. Set
+            VITE_ADGEM_APP_ID to go live.
+          </p>
+        )}
         {canCoverTarget && (
           <button
             type="button"
