@@ -97,7 +97,7 @@ function CheatSheetBar({
         setCopied(label)
         onCopied?.()
         setTimeout(() => setCopied(null), 1500)
-      } catch (_) {}
+      } catch {}
     },
     [onCopied]
   )
@@ -248,11 +248,16 @@ export default function ContestBrowser({
           preShowScript: script,
         })
 
+        // Re-inject on every page of multi-step forms, but charge one Smart-Fill per contest.
+        let charged = false
         InAppBrowser.addListener('browserPageLoaded', async () => {
           try {
             await InAppBrowser.executeScript({ code: script })
-            onAutoFillUsed?.()
-          } catch (_) {}
+            if (!charged) {
+              charged = true
+              onAutoFillUsed?.()
+            }
+          } catch {}
         })
 
         InAppBrowser.addListener('closeEvent', () => {
@@ -264,7 +269,7 @@ export default function ContestBrowser({
           }
         })
         return true
-      } catch (_) {
+      } catch {
         return false
       }
     },
@@ -385,7 +390,7 @@ export default function ContestBrowser({
           ? `Autofill injected (${Math.max(0, smartFillsRemaining - 1)} left). Mark as Entered when done.`
           : 'Autofill injected — check fields, then Mark as Entered.'
       )
-    } catch (_) {
+    } catch {
       setAutoFillMsg(
         'Could not reach the form (cross-origin). Open in Browser and tap the copy chips.'
       )

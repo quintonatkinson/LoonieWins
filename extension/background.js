@@ -1,6 +1,6 @@
 import { getSettings } from './lib/storage.js'
 import { toFillPayload, hasUsableProfile } from './lib/profile.js'
-import { fillFormWithProfile } from './lib/fill.js'
+import { loonieAutofill } from './lib/engine.generated.js'
 import { syncAllFromTab, syncFromSupabase } from './lib/sync.js'
 
 const MENU_FILL = 'loonie-fill-page'
@@ -34,134 +34,23 @@ async function fillActiveTab(tabId) {
   }
 
   const payload = toFillPayload(settings.profile)
-  const [{ result } = {}] = await chrome.scripting.executeScript({
+  // Shared engine (same matcher as the web + mobile apps). MAIN world so React/Vue
+  // controlled inputs see the native value setter; allFrames for embedded entry widgets.
+  const results = await chrome.scripting.executeScript({
     target: { tabId, allFrames: true },
     world: 'MAIN',
-    func: (u) => {
-      // Inline a minimal copy so MAIN world does not depend on extension modules.
-      const summary = { filled: 0, highlighted: 0 }
-      try {
-        const HUMANIZE = (el) => {
-          if (!el || typeof el.dispatchEvent !== 'function') return
-          ;['input', 'change', 'blur'].forEach((ev) => {
-            try {
-              el.dispatchEvent(new Event(ev, { bubbles: true }))
-            } catch (_) {}
-          })
-        }
-        const setNativeValue = (el, val) => {
-          const proto =
-            el.tagName === 'TEXTAREA'
-              ? window.HTMLTextAreaElement.prototype
-              : window.HTMLInputElement.prototype
-          const desc = Object.getOwnPropertyDescriptor(proto, 'value')
-          if (desc && desc.set) desc.set.call(el, val)
-          else el.value = val
-        }
-        const fill = (el, val) => {
-          if (!val) return false
-          if (el.tagName === 'SELECT') {
-            const opts = Array.from(el.options || [])
-            const lower = String(val).toLowerCase()
-            const exact = opts.find(
-              (o) => (o.text || o.value || '').toLowerCase() === lower,
-            )
-            if (exact) {
-              el.value = exact.value
-              HUMANIZE(el)
-              return true
-            }
-            const partial = opts.find((o) =>
-              (o.value || o.text || '').toLowerCase().includes(lower),
-            )
-            if (partial) {
-              el.value = partial.value
-              HUMANIZE(el)
-              return true
-            }
-            return false
-          }
-          setNativeValue(el, val)
-          el.setAttribute('value', val)
-          HUMANIZE(el)
-          return true
-        }
-        const match = (el) => {
-          const n = (el.name || '').toLowerCase()
-          const i = (el.id || '').toLowerCase()
-          const p = (el.placeholder || '').toLowerCase()
-          const a = ((el.getAttribute && el.getAttribute('aria-label')) || '').toLowerCase()
-          const auto = (el.autocomplete || '').toLowerCase()
-          const s = [n, i, p, a, auto].join(' ')
-          if (/e-?mail/i.test(s) && u.email) return fill(el, u.email)
-          if (/(first.*name|fname|given-name)/i.test(s) && u.first_name)
-            return fill(el, u.first_name)
-          if (/(last.*name|lname|family-name|surname)/i.test(s) && u.last_name)
-            return fill(el, u.last_name)
-          if (/(full.?name|your.?name)/i.test(s) && u.name) return fill(el, u.name)
-          if (/(^|[\s_-])name([\s_-]|$)/i.test(s) && !/user.?name|company/i.test(s)) {
-            if (u.name) return fill(el, u.name)
-            if (u.first_name) return fill(el, u.first_name)
-          }
-          if (/(address|street|addr1)/i.test(s) && u.address) return fill(el, u.address)
-          if (/(city|town|locality)/i.test(s) && u.city) return fill(el, u.city)
-          if (/(province|state|region)/i.test(s) && u.province) return fill(el, u.province)
-          if (/(postal|zip)/i.test(s) && u.postal_code) return fill(el, u.postal_code)
-          if (/(phone|mobile|tel)/i.test(s) && u.phone) return fill(el, u.phone)
-          return false
-        }
-        document.querySelectorAll('input,select,textarea').forEach((el) => {
-          const type = (el.type || '').toLowerCase()
-          if (
-            type === 'hidden' ||
-            type === 'submit' ||
-            type === 'button' ||
-            type === 'checkbox' ||
-            type === 'radio' ||
-            type === 'file' ||
-            type === 'password'
-          ) {
-            return
-          }
-          if (match(el)) summary.filled += 1
-        })
-        const pink = '#FF10F0'
-        document.querySelectorAll('label').forEach((lbl) => {
-          const t = (lbl.textContent || '').toLowerCase()
-          if (
-            /\b(math|skill testing|equation|answer correctly)\b/i.test(t) ||
-            /\d+\s*[+\-*/]\s*\d+/.test(lbl.textContent || '')
-          ) {
-            const forId = lbl.getAttribute('for')
-            const target = forId
-              ? document.getElementById(forId)
-              : lbl.querySelector('input,select,textarea')
-            if (target) {
-              target.style.border = '2px solid ' + pink
-              target.style.boxShadow = '0 0 8px ' + pink
-              summary.highlighted += 1
-            }
-          }
-        })
-      } catch (_) {}
-      return summary
-    },
+    func: loonieAutofill,
     args: [payload],
   })
 
-  // Also try isolated world as fallback summary if MAIN returned nothing
-  let summary = result || { filled: 0, highlighted: 0 }
-  if (!summary.filled) {
-    try {
-      const [{ result: iso } = {}] = await chrome.scripting.executeScript({
-        target: { tabId, allFrames: true },
-        func: fillFormWithProfile,
-        args: [payload],
-      })
-      if (iso && iso.filled > summary.filled) summary = iso
-    } catch {
-      /* ignore */
-    }
+  const summary = { filled: 0, candidates: 0, highlighted: 0, fields: [] }
+  for (const frame of results || []) {
+    const r = frame?.result
+    if (!r) continue
+    summary.filled += r.filled || 0
+    summary.candidates += r.candidates || 0
+    summary.highlighted += r.highlighted || 0
+    summary.fields.push(...(r.fields || []))
   }
 
   return { ok: true, summary }
