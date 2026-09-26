@@ -39,6 +39,10 @@ export interface UserProfile {
   iap_product_id: string | null
   iap_expires_at: string | null
   feature_flags: FeatureFlags
+  /** Points-bought Pro (redeem_pro_pass); while active the profile is treated as Pro. */
+  pro_pass_until: string | null
+  checkin_streak: number
+  last_checkin_on: string | null
 }
 
 interface AuthContextValue {
@@ -59,6 +63,11 @@ interface AuthContextValue {
 
 const AuthContext = createContext<AuthContextValue | null>(null)
 
+function proPassActive(until: string | null | undefined): boolean {
+  const t = until ? Date.parse(until) : NaN
+  return Number.isFinite(t) && t > Date.now()
+}
+
 function mapProfile(row: Record<string, unknown>): UserProfile {
   const tier = row.subscription_tier
   const subscription_tier: SubscriptionTier =
@@ -68,7 +77,8 @@ function mapProfile(row: Record<string, unknown>): UserProfile {
     id: String(row.id),
     email: (row.email as string | null) ?? null,
     display_name: (row.display_name as string | null) ?? null,
-    is_premium: Boolean(row.is_premium),
+    // An active Pro Pass unlocks every Pro gate client-side (the server checks it too).
+    is_premium: Boolean(row.is_premium) || proPassActive(row.pro_pass_until as string | null),
     points_balance: Number(row.points_balance ?? 0),
     xp: Number(row.xp ?? 0),
     level: Number(row.level ?? 1),
@@ -88,6 +98,9 @@ function mapProfile(row: Record<string, unknown>): UserProfile {
     iap_product_id: (row.iap_product_id as string | null) ?? null,
     iap_expires_at: (row.iap_expires_at as string | null) ?? null,
     feature_flags: (row.feature_flags as FeatureFlags) ?? {},
+    pro_pass_until: (row.pro_pass_until as string | null) ?? null,
+    checkin_streak: Number(row.checkin_streak ?? 0),
+    last_checkin_on: (row.last_checkin_on as string | null) ?? null,
   }
 }
 
@@ -182,6 +195,9 @@ function guestProfile(): UserProfile {
     iap_product_id: local.iap_product_id ?? null,
     iap_expires_at: local.iap_expires_at ?? null,
     feature_flags: local.feature_flags ?? {},
+    pro_pass_until: local.pro_pass_until ?? null,
+    checkin_streak: local.checkin_streak ?? 0,
+    last_checkin_on: local.last_checkin_on ?? null,
   }
 }
 

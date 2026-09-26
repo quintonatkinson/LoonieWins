@@ -9,3 +9,16 @@ verify_jwt = false
 
 [functions.send-weekly-digest]
 verify_jwt = false
+
+# Provider callbacks carry their own signatures, not Supabase JWTs.
+[functions.adgem-postback]
+verify_jwt = false
+
+[functions.offerwall-postback]
+verify_jwt = false
+
+[functions.admob-ssv]
+verify_jwt = false
+
+[functions.revenuecat-webhook]
+verify_jwt = false

@@ -10,6 +10,7 @@ import {
 } from '../lib/monetization/entryPointCost'
 import { hasFeature, isProTier } from '../lib/monetization/tiers'
 import SubscriptionModal from '../components/SubscriptionModal'
+import EarnHub from '../components/EarnHub'
 import {
   isSandboxOffer,
   openOfferwallSession,
@@ -36,6 +37,7 @@ export default function Earn() {
   const [sandboxNotice, setSandboxNotice] = useState(false)
   const [successTask, setSuccessTask] = useState<OfferwallOffer | null>(null)
   const [showPlanModal, setShowPlanModal] = useState(false)
+  const [liveWalls, setLiveWalls] = useState(0)
 
   const playerId = user?.id ?? profile?.id ?? 'guest'
   const session = useMemo(() => openOfferwallSession(playerId), [playerId])
@@ -105,10 +107,12 @@ export default function Earn() {
             {canCoverTarget ? ' — you can enter now.' : ' — keep earning.'}
           </p>
         )}
-        <p className="text-xs text-gray-500 mt-2">
-          Provider: <span className="text-gray-300">{session.provider}</span>
-          {session.configured ? ' (live)' : ' (sandbox fallback)'}
-        </p>
+        {!isCloudAccount && (
+          <p className="text-xs text-gray-500 mt-2">
+            Provider: <span className="text-gray-300">{session.provider}</span>
+            {session.configured ? ' (live)' : ' (sandbox fallback)'}
+          </p>
+        )}
         {sandboxNotice && (
           <p role="status" className="text-xs text-amber-300 mt-2">
             These are demo offers — real points credit only from live AdGem completions. Set
@@ -125,6 +129,8 @@ export default function Earn() {
           </button>
         )}
       </div>
+
+      {isCloudAccount && <EarnHub onWallsLoaded={setLiveWalls} />}
 
       {!hideEarnAds && (
         <div
@@ -181,6 +187,7 @@ export default function Earn() {
         </button>
       )}
 
+      {!(isCloudAccount && liveWalls > 0) && (
       <section>
         <h2 className="text-base font-bold text-gray-50 mb-1">Offerwall</h2>
         <p className="text-xs text-gray-500 mb-3">{session.note}</p>
@@ -217,6 +224,7 @@ export default function Earn() {
           ))}
         </div>
       </section>
+      )}
 
       {successTask && (
         <>

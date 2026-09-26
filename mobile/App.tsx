@@ -12,6 +12,8 @@ import AuthScreen from './src/components/AuthScreen'
 import Dashboard from './src/screens/Dashboard'
 import ContestBrowser from './src/screens/ContestBrowser'
 import SettingsScreen from './src/screens/SettingsScreen'
+import EarnScreen from './src/screens/EarnScreen'
+import { rpcConsumeSmartFill } from './src/lib/monetization/progression'
 import { parseNotificationPrefs } from './src/lib/notifications/prefs'
 import {
   registerForPushNotifications,
@@ -21,13 +23,14 @@ import type { AutoFillData } from './src/types/profile'
 import { resolveFeedDisplayPrefs } from './src/lib/utils/userSettings'
 
 function AppContent() {
-  const { session, loading, authReady, profile, user, updateProfile } = useAuth()
+  const { session, loading, authReady, profile, user, refreshProfile } = useAuth()
   const { enteredIds, markEntered } = useContestEntries()
   const { accentColor } = useTheme()
   const [overlayContest, setOverlayContest] = useState<Contest | null>(null)
   const [resolvedUrl, setResolvedUrl] = useState<string | null>(null)
   const [resolving, setResolving] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
+  const [showEarn, setShowEarn] = useState(false)
 
   const userIdRef = useRef(user?.id)
   const prefsEnabledRef = useRef(true)
@@ -110,12 +113,10 @@ function AppContent() {
     [markEntered]
   )
 
+  // Smart-Fill counts are server-owned: decrement via RPC, then pull the new count.
   const handleAutoFillUsed = useCallback(() => {
-    const remaining = profile?.smart_fills_remaining
-    if (typeof remaining === 'number' && remaining > 0) {
-      void updateProfile({ smart_fills_remaining: remaining - 1 })
-    }
-  }, [profile?.smart_fills_remaining, updateProfile])
+    void rpcConsumeSmartFill().then(() => refreshProfile())
+  }, [refreshProfile])
 
   if (!authReady || loading) {
     return (
@@ -134,12 +135,37 @@ function AppContent() {
     return <SettingsScreen onClose={() => setShowSettings(false)} />
   }
 
+  if (showEarn) {
+    return (
+      <UserEarnProvider>
+        <EarnScreen onClose={() => setShowEarn(false)} />
+      </UserEarnProvider>
+    )
+  }
+
   const showBrowser = overlayContest && resolvedUrl
 
   return (
     <UserEarnProvider>
       <View className="flex-1 bg-gray-900">
-        <View style={{ position: 'absolute', top: 52, right: 16, zIndex: 20 }}>
+        <View style={{ position: 'absolute', top: 52, right: 16, zIndex: 20, flexDirection: 'row', gap: 8 }}>
+          <TouchableOpacity
+            onPress={() => setShowEarn(true)}
+            accessibilityRole="button"
+            accessibilityLabel="Earn points"
+            style={{
+              backgroundColor: '#78350f',
+              borderColor: '#f59e0b',
+              borderWidth: 1,
+              borderRadius: 999,
+              paddingHorizontal: 12,
+              paddingVertical: 8,
+            }}
+          >
+            <Text style={{ color: '#fbbf24', fontSize: 13, fontWeight: '700' }}>
+              🪙 {(profile?.points_balance ?? 0).toLocaleString()}
+            </Text>
+          </TouchableOpacity>
           <TouchableOpacity
             onPress={() => setShowSettings(true)}
             accessibilityRole="button"
@@ -160,6 +186,7 @@ function AppContent() {
           onOpenOverlay={handleOpenOverlay}
           onPressUrl={handlePressUrl}
           enteredIds={enteredIds}
+          onNeedEarn={() => setShowEarn(true)}
         />
         {resolving && overlayContest && (
           <View

@@ -20,6 +20,29 @@ module.exports = () => {
     }
   }
 
+  // AdMob (rewarded videos). Real ids come from EAS env / mobile/.env; Google's public TEST
+  // ids keep builds working until your AdMob account is approved (test ads never pay).
+  const admobAndroid = process.env.EXPO_PUBLIC_ADMOB_ANDROID_APP_ID || 'ca-app-pub-3940256099942544~3347511713'
+  const admobIos = process.env.EXPO_PUBLIC_ADMOB_IOS_APP_ID || 'ca-app-pub-3940256099942544~1458002511'
+  expo.plugins = [
+    ...(expo.plugins ?? []).filter((p) => (Array.isArray(p) ? p[0] : p) !== 'react-native-google-mobile-ads'),
+    [
+      'react-native-google-mobile-ads',
+      {
+        androidAppId: admobAndroid,
+        iosAppId: admobIos,
+        userTrackingUsageDescription:
+          'Lets LoonieWins show you more relevant video ads, which pay you more points.',
+      },
+    ],
+  ]
+  // Personalized ads (much higher payouts) need the advertising id on Android.
+  if (expo.android?.blockedPermissions) {
+    expo.android.blockedPermissions = expo.android.blockedPermissions.filter(
+      (perm) => perm !== 'com.google.android.gms.permission.AD_ID'
+    )
+  }
+
   expo.extra = {
     ...expo.extra,
     push: {

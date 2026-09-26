@@ -77,9 +77,11 @@ interface DashboardProps {
   onPressUrl: (url: string) => void
   /** Shared from App so ContestBrowser mark-entered updates feed badges immediately */
   enteredIds?: Set<string>
+  /** Out of free entries and points → open the Earn screen */
+  onNeedEarn?: () => void
 }
 
-export default function Dashboard({ onOpenOverlay, onPressUrl, enteredIds: enteredIdsProp }: DashboardProps) {
+export default function Dashboard({ onOpenOverlay, onPressUrl, enteredIds: enteredIdsProp, onNeedEarn }: DashboardProps) {
   const { accentColor } = useTheme()
   const pipeline = useContestPipeline()
   const { liveContests, isScanning, isSyncingCloud, isFinished, offlineMode, phaseMessage, refetch } = pipeline
@@ -377,6 +379,7 @@ export default function Dashboard({ onOpenOverlay, onPressUrl, enteredIds: enter
   const renderItem = useCallback(
     ({ item: c }: { item: Contest }) => (
       <ContestCard
+        onNeedEarn={onNeedEarn}
         contest={c}
         onOpenOverlay={handleOpenOverlay}
         onOneTapEnter={(contest) => void oneTapEnter(contest)}
@@ -514,6 +517,7 @@ export default function Dashboard({ onOpenOverlay, onPressUrl, enteredIds: enter
               ) : (
                 routineContests.map((c) => (
                   <ContestCard
+                    onNeedEarn={onNeedEarn}
                     key={c.id}
                     contest={c}
                     onOpenOverlay={handleOpenOverlay}
@@ -539,6 +543,7 @@ export default function Dashboard({ onOpenOverlay, onPressUrl, enteredIds: enter
               ) : (
                 newRail.map((c) => (
                   <ContestCard
+                    onNeedEarn={onNeedEarn}
                     key={`new-${c.id}`}
                     contest={c}
                     onOpenOverlay={hasNewEndingRails ? handleOpenOverlay : () => setStatusToast('Upgrade to Pro for New rails')}
@@ -566,6 +571,7 @@ export default function Dashboard({ onOpenOverlay, onPressUrl, enteredIds: enter
               ) : (
                 endingRail.map((c) => (
                   <ContestCard
+                    onNeedEarn={onNeedEarn}
                     key={`end-${c.id}`}
                     contest={c}
                     onOpenOverlay={hasNewEndingRails ? handleOpenOverlay : () => setStatusToast('Upgrade to Pro for Ending rails')}

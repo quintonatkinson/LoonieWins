@@ -47,6 +47,7 @@ const MOBILE_MIRROR = [
   'src/lib/utils/linkHealth.ts',
   'src/lib/feed/filters.ts',
   'src/lib/feed/ranking.ts',
+  'src/lib/earn/rewards.ts',
 ]
 for (const rel of MOBILE_MIRROR) {
   outputs[rel.replace(/^src\//, 'mobile/src/')] =
