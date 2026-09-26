@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { mergeRankDedupe, titleKey, totalPrizeValue } from '../src/lib/feed/ranking'
+import { mergeRankDedupe, totalPrizeValue } from '../src/lib/feed/ranking'
 import { contestIdForUrl, decodeHtmlEntities } from '../src/lib/data/normalizer'
 import type { Contest } from '../src/lib/rssFetcher'
 

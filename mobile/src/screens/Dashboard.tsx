@@ -393,6 +393,7 @@ export default function Dashboard({ onOpenOverlay, onPressUrl, enteredIds: enter
       />
     ),
     [
+      onNeedEarn,
       handleOpenOverlay,
       onPressUrl,
       oneTapEnter,

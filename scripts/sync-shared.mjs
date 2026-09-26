@@ -31,7 +31,6 @@ if (start < 0) throw new Error('shared/autofill/engine.js must define function l
 const fn = engineSrc.slice(start).trim()
 const tsModule =
   banner('shared/autofill/engine.js') +
-  '/* eslint-disable */\n' +
   '/** Source of the self-contained `loonieAutofill(profile)` function, for page injection. */\n' +
   `export const AUTOFILL_ENGINE_SOURCE: string = ${JSON.stringify(fn)}\n`
 outputs['src/lib/autofill/engine.generated.ts'] = tsModule

@@ -92,9 +92,10 @@ export function useContestPipeline() {
   }, [])
 
   useEffect(() => {
+    const runs = runId
     void runPipeline()
     return () => {
-      runId.current++
+      runs.current++ // invalidate the in-flight run on unmount
     }
   }, [runPipeline])
 
