@@ -1,7 +1,7 @@
 /**
  * Local Vault + Supabase Hive Mind.
- * Persist contests in localStorage and sync with centralized Supabase DB.
- * Cloud data wins on merge. getLiveContests() serves from local for snappy UI.
+ * The ingest Edge Function fills public.contests server-side; the app reads it in one paged pull
+ * and caches it in localStorage so the next open paints instantly.
  */
 
 import type { Contest } from '../lib/rssFetcher'
@@ -94,7 +94,8 @@ function rowToContest(row: ContestRow): Contest {
   }
 }
 
-function contestToRow(c: Contest): Omit<ContestRow, 'created_at' | 'updated_at'> {
+// Clients no longer write public.contests (server-only since 20260926); kept for tooling.
+export function contestToRow(c: Contest): Omit<ContestRow, 'created_at' | 'updated_at'> {
   return {
     id: c.id,
     title: c.title,
@@ -128,67 +129,73 @@ function saveVault(contests: Contest[]): void {
   }
 }
 
-/**
- * Cloud Pull: fetch live contests from Supabase and merge into localStorage.
- * Cloud data wins conflicts (by url). Dispatches 'loonie_vault_updated'.
- */
-export async function fetchFromCloud(): Promise<number> {
-  if (!supabase) return 0
-  try {
-    const { data, error } = await withTimeout(
-      supabase.from('contests').select('*'),
-      CLOUD_TIMEOUT_MS
-    )
+const CLOUD_COLUMNS =
+  'id,title,url,source,expiry_date,is_estimated_expiry,prize_value,eligibility,tags,requirements,link_status,is_locked,created_at,updated_at'
+/** PostgREST caps each response at 1,000 rows; fetch pages in parallel. */
+const CLOUD_PAGE = 1000
+const CLOUD_MAX_PAGES = 5 // up to 5,000 live contests
 
-    if (error) {
-      console.warn('[Vault] fetchFromCloud error:', error.message)
-      return 0
-    }
-
-    const rows = (data ?? []) as ContestRow[]
-    const cloudContests = rows.map(rowToContest)
-
-    const existing = loadVault()
-    const byUrl = new Map<string, Contest>()
-    for (const c of existing) {
-      byUrl.set(normalizeUrl(c.url), c)
-    }
-    for (const c of cloudContests) {
-      byUrl.set(normalizeUrl(c.url), c)
-    }
-    saveVault([...byUrl.values()])
-
-    if (typeof window !== 'undefined') {
-      window.dispatchEvent(new CustomEvent('loonie_vault_updated'))
-    }
-
-    return cloudContests.length
-  } catch (err) {
-    console.warn('[Vault] fetchFromCloud:', err)
-    return 0
-  }
+function liveQuery(from: number, withCount: boolean, size = CLOUD_PAGE) {
+  const nowIso = new Date().toISOString()
+  return supabase!
+    .from('contests')
+    .select(CLOUD_COLUMNS, withCount ? { count: 'exact' } : undefined)
+    .or(`expiry_date.is.null,expiry_date.gt.${nowIso}`)
+    .or('link_status.is.null,link_status.not.in.(404,410)')
+    .order('created_at', { ascending: false })
+    .range(from, from + size - 1)
 }
 
 /**
- * Cloud Push: UPSERT enriched contests to Supabase master DB.
+ * Cloud Pull: every live contest from the Hive Mind (filled by the ingest Edge Function),
+ * newest first. Replaces the local vault cache so the next open paints instantly.
+ * Returns null when the cloud is unavailable (offline / not configured).
  */
-export async function syncToCloud(contests: Contest[]): Promise<void> {
-  if (!supabase || contests.length === 0) return
+export async function fetchLiveFromCloud(): Promise<Contest[] | null> {
+  if (!supabase) return null
   try {
-    const rows = contests.map((c) => contestToRow(c))
-    const { error } = await withTimeout(
-      supabase.from('contests').upsert(rows, {
-        onConflict: 'id',
-        ignoreDuplicates: false,
-      }),
-      CLOUD_TIMEOUT_MS
-    )
-    if (error) {
-      console.warn('[Vault] syncToCloud error:', error.message)
+    const first = await withTimeout(liveQuery(0, true), CLOUD_TIMEOUT_MS)
+    if (first.error) {
+      console.warn('[Vault] cloud pull:', first.error.message)
+      return null
     }
+    const rows = [...((first.data ?? []) as unknown as ContestRow[])]
+    // The project's "max rows" setting may be below CLOUD_PAGE, so page by what actually came back.
+    const pageSize = rows.length
+    if (pageSize > 0 && first.count != null && first.count > pageSize) {
+      const pages = Math.min(CLOUD_MAX_PAGES, Math.ceil(first.count / pageSize))
+      const rest = await Promise.all(
+        Array.from({ length: pages - 1 }, (_, i) =>
+          Promise.resolve(withTimeout(liveQuery((i + 1) * pageSize, false, pageSize), CLOUD_TIMEOUT_MS)).catch(() => null)
+        )
+      )
+      for (const page of rest) {
+        if (page && !page.error) rows.push(...((page.data ?? []) as unknown as ContestRow[]))
+      }
+    } else if (pageSize > 0 && first.count == null) {
+      // Count unavailable: walk until a short page.
+      for (let i = 1; i < CLOUD_MAX_PAGES; i++) {
+        const page = await Promise.resolve(withTimeout(liveQuery(i * pageSize, false, pageSize), CLOUD_TIMEOUT_MS)).catch(() => null)
+        const data = page && !page.error ? ((page.data ?? []) as unknown as ContestRow[]) : []
+        rows.push(...data)
+        if (data.length < pageSize) break
+      }
+    }
+    const contests = rows.map(rowToContest)
+    if (contests.length > 0) {
+      saveVault(contests)
+      if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('loonie_vault_updated'))
+    }
+    return contests
   } catch (err) {
-    console.warn('[Vault] syncToCloud:', err)
+    console.warn('[Vault] cloud pull:', err)
+    return null
   }
+}
+
+/** @deprecated use fetchLiveFromCloud — kept for callers that only need the count */
+export async function fetchFromCloud(): Promise<number> {
+  return (await fetchLiveFromCloud())?.length ?? 0
 }
 
 /**

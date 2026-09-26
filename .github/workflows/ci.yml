@@ -21,7 +21,7 @@ jobs:
       - run: npm run lint
       - run: npx tsc -b
       - run: npm test
-      - run: node scripts/sync-autofill.mjs --check
+      - run: node scripts/sync-shared.mjs --check
       - run: npm run build
       - name: Extension syntax
         run: for f in $(find extension -name '*.js'); do node --check "$f"; done
@@ -76,3 +76,16 @@ jobs:
             done
           done
           $P -f supabase/tests/economy_hardening.test.sql
+          $P -f supabase/tests/feed_lockdown.test.sql
+
+  edge-functions:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: Type-check functions
+        run: for f in supabase/functions/*/index.ts; do deno check --no-config "$f"; done
+      - name: Ingest tests
+        run: deno test --allow-env --no-config supabase/functions/

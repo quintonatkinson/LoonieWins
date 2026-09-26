@@ -33,6 +33,7 @@ import {
   sortByBestOdds,
   type FeedFilterOptions,
 } from '../lib/feed/filters'
+import { totalPrizeValue } from '../lib/feed/ranking'
 import {
   loadHomeMode,
   loadAutoAdvance,
@@ -64,6 +65,12 @@ type SortFilter = SortDefault | null
 const NEW_RAIL_MS = 48 * 60 * 60 * 1000
 const FREE_RAIL_TEASER = 2
 const PRO_RAIL_LIMIT = 12
+
+function formatPrizePool(v: number): string {
+  if (v >= 1_000_000) return `$${(v / 1_000_000).toFixed(1)}M`
+  if (v >= 1_000) return `$${Math.round(v / 1_000).toLocaleString()}K`
+  return `$${Math.round(v)}`
+}
 
 interface DashboardProps {
   onOpenOverlay: (contest: Contest) => void
@@ -298,6 +305,11 @@ export default function Dashboard({ onOpenOverlay, onPressUrl, enteredIds: enter
     [liveContests, filterOpts]
   )
 
+  const liveStats = useMemo(
+    () => ({ count: railBase.length, prizes: totalPrizeValue(railBase) }),
+    [railBase]
+  )
+
   const newRail = useMemo(() => {
     const cutoff = Date.now() - NEW_RAIL_MS
     return [...railBase]
@@ -399,6 +411,18 @@ export default function Dashboard({ onOpenOverlay, onPressUrl, enteredIds: enter
       )}
       {!showFullRadar && (
         <>
+          {liveStats.count > 0 && (
+            <View className="mx-4 mt-3 rounded-2xl border border-win/30 bg-win/10 px-4 py-3">
+              <Text className="text-2xl font-extrabold text-gray-50">
+                {liveStats.count.toLocaleString()} <Text className="text-win">live contests</Text>
+              </Text>
+              <Text className="text-sm text-gray-300 mt-0.5">
+                {liveStats.prizes > 0 ? `${formatPrizePool(liveStats.prizes)} in prizes you can enter ` : ''}
+                {geoFilter === 'ANY' ? 'across Canada & the US' : geoFilter === 'US' ? 'in the US' : 'in Canada'} ·
+                updated every 30 min
+              </Text>
+            </View>
+          )}
           <View className="px-4 pt-3 pb-2">
             <Text className="text-xs text-gray-500 mb-1">
               Appearance & more filters live in Settings

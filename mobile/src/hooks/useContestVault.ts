@@ -1,11 +1,12 @@
 /**
- * Local Vault + Supabase Hive Mind. Uses AsyncStorage.
+ * Local Vault + Supabase Hive Mind (AsyncStorage cache). The ingest Edge Function fills
+ * public.contests server-side; the app reads it in one paged pull.
  */
 
 import type { Contest } from '../lib/rssFetcher'
 import { toExpiryEndOfDay } from '../lib/utils/expiryDate'
 import { isDeadLink, DEAD_LINK_STATUSES } from '../lib/utils/linkHealth'
-import { supabase } from '../lib/supabase'
+import { isSupabaseConfigured, supabase } from '../lib/supabase'
 import { storage } from '../lib/utils/storage'
 import { autoCategorize } from '../lib/data/tagger'
 
@@ -71,7 +72,8 @@ function rowToContest(row: ContestRow): Contest {
   }
 }
 
-function contestToRow(c: Contest): Omit<ContestRow, 'created_at' | 'updated_at'> {
+// Clients no longer write public.contests (server-only since 20260926); kept for tooling.
+export function contestToRow(c: Contest): Omit<ContestRow, 'created_at' | 'updated_at'> {
   return {
     id: c.id,
     title: c.title,
@@ -103,36 +105,69 @@ async function saveVault(contests: Contest[]): Promise<void> {
   } catch {}
 }
 
-export async function fetchFromCloud(): Promise<number> {
+const CLOUD_COLUMNS =
+  'id,title,url,source,expiry_date,is_estimated_expiry,prize_value,eligibility,tags,requirements,link_status,is_locked,created_at,updated_at'
+/** PostgREST caps each response at 1,000 rows; fetch pages in parallel. */
+const CLOUD_PAGE = 1000
+const CLOUD_MAX_PAGES = 5 // up to 5,000 live contests
+
+function liveQuery(from: number, withCount: boolean, size = CLOUD_PAGE) {
+  const nowIso = new Date().toISOString()
+  return supabase
+    .from('contests')
+    .select(CLOUD_COLUMNS, withCount ? { count: 'exact' } : undefined)
+    .or(`expiry_date.is.null,expiry_date.gt.${nowIso}`)
+    .or('link_status.is.null,link_status.not.in.(404,410)')
+    .order('created_at', { ascending: false })
+    .range(from, from + size - 1)
+}
+
+/**
+ * Every live contest from the Hive Mind (filled server-side by the ingest Edge Function),
+ * newest first. Replaces the AsyncStorage cache. Null when the cloud is unavailable.
+ */
+export async function fetchLiveFromCloud(): Promise<Contest[] | null> {
+  if (!isSupabaseConfigured) return null
   try {
-    const { data, error } = await supabase.from('contests').select('*')
-    if (error) {
-      console.warn('[Vault] fetchFromCloud error:', error.message)
-      return 0
+    const first = await liveQuery(0, true)
+    if (first.error) {
+      console.warn('[Vault] cloud pull:', first.error.message)
+      return null
     }
-    const rows = (data ?? []) as ContestRow[]
-    const cloudContests = rows.map(rowToContest)
-    const existing = await loadVault()
-    const byUrl = new Map<string, Contest>()
-    for (const c of existing) byUrl.set(normalizeUrl(c.url), c)
-    for (const c of cloudContests) byUrl.set(normalizeUrl(c.url), c)
-    await saveVault([...byUrl.values()])
-    return cloudContests.length
+    const rows = [...((first.data ?? []) as unknown as ContestRow[])]
+    // The project's "max rows" setting may be below CLOUD_PAGE, so page by what actually came back.
+    const pageSize = rows.length
+    if (pageSize > 0 && first.count != null && first.count > pageSize) {
+      const pages = Math.min(CLOUD_MAX_PAGES, Math.ceil(first.count / pageSize))
+      const rest = await Promise.all(
+        Array.from({ length: pages - 1 }, (_, i) =>
+          Promise.resolve(liveQuery((i + 1) * pageSize, false, pageSize)).catch(() => null)
+        )
+      )
+      for (const page of rest) {
+        if (page && !page.error) rows.push(...((page.data ?? []) as unknown as ContestRow[]))
+      }
+    } else if (pageSize > 0 && first.count == null) {
+      // Count unavailable: walk until a short page.
+      for (let i = 1; i < CLOUD_MAX_PAGES; i++) {
+        const page = await Promise.resolve(liveQuery(i * pageSize, false, pageSize)).catch(() => null)
+        const data = page && !page.error ? ((page.data ?? []) as unknown as ContestRow[]) : []
+        rows.push(...data)
+        if (data.length < pageSize) break
+      }
+    }
+    const contests = rows.map(rowToContest)
+    if (contests.length > 0) await saveVault(contests)
+    return contests
   } catch (err) {
-    console.warn('[Vault] fetchFromCloud:', err)
-    return 0
+    console.warn('[Vault] cloud pull:', err)
+    return null
   }
 }
 
-export async function syncToCloud(contests: Contest[]): Promise<void> {
-  if (contests.length === 0) return
-  try {
-    const rows = contests.map(contestToRow)
-    const { error } = await supabase.from('contests').upsert(rows, { onConflict: 'id', ignoreDuplicates: false })
-    if (error) console.warn('[Vault] syncToCloud error:', error.message)
-  } catch (err) {
-    console.warn('[Vault] syncToCloud:', err)
-  }
+/** @deprecated use fetchLiveFromCloud */
+export async function fetchFromCloud(): Promise<number> {
+  return (await fetchLiveFromCloud())?.length ?? 0
 }
 
 export async function isVaultEmpty(): Promise<boolean> {

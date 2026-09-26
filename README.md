@@ -46,7 +46,7 @@ Canadian + American contest aggregator & offerwall — Win More, Work Less.
 
 ## Autofill engine (shared)
 
-`shared/autofill/engine.js` is the single form-filling engine used by the web app, the Expo WebView and the browser extension. Edit it there, then run `npm run sync:autofill` to regenerate `src/lib/autofill/engine.generated.ts`, `mobile/src/lib/autofill/engine.generated.ts` and `extension/lib/engine.generated.js` (CI fails if they drift). It never overwrites values the user typed, skips friend/referral, promo, username, company and address-line-2 fields, maps province/state codes ↔ names (EN/FR) for selects, fills country, and formats postal codes / phone numbers to the field's length.
+`shared/autofill/engine.js` is the single form-filling engine used by the web app, the Expo WebView and the browser extension. Edit it there, then run `npm run sync:shared` to regenerate `src/lib/autofill/engine.generated.ts`, `mobile/src/lib/autofill/engine.generated.ts` and `extension/lib/engine.generated.js` (CI fails if they drift). It never overwrites values the user typed, skips friend/referral, promo, username, company and address-line-2 fields, maps province/state codes ↔ names (EN/FR) for selects, fills country, and formats postal codes / phone numbers to the field's length.
 
 ## Browser extension
 

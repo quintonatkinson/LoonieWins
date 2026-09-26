@@ -3,10 +3,10 @@
  * Normalization pipeline: raw RSS/Atom item + source → clean Contest.
  */
 
-import type { Source } from './sources'
-import { SOURCE_FALLBACK_IMAGES } from './sources'
-import { sanitizeContestUrl } from '../utils/sanitizeContestUrl'
-import { autoCategorize, scanForMetadata } from './tagger'
+import type { Source } from './sources.ts'
+import { SOURCE_FALLBACK_IMAGES } from './sources.ts'
+import { sanitizeContestUrl } from './sanitizeContestUrl.ts'
+import { autoCategorize, scanForMetadata } from './tagger.ts'
 
 export interface Contest {
   id: string

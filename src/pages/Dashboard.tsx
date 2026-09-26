@@ -31,6 +31,7 @@ import {
   sortByBestOdds,
   type FeedFilterOptions,
 } from '../lib/feed/filters'
+import { totalPrizeValue } from '../lib/feed/ranking'
 import { saveAgeConfirmed } from '../lib/utils/ageGate'
 import {
   loadHomeMode,
@@ -66,6 +67,12 @@ function compareCreatedDescending(a?: string | null, b?: string | null): number 
   const va = Number.isFinite(ta) ? ta : 0
   const vb = Number.isFinite(tb) ? tb : 0
   return vb - va
+}
+
+function formatPrizePool(v: number): string {
+  if (v >= 1_000_000) return `$${(v / 1_000_000).toFixed(1)}M`
+  if (v >= 1_000) return `$${Math.round(v / 1_000).toLocaleString()}K`
+  return `$${Math.round(v)}`
 }
 
 export default function Dashboard() {
@@ -458,6 +465,11 @@ export default function Dashboard() {
     [liveContests, filterOpts]
   )
 
+  const liveStats = useMemo(
+    () => ({ count: railBase.length, prizes: totalPrizeValue(railBase) }),
+    [railBase]
+  )
+
   const newRail = useMemo(() => {
     const cutoff = Date.now() - NEW_RAIL_MS
     return [...railBase]
@@ -578,6 +590,23 @@ export default function Dashboard() {
       )}
       {!showFullRadar && (
         <>
+      {liveStats.count > 0 && (
+        <div className="mx-4 mt-3 rounded-2xl border border-win/30 bg-gradient-to-br from-win/15 to-transparent px-4 py-3">
+          <p className="text-2xl font-extrabold text-gray-50 leading-tight">
+            {liveStats.count.toLocaleString()} <span className="text-win">live contests</span>
+          </p>
+          <p className="text-sm text-gray-300 mt-0.5">
+            {liveStats.prizes > 0 && (
+              <>
+                <span className="font-semibold text-amber-300">{formatPrizePool(liveStats.prizes)}</span> in prizes you can
+                enter{' '}
+              </>
+            )}
+            {geoFilter === 'ANY' ? 'across Canada & the US' : geoFilter === 'US' ? 'in the US' : 'in Canada'} · updated
+            every 30 min
+          </p>
+        </div>
+      )}
       <div className="px-4 pt-3 pb-2 flex flex-wrap items-center gap-2 justify-between">
         <div className="flex flex-wrap items-center gap-2">
           <CountryToggle value={geoFilter} onChange={handleGeoChange} />

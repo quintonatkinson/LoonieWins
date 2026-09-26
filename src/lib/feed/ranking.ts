@@ -1,0 +1,85 @@
+/**
+ * Feed ranking + duplicate collapsing shared by web and mobile (mirrored by sync-shared).
+ * Linear time so a 2,000+ contest feed ranks in milliseconds on a phone.
+ */
+import type { Contest } from '../data/normalizer'
+
+export const OFFLINE_ALERT_ID = '__offline_alert__'
+
+export function qualityScore(c: Contest, home: 'CA' | 'US' = 'CA'): number {
+  const reqs = c.requirements ?? []
+  const tags = c.tags ?? []
+  let score = 0
+  if (reqs.length === 0) score += 50
+  if (tags.includes('⚡ Easy Entry')) score += 15
+  if (tags.includes('High Value')) score += 20
+  if ((c.prizeValue ?? 0) >= 500) score += 10
+  if (reqs.includes('Purchase Required')) score -= 20
+  if (reqs.includes('Creative Submission')) score -= 30
+  if (c.eligibility === home) score += 10
+  return score
+}
+
+export function urlKey(url: string): string {
+  try {
+    const u = new URL(url)
+    return `${u.host.replace(/^www\./, '')}${u.pathname}`.toLowerCase().replace(/\/+$/, '')
+  } catch {
+    return url.toLowerCase().replace(/\/+$/, '')
+  }
+}
+
+const TITLE_NOISE =
+  /\b(giveaway|contest|sweepstakes?|enter to win|chance to win|win|a|an|the|for|your|of|to|and|&)\b|\(.*?\)|\[.*?\]|[^a-z0-9$ ]/g
+
+/** Same prize posted by several blogs ("Win a $500 Tim Hortons Gift Card!" vs "…Giveaway") → one key. */
+export function titleKey(title: string): string {
+  return title
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .replace(TITLE_NOISE, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+/**
+ * Merge lists (later lists win on identical URLs), collapse cross-source duplicates by
+ * title (keeping the better-scored copy), then order by quality and freshness.
+ */
+export function mergeRankDedupe(...lists: Contest[][]): Contest[] {
+  const byUrl = new Map<string, Contest>()
+  for (const list of lists) {
+    for (const c of list) {
+      if (!c?.url || c.id === OFFLINE_ALERT_ID) continue
+      byUrl.set(urlKey(c.url), c)
+    }
+  }
+  const byTitle = new Map<string, Contest>()
+  for (const c of byUrl.values()) {
+    const key = titleKey(c.title)
+    if (key.length < 8) {
+      byTitle.set(`url:${urlKey(c.url)}`, c)
+      continue
+    }
+    const prev = byTitle.get(key)
+    if (!prev || qualityScore(c) > qualityScore(prev)) byTitle.set(key, c)
+  }
+  const fresh = (c: Contest) => {
+    const t = Date.parse(c.createdAt ?? c.postedAt ?? '')
+    return Number.isFinite(t) ? t : 0
+  }
+  return [...byTitle.values()].sort(
+    (a, b) => qualityScore(b) - qualityScore(a) || fresh(b) - fresh(a)
+  )
+}
+
+/** Sum of known / estimated prize values — powers the "$X in prizes" headline. */
+export function totalPrizeValue(contests: Contest[]): number {
+  let sum = 0
+  for (const c of contests) {
+    const v = c.prizeValue ?? 0
+    if (v > 0 && v < 5_000_000) sum += v
+  }
+  return sum
+}

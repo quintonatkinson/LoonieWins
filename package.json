@@ -9,8 +9,8 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "test": "vitest run",
-    "sync:autofill": "node scripts/sync-autofill.mjs",
-    "check": "npm run lint && tsc -b && vitest run && node scripts/sync-autofill.mjs --check"
+    "check": "npm run lint && tsc -b && vitest run && node scripts/sync-shared.mjs --check",
+    "sync:shared": "node scripts/sync-shared.mjs"
   },
   "dependencies": {
     "@capacitor/core": "^6.2.1",

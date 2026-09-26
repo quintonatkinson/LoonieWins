@@ -64,24 +64,53 @@ const TITLE_CLEAN_PATTERNS = [
   /\s*\[Daily\]\s*/gi,
 ]
 
-function decodeHtmlEntities(text: string): string {
-  if (!text.includes('&')) return text
-  try {
-    if (typeof document !== 'undefined') {
-      const el = document.createElement('textarea')
-      el.innerHTML = text
-      return el.value
+const NAMED_ENTITIES: Record<string, string> = {
+  amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ', rsquo: '\u2019', lsquo: '\u2018',
+  rdquo: '\u201d', ldquo: '\u201c', ndash: '\u2013', mdash: '\u2014', hellip: '\u2026',
+  eacute: '\u00e9', egrave: '\u00e8', agrave: '\u00e0', ccedil: '\u00e7', reg: '\u00ae',
+  trade: '\u2122', copy: '\u00a9', dollar: '$',
+}
+
+/** Decode HTML entities without a DOM (runs in browsers, React Native and Deno alike). */
+export function decodeHtmlEntities(text: string): string {
+  if (!text || !text.includes('&')) return text
+  return text.replace(/&(#x[0-9a-f]+|#\d+|[a-z]+);/gi, (whole, code: string) => {
+    if (code[0] === '#') {
+      const n = code[1] === 'x' || code[1] === 'X' ? parseInt(code.slice(2), 16) : parseInt(code.slice(1), 10)
+      return Number.isFinite(n) && n > 0 && n < 0x110000 ? String.fromCodePoint(n) : whole
     }
+    return NAMED_ENTITIES[code.toLowerCase()] ?? whole
+  })
+}
+
+const TRACKING_PARAMS = /^(utm_[a-z]+|fbclid|gclid|mc_cid|mc_eid|ref|source)$/i
+
+/**
+ * Stable contest id from its URL, so the same contest keeps one id across feeds, pages and
+ * ingest runs (the old `${source}-${index}-…` id changed whenever a feed shifted, duplicating rows).
+ */
+export function contestIdForUrl(url: string): string {
+  let key = url.trim().toLowerCase()
+  try {
+    const u = new URL(url.trim())
+    const params = [...u.searchParams.entries()]
+      .filter(([k]) => !TRACKING_PARAMS.test(k))
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([k, v]) => `${k}=${v}`)
+      .join('&')
+    key = `${u.host.replace(/^www\./, '')}${u.pathname.replace(/\/+$/, '')}${params ? `?${params}` : ''}`.toLowerCase()
   } catch {
-    /* fall through */
+    /* keep raw key */
   }
-  return text
-    .replace(/&amp;/g, '&')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/&apos;/g, "'")
+  // Two independent 32-bit FNV-1a hashes → 16 hex chars (collision-safe at our scale).
+  let h1 = 0x811c9dc5
+  let h2 = 0x01000193 ^ key.length
+  for (let i = 0; i < key.length; i++) {
+    const c = key.charCodeAt(i)
+    h1 = Math.imul(h1 ^ c, 0x01000193) >>> 0
+    h2 = Math.imul(h2 ^ c, 0x5bd1e995) >>> 0
+  }
+  return `c_${h1.toString(16).padStart(8, '0')}${h2.toString(16).padStart(8, '0')}`
 }
 
 function cleanTitle(title: string): string {
@@ -344,7 +373,7 @@ function applySourceDefaults(
   }
 }
 
-export function normalizeJsonItem(item: Rss2JsonItem, source: Source, index: number): Contest {
+export function normalizeJsonItem(item: Rss2JsonItem, source: Source, _index = 0): Contest {
   const title = cleanTitle(item.title)
   const body = [item.description ?? '', item.content ?? ''].join(' ')
   const categorized = autoCategorize(item.title, body)
@@ -359,7 +388,7 @@ export function normalizeJsonItem(item: Rss2JsonItem, source: Source, index: num
   const imageUrl =
     extractImageFromJsonItem(item, body) ?? SOURCE_FALLBACK_IMAGES[source.id]
 
-  const id = `${source.id}-${index}-${item.link.slice(-50).replace(/\W/g, '')}`
+  const id = contestIdForUrl(sanitizeContestUrl(item.link))
 
   const postedAtIso = parseDate(item.pubDate)
   const { expiryDate, is_estimated_expiry } = extractExpiryDate(body, postedAtIso)
@@ -390,7 +419,7 @@ export function normalizeJsonItem(item: Rss2JsonItem, source: Source, index: num
  * Turn a raw XML feed item and its source into a normalized Contest (Strategy B).
  * Applies title cleaning, image extraction, date parsing, and auto-categorization.
  */
-export function normalizeXmlItem(item: RawFeedItem, source: Source, index: number): Contest {
+export function normalizeXmlItem(item: RawFeedItem, source: Source, _index = 0): Contest {
   const title = cleanTitle(item.title)
   const body = [item.description ?? '', item.contentEncoded ?? '', item.content ?? ''].join(' ')
   const categorized = autoCategorize(item.title, body)
@@ -405,7 +434,7 @@ export function normalizeXmlItem(item: RawFeedItem, source: Source, index: numbe
   const imageUrl =
     extractImage(item) ?? SOURCE_FALLBACK_IMAGES[source.id]
 
-  const id = `${source.id}-${index}-${item.link.slice(-50).replace(/\W/g, '')}`
+  const id = contestIdForUrl(sanitizeContestUrl(item.link))
 
   const postedAtIso = parseDate(item.pubDate)
   const { expiryDate, is_estimated_expiry } = extractExpiryDate(body, postedAtIso)
