@@ -12,12 +12,14 @@ Canadian + American contest aggregator & offerwall — Win More, Work Less.
 
 ## Setup
 
+> **Owner?** Start with [`docs/OWNER_SETUP.md`](./docs/OWNER_SETUP.md) — a click-by-click checklist (database, shared web/app config, deploys, ad + survey accounts).
+
 1. `npm install`
 2. Copy `.env.example` → `.env`:
    - `VITE_SUPABASE_URL=https://oftunznsumfidavvbqz.supabase.co`
    - `VITE_SUPABASE_ANON_KEY=…`
    - Optional: `VITE_RSS2JSON_API_KEY` for fatter RSS pages (50–100 vs ~10 free)
-3. Run **`supabase/schema.sql`** in the SQL Editor (full bootstrap). Expose schemas `public`, `tracking`, `giveaways`. Enable Email auth (Confirm email off for local testing).
+3. Run **`supabase/setup/full_setup.sql`** in the SQL Editor (schema + every migration; re-runnable). Existing projects: `supabase/setup/latest_update.sql`. Expose schemas `public`, `tracking`, `giveaways`. Enable Email auth (Confirm email off for local testing).
 4. `npm run dev` — with Supabase configured: Create account / Log in; without keys: guest mode.
 5. **Server ingest (recommended):** follow [`docs/ingest-deploy.md`](./docs/ingest-deploy.md) (`supabase functions deploy ingest-giveaways` + cron / GitHub Action).
 6. **Additive migrations** (after bootstrap): run every file in `supabase/migrations/` in filename order — freemium, UGC, push, feed leveling, Pro/IAP, and **`20260925_economy_hardening.sql` (required: makes points / Pro / XP server-owned)**.

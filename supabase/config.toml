@@ -1,3 +1,5 @@
+project_id = "looniewins"
+
 # Supabase project config for LoonieWins scheduled ingest + push alerts + digest.
 # After `supabase functions deploy …`, enable cron (Dashboard schedules or pg_cron).
 
