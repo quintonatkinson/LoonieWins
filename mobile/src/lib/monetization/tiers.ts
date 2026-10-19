@@ -30,7 +30,7 @@ export const PRO_LOCKED_FEATURES = [
   {
     id: 'unlimited_smart_fills',
     title: 'Unlimited Smart-Fills',
-    detail: 'No 3-fill free cap — autofill every contest',
+    detail: 'No 3-fill free cap — inject profile fields on supported forms',
   },
   {
     id: 'new_ending_rails',
