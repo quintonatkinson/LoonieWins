@@ -2,7 +2,7 @@
  * AdGem offerwall postback → credits points server-side.
  *
  * Deploy:
- *   npx supabase functions deploy adgem-postback --project-ref oftunznsumfidavvbqz
+ *   npx supabase functions deploy adgem-postback --project-ref <ref>
  *
  * Secrets (Dashboard → Edge Functions → Secrets — NEVER in the client):
  *   SUPABASE_URL
@@ -11,28 +11,19 @@
  * Optional:
  *   ADGEM_APP_ID         (reject mismatched app_id)
  *   ADGEM_POINTS_PER_USD (default 1000 — maps payout USD → pts; prefer payout over amount)
+ *   ADGEM_ALLOW_UNSIGNED=true  (dev only — not for production)
  *
  * AdGem Postback URL (v2 GET example):
- *   https://oftunznsumfidavvbqz.supabase.co/functions/v1/adgem-postback
+ *   https://<project-ref>.supabase.co/functions/v1/adgem-postback
  *     ?player_id={player_id}&transaction_id={transaction_id}&amount={amount}
  *     &payout={payout}&campaign_id={campaign_id}&app_id={app_id}
  *     &request_id={request_id}&verifier={verifier}
  *
- * Verification (v2): HMAC-SHA256(hex) of the full request URL with `verifier`
- * query param stripped, keyed by ADGEM_POSTBACK_KEY.
- * v3: HMAC-SHA256(raw body) compared to `Signature` header.
- *
- * Security: service_role stays on the server only. Clients open the wall with
- * the public app id; completions are trusted only after this webhook verifies.
+ * Idempotency: credit_offerwall_completion unique(provider, external_id) → duplicate:true
  */
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.0'
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers':
-    'authorization, x-client-info, apikey, content-type, signature',
-}
+import { corsHeaders, json, timingSafeEqual } from '../_shared/http.ts'
 
 function hexHmacSha256(key: string, message: string): Promise<string> {
   const enc = new TextEncoder()
@@ -44,20 +35,6 @@ function hexHmacSha256(key: string, message: string): Promise<string> {
         .map((b) => b.toString(16).padStart(2, '0'))
         .join('')
     )
-}
-
-function timingSafeEqual(a: string, b: string): boolean {
-  if (a.length !== b.length) return false
-  let out = 0
-  for (let i = 0; i < a.length; i++) out |= a.charCodeAt(i) ^ b.charCodeAt(i)
-  return out === 0
-}
-
-function json(status: number, body: Record<string, unknown>): Response {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-  })
 }
 
 /**
@@ -83,6 +60,9 @@ Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
   }
+  if (req.method !== 'GET' && req.method !== 'POST') {
+    return json(405, { ok: false, reason: 'method_not_allowed' })
+  }
 
   const postbackKey = Deno.env.get('ADGEM_POSTBACK_KEY')?.trim()
   const supabaseUrl = Deno.env.get('SUPABASE_URL')
@@ -91,11 +71,16 @@ Deno.serve(async (req) => {
   const pointsPerUsd = Number(Deno.env.get('ADGEM_POINTS_PER_USD') || '1000')
 
   if (!postbackKey || !supabaseUrl || !serviceKey) {
+    console.error('[adgem-postback] misconfigured — missing secrets')
     return json(500, {
       ok: false,
       reason: 'server_misconfigured',
       hint: 'Set ADGEM_POSTBACK_KEY + SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY on the function',
     })
+  }
+
+  if (!Number.isFinite(pointsPerUsd) || pointsPerUsd <= 0) {
+    return json(500, { ok: false, reason: 'server_misconfigured', hint: 'ADGEM_POINTS_PER_USD invalid' })
   }
 
   const url = new URL(req.url)
@@ -116,11 +101,8 @@ Deno.serve(async (req) => {
         if (!timingSafeEqual(expected.toLowerCase(), signature.toLowerCase())) {
           return json(401, { ok: false, reason: 'bad_signature' })
         }
-      } else {
-        // Allow unsigned POST only when explicitly disabled (not recommended)
-        if (Deno.env.get('ADGEM_ALLOW_UNSIGNED') !== 'true') {
-          return json(401, { ok: false, reason: 'missing_signature' })
-        }
+      } else if (Deno.env.get('ADGEM_ALLOW_UNSIGNED') !== 'true') {
+        return json(401, { ok: false, reason: 'missing_signature' })
       }
 
       let body: Record<string, unknown> = {}
@@ -175,9 +157,10 @@ Deno.serve(async (req) => {
   if (!playerId || !/^[0-9a-f-]{36}$/i.test(playerId)) {
     return json(400, { ok: false, reason: 'bad_player_id' })
   }
-  if (!externalId) {
+  if (!externalId || !String(externalId).trim()) {
     return json(400, { ok: false, reason: 'missing_transaction_id' })
   }
+  externalId = String(externalId).trim().slice(0, 200)
 
   const points = pointsFromPayload(amountRaw, payoutRaw, pointsPerUsd)
   if (points <= 0) {
@@ -199,10 +182,21 @@ Deno.serve(async (req) => {
   })
 
   if (error) {
-    console.error('[adgem-postback]', error.message)
+    console.error('[adgem-postback] rpc', error.message)
     return json(500, { ok: false, reason: 'rpc_error', detail: error.message })
   }
 
-  // AdGem expects HTTP 200 on success
-  return json(200, { ok: true, result: data })
+  const result = (data ?? {}) as Record<string, unknown>
+  if (result.ok === false) {
+    // Business rejection from RPC — not a transport failure
+    return json(400, { ok: false, reason: result.reason ?? 'credit_rejected', result })
+  }
+
+  // AdGem expects HTTP 200 on success (including idempotent duplicates)
+  console.log(
+    '[adgem-postback] ok',
+    externalId,
+    result.duplicate === true ? 'duplicate' : `points=${points}`
+  )
+  return json(200, { ok: true, duplicate: result.duplicate === true, result })
 })
