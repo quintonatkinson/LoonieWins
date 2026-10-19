@@ -60,6 +60,10 @@ export interface Rss2JsonItem {
 const TITLE_CLEAN_PATTERNS = [
   /\s*\[QC\/PEI Excluded\]\s*/gi,
   /\s*\(QC\/PEI Excluded\)\s*/gi,
+  /\s*\[QC Excluded\]\s*/gi,
+  /\s*\(QC Excluded\)\s*/gi,
+  /\s*\[No QC\]\s*/gi,
+  /\s*\(No QC\)\s*/gi,
   /\s*\(Daily\)\s*/gi,
   /\s*\[Daily\]\s*/gi,
 ]

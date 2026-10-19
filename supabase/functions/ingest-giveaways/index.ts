@@ -62,6 +62,17 @@ const DISABLED_SOURCE_IDS: string[] = [
   'win-prizes-online',
   'true-sweepstakes',
   'save-a-loonie',
+  // Overnight sources quality 2026-10-19 — persistently dead / empty / proxy-blocked
+  'contestscoop',
+  'contest-canada',
+  'sweepstakes-lovers',
+  'reddit-contestsofcanada',
+  'reddit-canadian-contests',
+  'reddit-contests-canada',
+  'reddit-freebiescanada',
+  'reddit-sweepstakes',
+  'reddit-giveaways',
+  'reddit-freebies',
   'gleam-directory',
   'viralsweep-directory',
   'woobox-directory',
@@ -97,12 +108,6 @@ const ACTIVE_SOURCES: Source[] = [
   { id: 'cfs-contests', name: 'Canadian Free Stuff (Contests)', url: 'https://www.canadianfreestuff.com/canadian-contests/feed/', country: 'CA', enabled: true },
   { id: 'cfs-daily', name: 'Canadian Free Stuff (Daily)', url: 'https://www.canadianfreestuff.com/canadian-contests/enter-daily/feed/', country: 'CA', enabled: true },
   { id: 'cfs-canadian-contests', name: 'Canadian Free Stuff (Category)', url: 'https://www.canadianfreestuff.com/category/canadian-contests/feed/', country: 'CA', enabled: true },
-  { id: 'contestscoop', name: 'ContestScoop', url: 'https://contestscoop.com/feed/', country: 'CA', enabled: true },
-  { id: 'contest-canada', name: 'Contest Canada (.ca)', url: 'https://contestcanada.ca/feed/', country: 'CA', enabled: true },
-  { id: 'reddit-contestsofcanada', name: 'Reddit r/contestsofcanada', url: 'https://www.reddit.com/r/contestsofcanada/.rss', country: 'CA', enabled: true, includeKeywords: CONTEST_KEYWORDS },
-  { id: 'reddit-canadian-contests', name: 'Reddit r/CanadianContests', url: 'https://www.reddit.com/r/CanadianContests/.rss', country: 'CA', enabled: true, includeKeywords: CONTEST_KEYWORDS },
-  { id: 'reddit-contests-canada', name: 'Reddit r/contestsCanada', url: 'https://www.reddit.com/r/contestsCanada/.rss', country: 'CA', enabled: true, includeKeywords: CONTEST_KEYWORDS },
-  { id: 'reddit-freebiescanada', name: 'Reddit r/FreebiesCanada', url: 'https://www.reddit.com/r/FreebiesCanada/.rss', country: 'CA', enabled: true, includeKeywords: CONTEST_KEYWORDS },
   { id: 'sweeties-sweeps', name: 'Sweeties Sweeps', url: 'https://sweetiessweeps.com/feed/', country: 'US', enabled: true },
   { id: 'sweepstakes-bible', name: 'Sweepstakes Bible', url: 'https://www.sweepstakesbible.com/feed/', country: 'US', enabled: true },
   { id: 'sweepstakes-bible-daily', name: 'Sweepstakes Bible (Daily Entry)', url: 'https://www.sweepstakesbible.com/category/daily-entry/feed/', country: 'US', enabled: true },
@@ -126,13 +131,9 @@ const ACTIVE_SOURCES: Source[] = [
   { id: 'online-sweepstakes-monthly', name: 'Online Sweepstakes (Monthly Entry)', url: 'https://www.online-sweepstakes.com/monthly-entry-sweepstakes/feed/', country: 'US', enabled: true },
   { id: 'southern-savers-sweeps', name: 'Southern Savers (Sweepstakes)', url: 'https://www.southernsavers.com/category/sweepstakes/feed/', country: 'US', enabled: true, includeKeywords: CONTEST_KEYWORDS },
   { id: 'contestbee', name: 'Contest Bee', url: 'https://www.contestbee.com/feed/', country: 'US', enabled: true },
-  { id: 'sweepstakes-lovers', name: 'Sweepstakes Lovers', url: 'https://www.sweepstakeslovers.com/feed/', country: 'US', enabled: true },
   { id: 'sweepstakes-lovers-daily', name: 'Sweepstakes Lovers (Daily Entry)', url: 'https://www.sweepstakeslovers.com/category/daily-entry/feed/', country: 'US', enabled: true },
   { id: 'sweepstakes-lovers-weekly', name: 'Sweepstakes Lovers (Weekly Entry)', url: 'https://www.sweepstakeslovers.com/category/weekly-entry/feed/', country: 'US', enabled: true },
   { id: 'sweepstakes-mag', name: 'Sweepstakes Mag', url: 'https://www.sweepstakesmag.com/feed/', country: 'US', enabled: true, includeKeywords: CONTEST_KEYWORDS },
-  { id: 'reddit-sweepstakes', name: 'Reddit r/sweepstakes', url: 'https://www.reddit.com/r/sweepstakes/.rss', country: 'US', enabled: true, includeKeywords: CONTEST_KEYWORDS },
-  { id: 'reddit-giveaways', name: 'Reddit r/giveaways', url: 'https://www.reddit.com/r/giveaways/.rss', country: 'US', enabled: true, includeKeywords: CONTEST_KEYWORDS },
-  { id: 'reddit-freebies', name: 'Reddit r/Freebies', url: 'https://www.reddit.com/r/Freebies/.rss', country: 'US', enabled: true, includeKeywords: CONTEST_KEYWORDS },
   {
     id: 'freestufffinder-giveaways',
     name: 'FreeStuffFinder (Giveaways)',
@@ -162,9 +163,9 @@ type SourceResult = {
 }
 
 const NO_PURCHASE =
-  /\b(no purchase necessary|without purchase|purchase not (required|necessary))\b/i
+  /\b(no purchase necessary|without purchase|purchase not (required|necessary)|no buy(ing)? (required|necessary)|amo[eé]|alternate[- ]means of entry)\b/i
 const BUY_TO_ENTER =
-  /\b(buy to enter|buy-to-enter|purchase required|purchase-required|with purchase|proof of purchase|upc code|receipt required|purchase to enter)\b/i
+  /\b(buy to enter|buy-to-enter|purchase required|purchase-required|with purchase|proof of purchase|product purchase|upc code|receipt required|purchase to enter|must (buy|purchase))\b/i
 
 function stripTags(html: string): string {
   return html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()
@@ -172,12 +173,23 @@ function stripTags(html: string): string {
 
 function isPurchaseRequired(text: string): boolean {
   if (NO_PURCHASE.test(text)) return false
-  return BUY_TO_ENTER.test(text) || /\b(upc|receipt)\b/i.test(text)
+  return BUY_TO_ENTER.test(text) || /\b(upc(\s*code)?|proof of purchase|original receipt)\b/i.test(text)
+}
+
+/** Soft-repair BOM / leading junk / bare ampersands before regex item split. */
+function sanitizeFeedXml(raw: string): string {
+  let xml = raw.replace(/^\uFEFF/, '').trim()
+  const start = xml.search(/<\?xml|<rss[\s>]|<feed[\s>]|<rdf:RDF/i)
+  if (start > 0) xml = xml.slice(start)
+  if (/<!doctype html|<html[\s>]/i.test(xml.slice(0, 400))) return ''
+  return xml.replace(/&(?!(?:[a-zA-Z][a-zA-Z0-9]*|#\d+|#x[\da-fA-F]+);)/g, '&amp;')
 }
 
 function parseRssItems(xml: string): FeedItem[] {
+  const cleaned = sanitizeFeedXml(xml)
+  if (!cleaned) return []
   const items: FeedItem[] = []
-  const blocks = xml.match(/<item[\s>][\s\S]*?<\/item>|<entry[\s>][\s\S]*?<\/entry>/gi) ?? []
+  const blocks = cleaned.match(/<item[\s>][\s\S]*?<\/item>|<entry[\s>][\s\S]*?<\/entry>/gi) ?? []
   for (const block of blocks) {
     const title = stripTags(
       (block.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1] ?? '').replace(/<!\[CDATA\[|\]\]>/g, '')
@@ -185,7 +197,14 @@ function parseRssItems(xml: string): FeedItem[] {
     let link =
       block.match(/<link[^>]*href=["']([^"']+)["']/i)?.[1] ??
       stripTags((block.match(/<link[^>]*>([\s\S]*?)<\/link>/i)?.[1] ?? '').replace(/<!\[CDATA\[|\]\]>/g, ''))
-    if (!link) link = block.match(/<guid[^>]*>([\s\S]*?)<\/guid>/i)?.[1]?.trim() ?? ''
+    if (!link) {
+      const guid = block.match(/<guid[^>]*>([\s\S]*?)<\/guid>/i)?.[1]?.trim() ?? ''
+      if (/^https?:\/\//i.test(guid)) link = guid
+    }
+    if (!link) {
+      const id = block.match(/<id[^>]*>([\s\S]*?)<\/id>/i)?.[1]?.trim() ?? ''
+      if (/^https?:\/\//i.test(id)) link = id
+    }
     const description = stripTags(
       (
         block.match(/<description[^>]*>([\s\S]*?)<\/description>/i)?.[1] ??
@@ -194,7 +213,7 @@ function parseRssItems(xml: string): FeedItem[] {
         ''
       ).replace(/<!\[CDATA\[|\]\]>/g, '')
     )
-    if (title && link && !/\/(feed|rss)(\/|$)/i.test(link)) {
+    if (title && link && !/\/(feed|rss)(\/|$)|atom\.xml$/i.test(link)) {
       items.push({ title, link: link.trim(), description })
     }
   }
