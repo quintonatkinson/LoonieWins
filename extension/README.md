@@ -4,11 +4,13 @@ Browser extension that fills giveaway / contest forms using your LoonieWins prof
 
 ## Install (unpacked)
 
+**Why:** Most sponsor sites block the web app iframe, so in-app Auto-Fill cannot reach the form. This extension fills fields on the **real** page after you Open & Enter.
+
 1. Build or clone this repo; you only need the `extension/` folder.
 2. Chrome: open `chrome://extensions` → enable **Developer mode** → **Load unpacked** → select `extension/`.
 3. Edge: open `edge://extensions` → same steps.
 
-Pin the toolbar icon for quick access.
+Pin the toolbar icon for quick access. From the LoonieWins Smart-Fill sheet, use **Open & Enter** + copy chips until the extension is installed.
 
 ## Use
 

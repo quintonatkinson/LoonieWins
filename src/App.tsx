@@ -9,6 +9,7 @@ import Referrals from './pages/Referrals'
 import Earn from './pages/Earn'
 import Winners from './pages/Winners'
 import PastContests from './pages/PastContests'
+import MyGiveaways from './pages/MyGiveaways'
 import Profile from './pages/Profile'
 import Privacy from './pages/Privacy'
 import Terms from './pages/Terms'
@@ -31,6 +32,7 @@ function MainAppRoutes() {
             <Route path="/earn" element={<Earn />} />
             <Route path="/winners" element={<Winners />} />
             <Route path="/past" element={<PastContests />} />
+            <Route path="/my-giveaways" element={<MyGiveaways />} />
             <Route path="/profile" element={<Profile />} />
             <Route path="/submit" element={<SubmitContest />} />
             <Route path="/moderate" element={<ModerateContests />} />

@@ -6,11 +6,9 @@ import {
   Settings,
   Shield,
   Download,
-  FileSpreadsheet,
   Trash2,
   Crown,
-  ExternalLink,
-  Check,
+  ChevronRight,
   FileText,
   LifeBuoy,
   Scale,
@@ -19,7 +17,7 @@ import {
 } from 'lucide-react'
 import { useUserEarn } from '../contexts/UserEarnContext'
 import { useAuth } from '../contexts/AuthContext'
-import { useContestEntries, type ContestEntryStatus } from '../hooks/useContestEntries'
+import { useContestEntries } from '../hooks/useContestEntries'
 import { useUserLimits } from '../hooks/useUserLimits'
 import SubscriptionModal from '../components/SubscriptionModal'
 import NotificationPreferences from '../components/NotificationPreferences'
@@ -27,12 +25,11 @@ import AccentPicker from '../components/AccentPicker'
 import DisplayPreferences from '../components/DisplayPreferences'
 import type { AutoFillData } from '../types/profile'
 import { downloadWebDataExport, deleteAccountAndLocalData } from '../lib/account/deleteAccount'
-import { downloadAppliedContestsCsv } from '../lib/account/exportAppliedCsv'
 import { displaySupportEmail } from '../lib/legal/constants'
 import { loadAutoFillData, saveAutoFillData } from '../lib/utils/autoFillStorage'
 import { isSupabaseConfigured } from '../lib/supabase'
-import { hasFeature, PRO_LOCKED_FEATURES } from '../lib/monetization/tiers'
-import { daysLeftUntilExpiry, isExpired } from '../lib/utils/expiryDate'
+import { PRO_LOCKED_FEATURES } from '../lib/monetization/tiers'
+import { isCurrentContestEntry } from '../lib/utils/contestEntryScope'
 
 const AUTO_FILL_FIELDS: { key: keyof AutoFillData; label: string }[] = [
   { key: 'firstName', label: 'First Name' },
@@ -53,17 +50,11 @@ function getAutoFillValue(key: string, data: Partial<AutoFillData>): string {
   return ''
 }
 
-function formatPrize(v: number | null | undefined): string | undefined {
-  if (v == null || Number.isNaN(v)) return undefined
-  if (v >= 1000) return `$${(v / 1000).toFixed(v % 1000 === 0 ? 0 : 1)}K`
-  return `$${Math.round(v)}`
-}
-
 export default function Profile() {
   const navigate = useNavigate()
   const { subscriptionTier, upgradeToPro, weeklyEntriesUsed } = useUserEarn()
   const { profile, updateProfile, signOut, user } = useAuth()
-  const { entries, updateStatus, removeEntry } = useContestEntries()
+  const { entries } = useContestEntries()
   const { smartFillsRemaining, smartFillsUnlimited, weeklyEntryCap, weeklyLimitReached } =
     useUserLimits()
 
@@ -74,9 +65,12 @@ export default function Profile() {
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [deleteBusy, setDeleteBusy] = useState(false)
   const [deleteMsg, setDeleteMsg] = useState<string | null>(null)
-  const [entryFilter, setEntryFilter] = useState<'all' | ContestEntryStatus>('all')
-  const [entrySearch, setEntrySearch] = useState('')
   const [showPrefs, setShowPrefs] = useState(false)
+
+  const activeGiveaways = useMemo(
+    () => entries.filter(isCurrentContestEntry).length,
+    [entries]
+  )
 
   const autoFillData: Partial<AutoFillData> = useMemo(() => {
     const af = profile?.auto_fill_data
@@ -93,37 +87,6 @@ export default function Profile() {
     }
     return loadAutoFillData()
   }, [profile])
-
-  const appliedContests = useMemo(() => {
-    const q = entrySearch.trim().toLowerCase()
-    return entries
-      .filter((e) => (entryFilter === 'all' ? true : e.status === entryFilter))
-      .filter((e) => (!q ? true : (e.title || e.contest_id).toLowerCase().includes(q)))
-      .map((e) => {
-        const expiresAt = e.expires_at
-        const expiredByDate = isExpired(expiresAt)
-        const daysLeft = daysLeftUntilExpiry(expiresAt)
-        let endsLabel: string | null = null
-        if (expiresAt) {
-          const day = expiresAt.slice(0, 10)
-          if (expiredByDate || e.status === 'expired') endsLabel = `Ended ${day}`
-          else if (daysLeft === 0) endsLabel = `Ends today (${day})`
-          else if (daysLeft === 1) endsLabel = `Ends tomorrow (${day})`
-          else if (daysLeft != null) endsLabel = `Ends ${day} · ${daysLeft}d left`
-          else endsLabel = `Ends ${day}`
-        }
-        return {
-          id: e.contest_id,
-          title: e.title || e.contest_id,
-          enteredAt: e.entered_at.slice(0, 10),
-          prizeValue: formatPrize(e.prize_value),
-          ended: e.status === 'expired' || e.status === 'lost' || expiredByDate,
-          endsLabel,
-          status: e.status,
-          url: e.contest_url,
-        }
-      })
-  }, [entries, entryFilter, entrySearch])
 
   const smartFillsLabel = smartFillsUnlimited
     ? 'Unlimited Smart-Fills'
@@ -174,47 +137,8 @@ export default function Profile() {
     setSaveMsg(user ? 'Saved to your account.' : 'Saved on this device.')
   }
 
-  const statusLabel = (s: ContestEntryStatus) => {
-    switch (s) {
-      case 'submitted':
-        return 'Submitted'
-      case 'won':
-        return 'Won'
-      case 'lost':
-        return 'Lost'
-      case 'expired':
-        return 'Expired'
-      default:
-        return 'Entered'
-    }
-  }
-
   const handleExport = async () => {
     await downloadWebDataExport()
-  }
-
-  const canExportCsv = hasFeature(profile?.feature_flags, 'export_csv', {
-    tier: subscriptionTier,
-    isPremium: profile?.is_premium,
-  })
-
-  const handleExportCsv = () => {
-    if (!canExportCsv) {
-      setShowPlanModal(true)
-      return
-    }
-    downloadAppliedContestsCsv(
-      entries.map((e) => ({
-        contest_id: e.contest_id,
-        title: e.title,
-        status: e.status,
-        entered_at: e.entered_at,
-        submitted_at: e.submitted_at,
-        prize_value: e.prize_value,
-        contest_url: e.contest_url,
-        expires_at: e.expires_at,
-      }))
-    )
   }
 
   const handleDelete = async () => {
@@ -327,155 +251,28 @@ export default function Profile() {
       </section>
 
       <section>
-        <div className="flex items-center justify-between mb-3 gap-2 flex-wrap">
-          <div className="flex items-center gap-2">
-            <Trophy className="w-5 h-5 text-win" />
-            <h2 className="text-sm font-semibold text-white uppercase tracking-wide">
-              Applied Contests
-            </h2>
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="text-sm text-gray-400">{entries.length} tracked</span>
-            <button
-              type="button"
-              onClick={handleExportCsv}
-              disabled={entries.length === 0 && canExportCsv}
-              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${
-                canExportCsv
-                  ? 'border-win/40 text-win hover:bg-win/10 disabled:opacity-40'
-                  : 'border-amber-500/40 text-amber-400 hover:bg-amber-500/10'
-              }`}
-              title={
-                canExportCsv
-                  ? 'Download Applied Contests as CSV'
-                  : 'Pro unlocks CSV export of Applied Contests'
-              }
-            >
-              <FileSpreadsheet className="w-3.5 h-3.5" />
-              {canExportCsv ? 'Export CSV' : 'CSV · Pro'}
-            </button>
-          </div>
+        <div className="flex items-center gap-2 mb-3">
+          <Trophy className="w-5 h-5 text-win" />
+          <h2 className="text-sm font-semibold text-white uppercase tracking-wide">
+            My Giveaways
+          </h2>
         </div>
-        <div className="flex flex-wrap gap-2 mb-3">
-          {(
-            [
-              ['all', 'All'],
-              ['entered', 'Entered'],
-              ['submitted', 'Submitted'],
-              ['won', 'Won'],
-              ['lost', 'Lost'],
-              ['expired', 'Expired'],
-            ] as const
-          ).map(([key, label]) => (
-            <button
-              key={key}
-              type="button"
-              onClick={() => setEntryFilter(key)}
-              className={`px-3 py-1 rounded-full text-xs font-medium border ${
-                entryFilter === key
-                  ? 'bg-win text-on-win border-win'
-                  : 'border-gray-600/50 text-gray-400'
-              }`}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-        <input
-          type="search"
-          value={entrySearch}
-          onChange={(e) => setEntrySearch(e.target.value)}
-          placeholder="Search your entries…"
-          className="w-full mb-3 px-3 py-2 rounded-lg bg-gray-900 border border-gray-600/50 text-white text-sm"
-        />
-        <ul className="space-y-2">
-          {appliedContests.length === 0 ? (
-            <li className="text-gray-500 text-sm py-4 text-center">
-              No entries yet. Mark contests as entered from Home.
-            </li>
-          ) : (
-            appliedContests.map((c) => (
-              <li
-                key={c.id}
-                className="rounded-xl border-2 border-win/40 bg-gray-800/60 px-4 py-3 space-y-2"
-              >
-                <div className="flex items-center gap-3">
-                  <div className="shrink-0 flex items-center justify-center w-8 h-8 rounded-full bg-win/20">
-                    <Check className="w-4 h-4 text-win" strokeWidth={3} />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-white line-clamp-1">{c.title}</p>
-                    <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-                      {c.prizeValue && (
-                        <span className="text-xs font-semibold text-win">{c.prizeValue}</span>
-                      )}
-                      <span className="text-xs text-gray-400">Entered {c.enteredAt}</span>
-                      {c.endsLabel ? (
-                        <span
-                          className={`text-xs ${c.ended ? 'text-red-400' : 'text-amber-300'}`}
-                        >
-                          {c.endsLabel}
-                        </span>
-                      ) : c.ended ? (
-                        <span className="text-xs text-red-400">Ended</span>
-                      ) : null}
-                      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-win/20 text-win">
-                        {statusLabel(c.status)}
-                      </span>
-                    </div>
-                  </div>
-                  {c.url && (
-                    <a
-                      href={c.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="shrink-0 p-2 rounded-lg text-win hover:bg-win/10 transition-colors"
-                      aria-label="Open contest"
-                    >
-                      <ExternalLink className="w-4 h-4" />
-                    </a>
-                  )}
-                </div>
-                <div className="flex flex-wrap gap-2 pl-11">
-                  {c.status === 'entered' && (
-                    <button
-                      type="button"
-                      onClick={() => void updateStatus(c.id, 'submitted')}
-                      className="text-xs px-2 py-1 rounded border border-win/40 text-win"
-                    >
-                      Mark submitted
-                    </button>
-                  )}
-                  {c.status !== 'won' && (
-                    <button
-                      type="button"
-                      onClick={() => void updateStatus(c.id, 'won')}
-                      className="text-xs px-2 py-1 rounded border border-gray-600/50 text-gray-300"
-                    >
-                      Won
-                    </button>
-                  )}
-                  {c.status !== 'lost' && (
-                    <button
-                      type="button"
-                      onClick={() => void updateStatus(c.id, 'lost')}
-                      className="text-xs px-2 py-1 rounded border border-gray-600/50 text-gray-300"
-                    >
-                      Lost
-                    </button>
-                  )}
-                  <button
-                    type="button"
-                    onClick={() => void removeEntry(c.id)}
-                    className="text-xs px-2 py-1 rounded border border-red-500/40 text-red-400"
-                  >
-                    Remove
-                  </button>
-                </div>
-              </li>
-            ))
-          )}
-        </ul>
+        <Link
+          to="/my-giveaways"
+          className="flex items-center gap-3 rounded-xl border-2 border-win/40 bg-gray-800/60 px-4 py-3 hover:bg-gray-800 transition-colors"
+          data-testid="profile-my-giveaways-link"
+        >
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-medium text-white">Contests you&apos;re in</p>
+            <p className="text-xs text-gray-400 mt-0.5">
+              {activeGiveaways} active · {entries.length} all-time
+            </p>
+            <p className="text-xs text-gray-500 mt-1">
+              Current &amp; All-time tabs, status filters, end dates
+            </p>
+          </div>
+          <ChevronRight className="w-5 h-5 text-win shrink-0" />
+        </Link>
       </section>
 
       <section>
