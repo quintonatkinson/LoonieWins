@@ -26,6 +26,8 @@ export interface Contest {
   eligibilityUnverified?: boolean
   requirements?: string[]
   linkStatus?: number
+  /** ISO when linkStatus was last probed / reported on this device */
+  linkCheckedAt?: string
   /** Hive Mind / feed created timestamp (ISO) — used for New rails */
   createdAt?: string
   /** ISO publish time from RSS when available — also powers Pro New rail */

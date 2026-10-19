@@ -58,3 +58,21 @@ body {
 .empty-panel {
   @apply rounded-xl border border-dashed border-gray-600/60 bg-gray-800/40 px-4 py-8 text-center;
 }
+
+/* Accessibility: calm motion for users who prefer reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .animate-pulse,
+  .animate-fade-in,
+  .animate-sheet-up,
+  .motion-safe\:transition-colors {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .motion-safe\:transition-colors {
+    transition-property: color, background-color, border-color;
+    transition-duration: 150ms;
+  }
+}

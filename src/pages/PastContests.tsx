@@ -1,11 +1,20 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import { Package } from 'lucide-react'
 import ContestCard from '../components/ContestCard'
 import PageShell from '../components/PageShell'
 import { getPastContests } from '../hooks/useContestVault'
 import type { Contest } from '../lib/rssFetcher'
-import { getExpirySortKey } from '../lib/utils/expiryDate'
+import { getExpirySortKey, isExpired } from '../lib/utils/expiryDate'
+
+function formatEndedDay(expiryDate?: string): string | null {
+  if (!expiryDate?.trim()) return null
+  const day = expiryDate.trim().slice(0, 10)
+  if (/^\d{4}-\d{2}-\d{2}$/.test(day)) return day
+  const t = Date.parse(expiryDate)
+  if (!Number.isFinite(t)) return null
+  return new Date(t).toISOString().slice(0, 10)
+}
 
 export default function PastContests() {
   const [pastContests, setPastContests] = useState<Contest[]>([])
@@ -24,9 +33,15 @@ export default function PastContests() {
     }
   }, [])
 
-  const sorted = [...pastContests].sort(
-    (a, b) => getExpirySortKey(b.expiryDate) - getExpirySortKey(a.expiryDate)
+  const sorted = useMemo(
+    () =>
+      [...pastContests].sort(
+        (a, b) => getExpirySortKey(b.expiryDate) - getExpirySortKey(a.expiryDate)
+      ),
+    [pastContests]
   )
+
+  const withKnownEnd = sorted.filter((c) => c.expiryDate && isExpired(c.expiryDate)).length
 
   return (
     <PageShell className="space-y-4" testId="past-contests">
@@ -54,12 +69,19 @@ export default function PastContests() {
         .
       </p>
 
+      {sorted.length > 0 && (
+        <p className="text-xs text-gray-500" data-testid="past-contests-counts">
+          {sorted.length} past
+          {withKnownEnd > 0 ? ` · ${withKnownEnd} with end dates` : ''}
+        </p>
+      )}
+
       {sorted.length === 0 ? (
-        <div className="empty-panel space-y-3">
-          <p className="text-white font-medium">No past contests yet</p>
+        <div className="empty-panel space-y-3" data-testid="past-empty-state">
+          <p className="text-white font-medium">Vault is empty — nothing expired yet</p>
           <p className="text-sm text-gray-400 max-w-sm mx-auto">
             When live Hive Mind contests expire, they drop here so you can still peek — without
-            cluttering Home.
+            cluttering Home. Browse Home to fill the feed first.
           </p>
           <Link
             to="/"
@@ -71,14 +93,26 @@ export default function PastContests() {
       ) : (
         <div className="opacity-70 grayscale-[35%] space-y-2">
           <ul className="space-y-2">
-            {sorted.map((c) => (
-              <ContestCard
-                key={c.id}
-                contest={c}
-                onOpenOverlay={() => {}}
-                variant="ended"
-              />
-            ))}
+            {sorted.map((c) => {
+              const endedDay = formatEndedDay(c.expiryDate)
+              return (
+                <li key={c.id} className="space-y-1">
+                  {endedDay && (
+                    <p
+                      className="text-[11px] font-medium text-red-400/90 px-1"
+                      data-testid="past-ended-date"
+                    >
+                      Ended {endedDay}
+                      {c.is_estimated_expiry ? ' · estimated' : ''}
+                    </p>
+                  )}
+                  {!endedDay && (
+                    <p className="text-[11px] text-gray-500 px-1">End date unknown</p>
+                  )}
+                  <ContestCard contest={c} onOpenOverlay={() => {}} variant="ended" />
+                </li>
+              )
+            })}
           </ul>
         </div>
       )}

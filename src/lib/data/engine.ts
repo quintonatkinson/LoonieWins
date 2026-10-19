@@ -446,7 +446,17 @@ export async function enrichContest(contest: Contest): Promise<Contest> {
     requirements,
     tags,
     restrictions,
-    ...(result.status != null && (result.status < 200 || result.status >= 300) && { linkStatus: result.status }),
+    ...(result.status != null &&
+      (result.status < 200 || result.status >= 300) && {
+        linkStatus: result.status,
+        linkCheckedAt: new Date().toISOString(),
+      }),
+    ...(result.status != null &&
+      result.status >= 200 &&
+      result.status < 300 && {
+        linkStatus: result.status,
+        linkCheckedAt: new Date().toISOString(),
+      }),
     ...(result.isLocked === true && { isLocked: true }),
   }
 }
