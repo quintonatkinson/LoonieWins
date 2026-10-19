@@ -10,6 +10,7 @@ import { shareContest } from '../lib/utils/shareContest'
 import { copyText } from '../lib/utils/copyText'
 import {
   deadLinkLabel,
+  formatLinkCheckedAgo,
   isDeadLink,
   isDeadLinkStatus,
   probeContestUrl,
@@ -191,7 +192,15 @@ export default function ContestBrowser({
     setStatusMsg(null)
     setLinkHealthMsg(null)
     if (isDeadLink(contest)) {
-      setLinkHealthMsg(`${deadLinkLabel(contest.linkStatus)} — try Open & Enter or Report bad link.`)
+      const checked = formatLinkCheckedAgo(contest.linkCheckedAt)
+      setLinkHealthMsg(
+        `${deadLinkLabel(contest.linkStatus)}${checked ? ` · ${checked}` : ''} — try Open & Enter or Report bad link below.`
+      )
+    } else if (contest.linkCheckedAt) {
+      const checked = formatLinkCheckedAgo(contest.linkCheckedAt)
+      if (checked) {
+        setLinkHealthMsg(`${checked}. If the page looks wrong, Report bad link below.`)
+      }
     }
     resolveContestUrl(contest.url, contest.contentSnippet ?? contest.description).then((url) => {
       setResolvedUrl(url)
@@ -201,9 +210,13 @@ export default function ContestBrowser({
     let cancelled = false
     void probeContestUrl(contest.url).then((status) => {
       if (cancelled || status == null) return
+      markVaultLinkStatus(contest.url, status)
       if (isDeadLinkStatus(status)) {
-        markVaultLinkStatus(contest.url, status)
-        setLinkHealthMsg(`${deadLinkLabel(status)} (rechecked) — Open & Enter may still fail.`)
+        setLinkHealthMsg(
+          `${deadLinkLabel(status)} (rechecked just now) — Open & Enter may still fail. Report bad link if it stays broken.`
+        )
+      } else if (status >= 200 && status < 400) {
+        setLinkHealthMsg('Link OK (rechecked just now). Still broken? Report bad link below.')
       }
     })
     return () => {
@@ -719,14 +732,21 @@ export default function ContestBrowser({
               onClick={() => {
                 reportUrl(contest.url, 410)
                 markVaultLinkStatus(contest.url, 410)
-                setLinkHealthMsg('Marked as bad link — dropped from this device’s live feed.')
+                setLinkHealthMsg(
+                  'Reported — dropped from this device’s live feed. Thanks for keeping Hive Mind honest.'
+                )
                 setReportToast(true)
                 setTimeout(() => setReportToast(false), 2500)
               }}
-              className="text-xs text-white/50 hover:text-white/70 transition-colors self-start"
+              className="text-xs text-amber-300/80 hover:text-amber-200 transition-colors self-start underline-offset-2 hover:underline"
+              data-testid="report-bad-link"
+              aria-label="Report bad or expired contest link"
             >
               Report bad link
             </button>
+            <p className="text-[10px] text-white/40 -mt-1">
+              Helps Hive Mind bury dead sponsor pages on this device.
+            </p>
             {(reportToast || statusMsg) && (
               <p className="text-xs text-win" role="status">
                 {statusMsg || 'Thanks — saved locally and removed from your live feed.'}

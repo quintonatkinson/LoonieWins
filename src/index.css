@@ -21,8 +21,25 @@ body {
   @apply bg-gray-900 text-gray-50 antialiased font-sans;
 }
 
-
 /* Glass / card panel (gray-800 = #1f2937) */
 .glass {
   @apply backdrop-blur-xl bg-gray-800 border border-gray-600/50;
+}
+
+/* Accessibility: calm motion for users who prefer reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .animate-pulse,
+  .animate-spin,
+  .motion-safe\:animate-spin,
+  .motion-safe\:transition-colors {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .motion-safe\:transition-colors {
+    transition-property: color, background-color, border-color;
+    transition-duration: 150ms;
+  }
 }

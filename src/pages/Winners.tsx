@@ -96,13 +96,13 @@ export default function Winners() {
   }, [winners])
 
   return (
-    <div className="p-4 space-y-6 pb-24">
+    <div className="p-4 space-y-5 pb-24 max-w-3xl mx-auto w-full" data-testid="winners-page">
       <div>
-        <h1 className="text-xl font-semibold flex items-center gap-2">
+        <h1 className="text-xl font-semibold flex items-center gap-2 text-white">
           <Trophy className="w-5 h-5 text-win" />
           Winners
         </h1>
-        <p className="text-white/70 text-sm mt-1">Recent wins. You could be next.</p>
+        <p className="text-gray-400 text-sm mt-1">Recent wins. You could be next.</p>
       </div>
 
       <div className="glass rounded-xl p-4 flex flex-wrap gap-4 text-sm">
@@ -139,9 +139,22 @@ export default function Winners() {
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           {filtered.length === 0 ? (
-            <p className="col-span-2 text-gray-500 text-sm py-6 text-center">
-              No wins in this period yet. Wins appear when users share them to the community feed.
-            </p>
+            <div
+              className="col-span-2 rounded-xl border border-dashed border-gray-600/60 bg-gray-800/40 px-4 py-8 text-center space-y-2"
+              data-testid="winners-empty"
+            >
+              <p className="text-white font-medium">No wins in this period yet</p>
+              <p className="text-sm text-gray-400 max-w-sm mx-auto">
+                Wins appear when people share them to the community feed. Keep entering from Home —
+                you could be next.
+              </p>
+              <Link
+                to="/"
+                className="inline-flex items-center justify-center px-4 py-2.5 rounded-lg bg-win text-on-win font-semibold text-sm"
+              >
+                Browse live contests
+              </Link>
+            </div>
           ) : (
             filtered.map((w) => {
               const big = (w.prizeValueEstimate ?? 0) >= BIG_WIN_THRESHOLD

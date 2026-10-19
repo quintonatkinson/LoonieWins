@@ -20,7 +20,9 @@ import { isSupabaseConfigured } from '../lib/supabase'
 import {
   compareExpiryAscending,
   daysLeftUntilExpiry,
+  isEndingSoon,
 } from '../lib/utils/expiryDate'
+import { isCurrentContestEntry } from '../lib/utils/contestEntryScope'
 import { isEndingTonight } from '../lib/utils/countdownLabel'
 import { isDeadLink } from '../lib/utils/linkHealth'
 import { saveAgeConfirmed } from '../lib/utils/ageGate'
@@ -105,7 +107,7 @@ export default function Dashboard() {
   const pipeline = useContestPipeline()
   const { liveContests, isScanning, isSyncingCloud, isFinished, offlineMode, phaseMessage, refetch } = pipeline
   const { profile, updateProfile } = useAuth()
-  const { enteredIds, markEntered: persistEntered } = useContestEntries()
+  const { entries, enteredIds, markEntered: persistEntered } = useContestEntries()
   const { smartFillsBlocked, smartFillsUnlimited, smartFillsRemaining, hasNewEndingRails } =
     useUserLimits()
   const [showSmartFillPaywall, setShowSmartFillPaywall] = useState(false)
@@ -431,6 +433,14 @@ export default function Dashboard() {
     return hivePieces.length ? hivePieces.join(' · ') : null
   }, [liveContests.length, isFinished, social.hiveLabel])
 
+  /** Contests you’re in that end within 48h — Home teaser into My Giveaways */
+  const endingInYourList = useMemo(() => {
+    return entries
+      .filter((e) => isCurrentContestEntry(e) && isEndingSoon(e.expires_at))
+      .sort((a, b) => compareExpiryAscending(a.expires_at, b.expires_at))
+      .slice(0, 3)
+  }, [entries])
+
   // Hive Mind history search (debounced)
   useEffect(() => {
     const q = search.trim()
@@ -713,6 +723,51 @@ export default function Dashboard() {
         >
           {hiveMindCounterLabel}
         </p>
+      )}
+
+      {endingInYourList.length > 0 && (
+        <section
+          className="px-4 pt-2 pb-1"
+          data-testid="ending-in-your-list"
+          aria-label="Ending in your list"
+        >
+          <div className="rounded-xl border border-amber-500/35 bg-amber-500/10 px-3 py-2.5 space-y-2">
+            <div className="flex items-center justify-between gap-2">
+              <h2 className="text-sm font-semibold text-amber-200">Ending in your list</h2>
+              <Link
+                to="/my-giveaways"
+                className="text-xs text-win hover:underline shrink-0"
+              >
+                Open Mine
+              </Link>
+            </div>
+            <ul className="space-y-1.5">
+              {endingInYourList.map((e) => {
+                const day = e.expires_at?.slice(0, 10)
+                const left = daysLeftUntilExpiry(e.expires_at)
+                const when =
+                  left === 0
+                    ? 'Ends today'
+                    : left === 1
+                      ? 'Ends tomorrow'
+                      : left != null
+                        ? `${left}d left`
+                        : 'Ending soon'
+                return (
+                  <li key={e.contest_id} className="flex items-start justify-between gap-2">
+                    <span className="text-xs text-gray-100 line-clamp-1 min-w-0">
+                      {e.title || e.contest_id}
+                    </span>
+                    <span className="text-[11px] text-amber-300 shrink-0 font-medium">
+                      {when}
+                      {day ? ` · ${day}` : ''}
+                    </span>
+                  </li>
+                )
+              })}
+            </ul>
+          </div>
+        </section>
       )}
 
       {/* Enter Next / Daily Routine */}

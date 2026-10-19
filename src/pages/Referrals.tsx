@@ -154,10 +154,10 @@ export default function Referrals() {
   }
 
   return (
-    <div className="p-4 space-y-6 pb-24">
+    <div className="p-4 space-y-5 pb-24 max-w-3xl mx-auto w-full" data-testid="referrals-page">
       <div>
         <h1 className="text-xl font-semibold text-gray-50">Referrals</h1>
-        <p className="text-gray-400 text-sm mt-1">
+        <p className="text-gray-400 text-sm mt-1 leading-relaxed">
           Real points, not karma. Click credit = +{REFERRAL_CLICK_POINTS} pts to the link owner
           (once per friend). Invite code: you +{REFERRAL_SIGNUP_REFEREE_POINTS}, friend +
           {REFERRAL_SIGNUP_REFERRER_POINTS}.
@@ -224,7 +224,17 @@ export default function Referrals() {
         {loading ? (
           <p className="text-gray-500 text-sm">Loading…</p>
         ) : links.length === 0 ? (
-          <p className="text-gray-500 text-sm">No referral links yet. Be the first.</p>
+          <div
+            className="rounded-xl border border-dashed border-gray-600/60 bg-gray-800/40 px-4 py-8 text-center space-y-2"
+            data-testid="referrals-empty"
+          >
+            <p className="text-white font-medium">No community links yet</p>
+            <p className="text-sm text-gray-400 max-w-sm mx-auto">
+              {error
+                ? error
+                : 'Be the first — add a contest URL above so friends can click and you earn pts.'}
+            </p>
+          </div>
         ) : (
           <ul className="space-y-3">
             {links.map((link) => (

@@ -15,6 +15,8 @@ import {
   openOfferwallSession,
   type OfferwallOffer,
 } from '../lib/earn/offerwall'
+import PageHeader from '../components/PageHeader'
+import { Coins } from 'lucide-react'
 
 const SIMULATE_MS = 2000
 
@@ -79,7 +81,13 @@ export default function Earn() {
   const closeSuccess = useCallback(() => setSuccessTask(null), [])
 
   return (
-    <div className="p-4 space-y-6 pb-24">
+    <div className="p-4 space-y-5 pb-24 max-w-3xl mx-auto w-full" data-testid="earn-page">
+      <PageHeader
+        icon={<Coins className="w-5 h-5 text-win" strokeWidth={2.5} />}
+        title="Earn"
+        subtitle="Offerwall pts when free weekly entries are capped"
+      />
+
       <div className="rounded-xl glass border border-amber-500/20 p-4">
         <p className="text-gray-300 text-sm">Your Balance</p>
         <p className="text-amber-400 font-bold text-2xl mt-1 flex items-center gap-2">
@@ -171,38 +179,58 @@ export default function Earn() {
       <section>
         <h2 className="text-base font-bold text-gray-50 mb-1">Offerwall</h2>
         <p className="text-xs text-gray-500 mb-3">{session.note}</p>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          {session.offers.map((offer) => (
+        {session.offers.length === 0 ? (
+          <div
+            className="rounded-xl border border-dashed border-gray-600/60 bg-gray-800/40 px-4 py-8 text-center space-y-2"
+            data-testid="earn-empty-offers"
+          >
+            <p className="text-white font-medium">No offers right now</p>
+            <p className="text-sm text-gray-400 max-w-sm mx-auto">
+              Check back later, or open the live AdGem wall when configured. Free weekly entries on
+              Home still work without pts.
+            </p>
             <button
-              key={offer.id}
               type="button"
-              disabled={!!loadingId}
-              onClick={() => handleOfferClick(offer)}
-              className="relative rounded-xl glass border border-amber-500/20 p-4 text-left flex flex-col gap-2 hover:border-amber-500/40 transition-colors disabled:opacity-60 disabled:pointer-events-none"
+              onClick={() => navigate('/')}
+              className="inline-flex items-center justify-center px-4 py-2.5 rounded-lg bg-win text-on-win font-semibold text-sm"
             >
-              <div className="flex items-start justify-between gap-2">
-                <span className="font-semibold text-gray-50 text-sm line-clamp-2">{offer.title}</span>
-                <span className="shrink-0 px-2 py-0.5 rounded-full text-xs font-medium bg-amber-500/20 text-amber-400 border border-amber-500/30">
-                  {offer.tag}
-                </span>
-              </div>
-              <div className="flex items-center justify-between mt-auto">
-                <span className="text-amber-400 font-bold text-sm">
-                  {offer.reward > 0 ? `+${offer.reward.toLocaleString()} Pts` : 'Variable'}
-                </span>
-                <span className="flex items-center gap-1 text-xs text-gray-400">
-                  <TimeIcon kind={offer.timeKind} />
-                  {offer.timeLabel}
-                </span>
-              </div>
-              {loadingId === offer.id && (
-                <div className="absolute inset-0 rounded-xl bg-gray-900/80 flex items-center justify-center" aria-busy>
-                  <div className="w-8 h-8 border-2 border-amber-400 border-t-transparent rounded-full animate-spin" />
-                </div>
-              )}
+              Back to Home
             </button>
-          ))}
-        </div>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {session.offers.map((offer) => (
+              <button
+                key={offer.id}
+                type="button"
+                disabled={!!loadingId}
+                onClick={() => handleOfferClick(offer)}
+                className="relative rounded-xl glass border border-amber-500/20 p-4 text-left flex flex-col gap-2 hover:border-amber-500/40 transition-colors disabled:opacity-60 disabled:pointer-events-none"
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <span className="font-semibold text-gray-50 text-sm line-clamp-2">{offer.title}</span>
+                  <span className="shrink-0 px-2 py-0.5 rounded-md text-xs font-medium bg-amber-500/20 text-amber-400 border border-amber-500/30">
+                    {offer.tag}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between mt-auto">
+                  <span className="text-amber-400 font-bold text-sm">
+                    {offer.reward > 0 ? `+${offer.reward.toLocaleString()} Pts` : 'Variable'}
+                  </span>
+                  <span className="flex items-center gap-1 text-xs text-gray-400">
+                    <TimeIcon kind={offer.timeKind} />
+                    {offer.timeLabel}
+                  </span>
+                </div>
+                {loadingId === offer.id && (
+                  <div className="absolute inset-0 rounded-xl bg-gray-900/80 flex items-center justify-center" aria-busy>
+                    <div className="w-8 h-8 border-2 border-amber-400 border-t-transparent rounded-full motion-safe:animate-spin" />
+                  </div>
+                )}
+              </button>
+            ))}
+          </div>
+        )}
       </section>
 
       {successTask && (
