@@ -28,10 +28,11 @@ import DisplayPreferences from '../components/DisplayPreferences'
 import type { AutoFillData } from '../types/profile'
 import { downloadWebDataExport, deleteAccountAndLocalData } from '../lib/account/deleteAccount'
 import { downloadAppliedContestsCsv } from '../lib/account/exportAppliedCsv'
-import { SUPPORT_EMAIL } from '../lib/legal/constants'
+import { displaySupportEmail } from '../lib/legal/constants'
 import { loadAutoFillData, saveAutoFillData } from '../lib/utils/autoFillStorage'
 import { isSupabaseConfigured } from '../lib/supabase'
 import { hasFeature, PRO_LOCKED_FEATURES } from '../lib/monetization/tiers'
+import { daysLeftUntilExpiry, isExpired } from '../lib/utils/expiryDate'
 
 const AUTO_FILL_FIELDS: { key: keyof AutoFillData; label: string }[] = [
   { key: 'firstName', label: 'First Name' },
@@ -98,15 +99,30 @@ export default function Profile() {
     return entries
       .filter((e) => (entryFilter === 'all' ? true : e.status === entryFilter))
       .filter((e) => (!q ? true : (e.title || e.contest_id).toLowerCase().includes(q)))
-      .map((e) => ({
-        id: e.contest_id,
-        title: e.title || e.contest_id,
-        enteredAt: e.entered_at.slice(0, 10),
-        prizeValue: formatPrize(e.prize_value),
-        ended: e.status === 'expired' || e.status === 'lost',
-        status: e.status,
-        url: e.contest_url,
-      }))
+      .map((e) => {
+        const expiresAt = e.expires_at
+        const expiredByDate = isExpired(expiresAt)
+        const daysLeft = daysLeftUntilExpiry(expiresAt)
+        let endsLabel: string | null = null
+        if (expiresAt) {
+          const day = expiresAt.slice(0, 10)
+          if (expiredByDate || e.status === 'expired') endsLabel = `Ended ${day}`
+          else if (daysLeft === 0) endsLabel = `Ends today (${day})`
+          else if (daysLeft === 1) endsLabel = `Ends tomorrow (${day})`
+          else if (daysLeft != null) endsLabel = `Ends ${day} · ${daysLeft}d left`
+          else endsLabel = `Ends ${day}`
+        }
+        return {
+          id: e.contest_id,
+          title: e.title || e.contest_id,
+          enteredAt: e.entered_at.slice(0, 10),
+          prizeValue: formatPrize(e.prize_value),
+          ended: e.status === 'expired' || e.status === 'lost' || expiredByDate,
+          endsLabel,
+          status: e.status,
+          url: e.contest_url,
+        }
+      })
   }, [entries, entryFilter, entrySearch])
 
   const smartFillsLabel = smartFillsUnlimited
@@ -196,6 +212,7 @@ export default function Profile() {
         submitted_at: e.submitted_at,
         prize_value: e.prize_value,
         contest_url: e.contest_url,
+        expires_at: e.expires_at,
       }))
     )
   }
@@ -392,11 +409,16 @@ export default function Profile() {
                       {c.prizeValue && (
                         <span className="text-xs font-semibold text-win">{c.prizeValue}</span>
                       )}
-                      {c.ended ? (
+                      <span className="text-xs text-gray-400">Entered {c.enteredAt}</span>
+                      {c.endsLabel ? (
+                        <span
+                          className={`text-xs ${c.ended ? 'text-red-400' : 'text-amber-300'}`}
+                        >
+                          {c.endsLabel}
+                        </span>
+                      ) : c.ended ? (
                         <span className="text-xs text-red-400">Ended</span>
-                      ) : (
-                        <span className="text-xs text-gray-400">{c.enteredAt}</span>
-                      )}
+                      ) : null}
                       <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-win/20 text-win">
                         {statusLabel(c.status)}
                       </span>
@@ -610,7 +632,7 @@ export default function Profile() {
               <LifeBuoy className="w-5 h-5 text-gray-400 shrink-0" />
               <div>
                 <p className="text-sm font-medium text-white">Support</p>
-                <p className="text-xs text-gray-500">{SUPPORT_EMAIL}</p>
+                <p className="text-xs text-gray-500">{displaySupportEmail()}</p>
               </div>
             </Link>
           </li>

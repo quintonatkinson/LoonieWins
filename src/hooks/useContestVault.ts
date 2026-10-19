@@ -30,9 +30,6 @@ function withTimeout<T>(promise: PromiseLike<T>, ms: number): Promise<T> {
 
 const VAULT_KEY = 'loonie_vault_v1'
 
-/** @deprecated prefer DEAD_LINK_STATUSES from linkHealth */
-const DEAD_STATUSES = [...DEAD_LINK_STATUSES]
-
 interface ContestRow {
   id: string
   title: string
@@ -296,4 +293,12 @@ export async function searchHiveMind(
   return [...byUrl.values()].slice(0, limit)
 }
 
-export { isDeadLink, DEAD_STATUSES }
+/** Local vault size — guest-safe Hive Mind inventory count (live + past). */
+export function getVaultContestCount(): { total: number; live: number; past: number } {
+  const vault = loadVault()
+  const live = getLiveContests().length
+  const past = getPastContests().length
+  return { total: vault.length, live, past }
+}
+
+export { isDeadLink, DEAD_LINK_STATUSES as DEAD_STATUSES }
