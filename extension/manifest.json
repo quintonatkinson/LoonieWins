@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "LoonieWins Autofill",
-  "version": "0.1.0",
-  "description": "Fill giveaway forms with your LoonieWins profile. Sync from the web app localStorage or Supabase (anon key only).",
+  "name": "LoonieWins Smart-Fill",
+  "version": "0.1.1",
+  "description": "Best-effort fill of matching giveaway fields from your LoonieWins profile. You review and submit. Sync from the web app localStorage or Supabase (anon key only).",
   "icons": {
     "16": "icons/icon16.png",
     "32": "icons/icon32.png",
@@ -10,7 +10,7 @@
     "128": "icons/icon128.png"
   },
   "action": {
-    "default_title": "LoonieWins Autofill",
+    "default_title": "LoonieWins Smart-Fill",
     "default_popup": "popup/popup.html",
     "default_icon": {
       "16": "icons/icon16.png",
@@ -56,7 +56,7 @@
       "suggested_key": {
         "default": "Alt+Shift+L"
       },
-      "description": "Fill the active tab with LoonieWins profile data"
+      "description": "Try to fill matching fields on the active tab"
     }
   }
 }

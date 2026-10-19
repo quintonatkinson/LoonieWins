@@ -54,22 +54,26 @@ export default function NotificationPreferences() {
   const [msg, setMsg] = useState<string | null>(null)
 
   const setPref = async (patch: Partial<NotificationPrefs>) => {
-    if (!user) {
-      setMsg('Sign in to sync notification preferences.')
-      return
-    }
     setBusy(true)
     setMsg(null)
     const nextSettings = withNotificationPrefs(profile?.settings, patch)
     const { error } = await updateProfile({ settings: nextSettings })
-    if (!error && patch.enabled === true) {
+    if (error) {
+      setMsg(error)
+      setBusy(false)
+      return
+    }
+    // Guests persist locally (same as web #35); push delivery still needs a signed-in account.
+    if (user && patch.enabled === true) {
       const reg = await registerForPushNotifications(user.id)
       if (reg.error) setMsg(`Prefs saved. Token: ${reg.error}`)
       else setMsg('Saved. Device registered for push.')
-    } else if (error) {
-      setMsg(error)
-    } else {
+    } else if (user) {
       setMsg('Saved.')
+    } else {
+      setMsg(
+        'Saved on this device. Sign in to sync to your account; push delivery needs an account.'
+      )
     }
     setBusy(false)
   }

@@ -49,7 +49,7 @@ form.addEventListener('submit', async (ev) => {
 })
 
 document.getElementById('fill-btn').addEventListener('click', async () => {
-  setStatus('Filling active tab…')
+  setStatus('Trying best-effort fill on the active tab…')
   const res = await chrome.runtime.sendMessage({ type: 'FILL_ACTIVE_TAB' })
   if (!res?.ok) {
     setStatus(res?.reason || 'Fill failed', 'err')
@@ -57,14 +57,25 @@ document.getElementById('fill-btn').addEventListener('click', async () => {
   }
   const n = res.summary?.filled ?? 0
   const h = res.summary?.highlighted ?? 0
-  setStatus(`Filled ${n} field(s); highlighted ${h} skill-testing field(s).`, 'ok')
+  if (res.empty || n === 0) {
+    setStatus(
+      res.reason ||
+        'No matching fields on this page. Try again after the form loads, or paste from Open & Enter copy chips.',
+      'err',
+    )
+    return
+  }
+  setStatus(
+    `Matched ${n} field(s). Review before submit. ${h} skill-test field(s) highlighted.`,
+    'ok',
+  )
 })
 
 document.getElementById('sync-tab-btn').addEventListener('click', async () => {
-  setStatus('Syncing from active tab…')
+  setStatus('Focus the LoonieWins tab, then syncing…')
   const res = await chrome.runtime.sendMessage({ type: 'SYNC_ACTIVE_TAB' })
   if (!res?.ok) {
-    setStatus(res?.reason || 'Sync failed', 'err')
+    setStatus(res?.reason || 'Sync failed — keep the LoonieWins tab focused.', 'err')
     return
   }
   setStatus(`Synced from ${res.source}.`, 'ok')

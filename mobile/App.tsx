@@ -10,6 +10,7 @@ import { ThemeProvider, useTheme } from './src/contexts/ThemeContext'
 import { useContestEntries } from './src/hooks/useContestEntries'
 import AuthScreen from './src/components/AuthScreen'
 import Dashboard from './src/screens/Dashboard'
+import MyGiveaways from './src/screens/MyGiveaways'
 import ContestBrowser from './src/screens/ContestBrowser'
 import SettingsScreen from './src/screens/SettingsScreen'
 import { parseNotificationPrefs } from './src/lib/notifications/prefs'
@@ -20,14 +21,17 @@ import {
 import type { AutoFillData } from './src/types/profile'
 import { resolveFeedDisplayPrefs } from './src/lib/utils/userSettings'
 
+type MainTab = 'home' | 'mine'
+
 function AppContent() {
-  const { session, loading, authReady, profile, user, updateProfile } = useAuth()
-  const { enteredIds, markEntered } = useContestEntries()
+  const { session, loading, authReady, profile, user, isGuest, updateProfile } = useAuth()
+  const { entries, enteredIds, markEntered, updateStatus, removeEntry } = useContestEntries()
   const { accentColor } = useTheme()
   const [overlayContest, setOverlayContest] = useState<Contest | null>(null)
   const [resolvedUrl, setResolvedUrl] = useState<string | null>(null)
   const [resolving, setResolving] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
+  const [mainTab, setMainTab] = useState<MainTab>('home')
 
   const userIdRef = useRef(user?.id)
   const prefsEnabledRef = useRef(true)
@@ -126,7 +130,7 @@ function AppContent() {
     )
   }
 
-  if (!session) {
+  if (!session && !isGuest) {
     return <AuthScreen />
   }
 
@@ -138,7 +142,7 @@ function AppContent() {
 
   return (
     <UserEarnProvider>
-      <View className="flex-1 bg-gray-900">
+      <View style={{ flex: 1, backgroundColor: '#111827' }}>
         <View style={{ position: 'absolute', top: 52, right: 16, zIndex: 20 }}>
           <TouchableOpacity
             onPress={() => setShowSettings(true)}
@@ -156,11 +160,64 @@ function AppContent() {
             <Text style={{ color: accentColor, fontSize: 13, fontWeight: '600' }}>Settings</Text>
           </TouchableOpacity>
         </View>
-        <Dashboard
-          onOpenOverlay={handleOpenOverlay}
-          onPressUrl={handlePressUrl}
-          enteredIds={enteredIds}
-        />
+        <View style={{ flex: 1 }}>
+          {mainTab === 'home' ? (
+            <Dashboard
+              onOpenOverlay={handleOpenOverlay}
+              onPressUrl={handlePressUrl}
+              enteredIds={enteredIds}
+            />
+          ) : (
+            <View style={{ flex: 1, paddingTop: 48 }}>
+              <MyGiveaways
+                entries={entries}
+                updateStatus={updateStatus}
+                removeEntry={removeEntry}
+                onGoHome={() => setMainTab('home')}
+              />
+            </View>
+          )}
+        </View>
+        <View
+          style={{
+            flexDirection: 'row',
+            borderTopWidth: 1,
+            borderTopColor: '#374151',
+            backgroundColor: '#111827',
+            paddingBottom: 10,
+            paddingTop: 6,
+          }}
+          accessibilityRole="tablist"
+        >
+          {(
+            [
+              ['home', 'Home'],
+              ['mine', 'Mine'],
+            ] as const
+          ).map(([key, label]) => {
+            const on = mainTab === key
+            return (
+              <TouchableOpacity
+                key={key}
+                accessibilityRole="tab"
+                accessibilityState={{ selected: on }}
+                onPress={() => setMainTab(key)}
+                style={{ flex: 1, alignItems: 'center', paddingVertical: 10 }}
+                testID={`main-tab-${key}`}
+              >
+                <Text
+                  style={{
+                    color: on ? accentColor : '#9ca3af',
+                    fontWeight: on ? '700' : '600',
+                    fontSize: 13,
+                  }}
+                >
+                  {label}
+                </Text>
+              </TouchableOpacity>
+            )
+          })}
+        </View>
         {resolving && overlayContest && (
           <View
             style={{

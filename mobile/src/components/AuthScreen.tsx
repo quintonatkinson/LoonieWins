@@ -14,7 +14,14 @@ import { useAuth } from '../contexts/AuthContext'
 type Mode = 'login' | 'signup'
 
 export default function AuthScreen() {
-  const { signIn, signUp, needsEmailConfirm, pendingEmail, clearEmailConfirm } = useAuth()
+  const {
+    signIn,
+    signUp,
+    continueAsGuest,
+    needsEmailConfirm,
+    pendingEmail,
+    clearEmailConfirm,
+  } = useAuth()
   const [mode, setMode] = useState<Mode>('signup')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -176,6 +183,38 @@ export default function AuthScreen() {
               {mode === 'signup' ? 'Create account' : 'Log in'}
             </Text>
           )}
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          onPress={() => {
+            setBusy(true)
+            void continueAsGuest().finally(() => setBusy(false))
+          }}
+          disabled={busy}
+          style={{
+            marginTop: 14,
+            borderRadius: 12,
+            paddingVertical: 14,
+            borderWidth: 1,
+            borderColor: '#4b5563',
+            opacity: busy ? 0.6 : 1,
+          }}
+          accessibilityLabel="Continue as guest"
+        >
+          <Text style={{ color: '#d1d5db', fontWeight: '600', textAlign: 'center' }}>
+            Continue as guest
+          </Text>
+          <Text
+            style={{
+              color: '#6b7280',
+              fontSize: 11,
+              textAlign: 'center',
+              marginTop: 4,
+              paddingHorizontal: 8,
+            }}
+          >
+            Prefs and entries stay on this device. Sign in later to sync and enable push.
+          </Text>
         </TouchableOpacity>
       </ScrollView>
     </KeyboardAvoidingView>
