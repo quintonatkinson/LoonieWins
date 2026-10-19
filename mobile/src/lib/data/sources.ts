@@ -184,7 +184,9 @@ export const MASTER_SOURCES: Source[] = [
     type: 'rss_standard',
     country: 'CA',
     trustScore: 6,
-    enabled: true,
+    enabled: false,
+    notes:
+      'Disabled 2026-10-19: host returns WAF/HTML “access limited” (5xx) — not RSS. Direct + rss2json fail persistently.',
   },
   {
     id: 'contest-canada',
@@ -193,7 +195,9 @@ export const MASTER_SOURCES: Source[] = [
     type: 'rss_standard',
     country: 'CA',
     trustScore: 5,
-    enabled: true,
+    enabled: false,
+    notes:
+      'Disabled 2026-10-19: feed still serves only stale 2020 archive posts (no live contests). Prefer contestcanada-net.',
   },
   {
     id: 'reddit-contestsofcanada',
@@ -202,8 +206,10 @@ export const MASTER_SOURCES: Source[] = [
     type: 'rss_reddit',
     country: 'CA',
     trustScore: 8,
-    enabled: true,
+    enabled: false,
     includeKeywords: CONTEST_KEYWORDS,
+    notes:
+      'Disabled 2026-10-19: /.rss resolves to subreddit search (0 entries) — community missing/renamed.',
   },
   {
     id: 'reddit-canadian-contests',
@@ -212,8 +218,10 @@ export const MASTER_SOURCES: Source[] = [
     type: 'rss_reddit',
     country: 'CA',
     trustScore: 7,
-    enabled: true,
+    enabled: false,
     includeKeywords: CONTEST_KEYWORDS,
+    notes:
+      'Disabled 2026-10-19: Reddit blocks shared proxies (corsproxy 403 / rss2json fail / 429). Re-enable only with server-side ingest allowlist.',
   },
   {
     id: 'reddit-contests-canada',
@@ -222,8 +230,10 @@ export const MASTER_SOURCES: Source[] = [
     type: 'rss_reddit',
     country: 'CA',
     trustScore: 6,
-    enabled: true,
+    enabled: false,
     includeKeywords: CONTEST_KEYWORDS,
+    notes:
+      'Disabled 2026-10-19: same Reddit proxy/rate-limit dead path as other CA Reddit feeds.',
   },
   {
     id: 'reddit-freebiescanada',
@@ -232,9 +242,10 @@ export const MASTER_SOURCES: Source[] = [
     type: 'rss_reddit',
     country: 'CA',
     trustScore: 5,
-    enabled: true,
+    enabled: false,
     includeKeywords: CONTEST_KEYWORDS,
-    notes: 'Thin freebie community; keyword filter keeps only contest/giveaway posts.',
+    notes:
+      'Disabled 2026-10-19: thin community + Reddit proxy/rate-limit dead path.',
   },
 
   // ——— United States (active) ———
@@ -385,7 +396,9 @@ export const MASTER_SOURCES: Source[] = [
     type: 'rss_standard',
     country: 'US',
     trustScore: 8,
-    enabled: true,
+    enabled: false,
+    notes:
+      'Disabled 2026-10-19: main /feed/ returns empty body (0 bytes). Daily/weekly category feeds still active.',
   },
   {
     id: 'sweepstakes-lovers-daily',
@@ -423,8 +436,10 @@ export const MASTER_SOURCES: Source[] = [
     type: 'rss_reddit',
     country: 'US',
     trustScore: 8,
-    enabled: true,
+    enabled: false,
     includeKeywords: CONTEST_KEYWORDS,
+    notes:
+      'Disabled 2026-10-19: intermittent 429 + corsproxy 403 / rss2json fail on client path. Prefer server ingest if revived.',
   },
   {
     id: 'reddit-giveaways',
@@ -433,8 +448,10 @@ export const MASTER_SOURCES: Source[] = [
     type: 'rss_reddit',
     country: 'US',
     trustScore: 7,
-    enabled: true,
+    enabled: false,
     includeKeywords: CONTEST_KEYWORDS,
+    notes:
+      'Disabled 2026-10-19: Reddit proxy/rate-limit dead path for browser engine.',
   },
   {
     id: 'reddit-freebies',
@@ -443,8 +460,10 @@ export const MASTER_SOURCES: Source[] = [
     type: 'rss_reddit',
     country: 'US',
     trustScore: 6,
-    enabled: true,
+    enabled: false,
     includeKeywords: CONTEST_KEYWORDS,
+    notes:
+      'Disabled 2026-10-19: Reddit proxy/rate-limit dead path for browser engine.',
   },
   // Cloudflare blocks datacenter IPs on this host; rss2json relay works for giveaways category.
   {

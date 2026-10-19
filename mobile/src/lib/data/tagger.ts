@@ -1,5 +1,9 @@
 /**
  * Auto-categorization: tags and restrictions from title/body.
+ * Honesty rules:
+ * - Purchase / 18+ only when age-gate or buy-to-enter language is clear
+ * - Never treat “No Purchase Necessary” / AMOE as purchase-required
+ * - Québec exclusions cover common CA sponsor phrasing (incl. accents)
  */
 
 export interface TagResult {
@@ -9,24 +13,33 @@ export interface TagResult {
 
 const DAILY_PATTERNS = /\b(daily|every day|24h|\[daily\])\b/i
 const INSTANT_PATTERNS = /\b(instant|iw)\b/i
-const QUEBEC_EXCLUDED_PATTERNS = /\b(no qc|void in qc|excl quebec|excl\.?\s*quebec|rest of canada|quebec excluded|qc excluded|\[no qc\])\b/i
+/** Québec / QC void — keep in sync with Dashboard Québec-safe filter */
+const QUEBEC_EXCLUDED_PATTERNS =
+  /\b(no[\s-]?qc|void in qc|void (in|where) qu[eé]bec|excl\.?\s*qu[eé]bec|excluding qu[eé]bec|qu[eé]bec excluded|qc excluded|\[no qc\]|\[qc(\/pei)? excluded\]|\(qc(\/pei)? excluded\)|rest of canada|open (only )?to (residents of )?canada (except|excluding|outside) qu[eé]bec|not (open|available) (to|in) qu[eé]bec|qu[eé]bec residents (are )?excluded|void (in|for) (the )?province of qu[eé]bec)\b/i
 const HIGH_VALUE_PATTERNS =
   /\b(car|truck|vehicle|trip|vacation|cruise|\$10,?000|\$1,?000,?000|cash|ram\b|f-?150|silverado)\b/i
-const MATH_PATTERNS = /\b(math|skill testing|equation|answer correctly)\b/i
-const AGE_PATTERNS = /\b(18\+|21\+|18 years|21 years|age of majority)\b/i
+const MATH_PATTERNS = /\b(math|skill[- ]testing|equation|answer correctly)\b/i
+/**
+ * Age-gate only — avoid tagging mere “18” in prize copy.
+ * 19+/21+ still surface as 18+ filter (adult) so hide-18+ stays conservative.
+ */
+const AGE_PATTERNS =
+  /\b((must be|open to (persons?|entrants?)|entrants? must be|you must be)\s+)?(18|19|21)\+|\b(18|19|21)\s*years(\s*of\s*age)?(\s*or\s*older)?\b|\bage of majority\b|\blegal (drinking )?age\b/i
 const SINGLE_ENTRY_PATTERNS = /\b(single entry|one time|one entry|1 entry per person|\[once\])\b/i
 const WEEKLY_PATTERNS = /\b(weekly|every week)\b/i
 
 /** Explicit buy-to-enter / purchase-required (avoid matching "No Purchase Necessary"). */
 const NO_PURCHASE_NECESSARY =
-  /\b(no purchase necessary|without purchase|purchase not (required|necessary)|no buy(ing)? (required|necessary))\b/i
+  /\b(no purchase necessary|without purchase|purchase not (required|necessary)|no buy(ing)? (required|necessary)|amo[eé]|alternate[- ]means of entry)\b/i
 const BUY_TO_ENTER_PATTERNS =
-  /\b(buy to enter|buy-to-enter|purchase required|purchase-required|with purchase|proof of purchase|product purchase|buy any|buy a |buy one|upc code|receipt required|mail[- ]in entry with (proof|receipt)|purchase to enter)\b/i
-const PURCHASE_LOOSE = /\b(upc|receipt)\b/i
+  /\b(buy to enter|buy-to-enter|purchase required|purchase-required|with purchase|proof of purchase|product purchase|buy any|buy a |buy one|upc code|receipt required|mail[- ]in entry with (proof|receipt)|purchase to enter|must (buy|purchase)|require(s|d)? (a )?(purchase|receipt|upc))\b/i
+/** Loose UPC/receipt only when not in a “no purchase” / AMOE clause */
+const PURCHASE_LOOSE = /\b(upc(\s*code)?|proof of purchase|original receipt)\b/i
 
 const REQ_SOCIAL = /\b(instagram|tiktok|tag a friend|share on|retweet|follow us)\b/i
 const REQ_APP = /\b(download (the )?app|app store|install the app)\b/i
-const REQ_CREATIVE = /\b(photo (submit|submission|entry)|video (submit|submission|entry)|essay|story contest|recipe contest)\b/i
+const REQ_CREATIVE =
+  /\b(photo (submit|submission|entry)|video (submit|submission|entry)|essay|story contest|recipe contest)\b/i
 const REQ_NEWSLETTER = /\b(subscribe to (our )?newsletter|email list signup|join our email)\b/i
 
 export function isPurchaseRequiredText(text: string): boolean {

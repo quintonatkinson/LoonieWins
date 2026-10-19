@@ -16,6 +16,7 @@ import { resolveContestUrl } from '../lib/rssFetcher'
 import ContestCard from '../components/ContestCard'
 import CountryToggle from '../components/CountryToggle'
 import RadarLoader from '../components/RadarLoader'
+import FeedWarmupSkeleton from '../components/FeedWarmupSkeleton'
 import { useContestPipeline } from '../hooks/useContestPipeline'
 import { useContestEntries } from '../hooks/useContestEntries'
 import { useContestSocialProof } from '../hooks/useContestSocialProof'
@@ -107,7 +108,16 @@ interface DashboardProps {
 export default function Dashboard({ onOpenOverlay, onPressUrl, enteredIds: enteredIdsProp }: DashboardProps) {
   const { accentColor } = useTheme()
   const pipeline = useContestPipeline()
-  const { liveContests, isScanning, isSyncingCloud, isFinished, offlineMode, phaseMessage, refetch } = pipeline
+  const {
+    liveContests,
+    isScanning,
+    isSyncingCloud,
+    isFinished,
+    offlineMode,
+    phaseMessage,
+    scanProgress,
+    refetch,
+  } = pipeline
   const { profile, updateProfile } = useAuth()
   const localEntries = useContestEntries()
   const enteredIds = enteredIdsProp ?? localEntries.enteredIds
@@ -731,8 +741,12 @@ export default function Dashboard({ onOpenOverlay, onPressUrl, enteredIds: enter
             <Text className="text-center text-sm text-gray-500">Downloading the latest from the Hive Mind</Text>
           </View>
         ) : (
-          <View className="flex-1 py-12">
-            <RadarLoader phaseMessage={phaseMessage} liveCount={liveContests.length} />
+          <View className="flex-1 py-4">
+            <FeedWarmupSkeleton
+              phaseMessage={phaseMessage}
+              progress={scanProgress > 0 ? scanProgress : undefined}
+              liveCount={liveContests.length}
+            />
           </View>
         )}
       </ScrollView>
@@ -751,7 +765,12 @@ export default function Dashboard({ onOpenOverlay, onPressUrl, enteredIds: enter
         ListFooterComponent={
           !isFinished && homeMode === 'browse' ? (
             <View className="py-4">
-              <RadarLoader mini phaseMessage={phaseMessage} liveCount={liveContests.length} />
+              <RadarLoader
+                mini
+                phaseMessage={phaseMessage}
+                liveCount={liveContests.length}
+                progress={scanProgress}
+              />
             </View>
           ) : null
         }
