@@ -117,7 +117,8 @@ export default function Layout({ children }: { children?: React.ReactNode }) {
 
   return (
     <div className={`min-h-screen flex flex-col bg-gray-900 ${showAppChrome ? 'pb-20' : ''}`}>
-      <header className="sticky top-0 z-30 px-4 py-3 flex items-center justify-between gap-3 bg-gray-900/95 border-b border-gray-700/50 backdrop-blur-md">
+      <header className="sticky top-0 z-30 bg-gray-900/95 border-b border-gray-700/50 backdrop-blur-md">
+        <div className="mx-auto w-full max-w-3xl px-4 py-3 flex items-center justify-between gap-3">
         <div className="min-w-0">
           {showAppChrome ? (
             <>
@@ -172,6 +173,7 @@ export default function Layout({ children }: { children?: React.ReactNode }) {
               )}
             </>
           )}
+        </div>
         </div>
       </header>
 
