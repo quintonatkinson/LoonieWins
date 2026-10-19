@@ -23,6 +23,43 @@ export function deadLinkLabel(status?: number | null): string {
   return 'Link unavailable'
 }
 
+/** Relative “last checked” copy for Hive Mind trust hints. */
+export function formatLinkCheckedAgo(
+  iso?: string | null,
+  now = Date.now()
+): string | null {
+  if (!iso?.trim()) return null
+  const t = Date.parse(iso)
+  if (!Number.isFinite(t)) return null
+  const ago = Math.max(0, now - t)
+  const min = Math.floor(ago / 60_000)
+  if (min < 1) return 'Checked just now'
+  if (min < 60) return `Checked ${min}m ago`
+  const hr = Math.floor(min / 60)
+  if (hr < 48) return `Checked ${hr}h ago`
+  const day = Math.floor(hr / 24)
+  return `Checked ${day}d ago`
+}
+
+/**
+ * Compact trust line for cards: dead status + last checked, or healthy check only.
+ * Returns null when nothing useful is known.
+ */
+export function linkHealthHint(contest: {
+  linkStatus?: number | null
+  linkCheckedAt?: string | null
+}): string | null {
+  const checked = formatLinkCheckedAgo(contest.linkCheckedAt)
+  if (isDeadLink(contest)) {
+    const dead = deadLinkLabel(contest.linkStatus)
+    return checked ? `${dead} · ${checked}` : dead
+  }
+  if (contest.linkStatus != null && contest.linkStatus >= 200 && contest.linkStatus < 400) {
+    return checked ? `Link OK · ${checked}` : 'Link OK'
+  }
+  return checked
+}
+
 const PROBE_PROXY = 'https://corsproxy.io/?'
 
 /**

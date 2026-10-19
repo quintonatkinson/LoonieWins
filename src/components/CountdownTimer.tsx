@@ -11,14 +11,21 @@ interface CountdownTimerProps {
   variant?: 'card' | 'detail'
 }
 
+function prefersReducedMotion(): boolean {
+  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return false
+  return window.matchMedia('(prefers-reduced-motion: reduce)').matches
+}
+
 export default function CountdownTimer({ targetDate, variant = 'card' }: CountdownTimerProps) {
   const [info, setInfo] = useState<CountdownLabel>(() => getCountdownLabel(targetDate))
 
   useEffect(() => {
     setInfo(getCountdownLabel(targetDate))
+    // Respect reduced motion: refresh every minute instead of a 1s ticker
+    const intervalMs = prefersReducedMotion() ? 60_000 : 1000
     const id = setInterval(() => {
       setInfo(getCountdownLabel(targetDate))
-    }, 1000)
+    }, intervalMs)
     return () => clearInterval(id)
   }, [targetDate])
 
