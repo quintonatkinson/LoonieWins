@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useRef, useMemo } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import type { Contest } from '../lib/rssFetcher'
 import { resolveContestUrl } from '../lib/rssFetcher'
 import ContestBrowser from '../components/ContestBrowser'
@@ -102,12 +102,25 @@ function passesGeo(c: Contest, geoFilter: GeoFilterValue): boolean {
 }
 
 export default function Dashboard() {
+  const navigate = useNavigate()
   const pipeline = useContestPipeline()
   const { liveContests, isScanning, isSyncingCloud, isFinished, offlineMode, phaseMessage, refetch } = pipeline
   const { profile, updateProfile } = useAuth()
   const { enteredIds, markEntered: persistEntered } = useContestEntries()
-  const { smartFillsBlocked, smartFillsUnlimited, smartFillsRemaining, hasNewEndingRails } =
-    useUserLimits()
+  const {
+    smartFillsBlocked,
+    smartFillsUnlimited,
+    smartFillsRemaining,
+    hasNewEndingRails,
+    weeklyLimitReached,
+    userIsFree,
+    canEnterFree,
+    hasUnlimitedEntries,
+    balance,
+    getEntryCost,
+    spendPointsForEntry,
+    useFreeEntry,
+  } = useUserLimits()
   const [showSmartFillPaywall, setShowSmartFillPaywall] = useState(false)
   const [showRailsPaywall, setShowRailsPaywall] = useState(false)
   const { upgradeToPro } = useUserEarn()
@@ -338,33 +351,78 @@ export default function Dashboard() {
     saveHomeMode(mode)
   }, [])
 
-  /** One-tap Enter: open contest URL and auto-mark when the user returns. */
+  /**
+   * One-tap Enter: open contest URL and auto-mark when the user returns.
+   * Must honor the same free weekly cap + prize-tier pts gate as ContestCard
+   * (Enter next previously bypassed the paywall).
+   */
+  const openOneTapUrl = useCallback(async (contest: Contest) => {
+    pendingAutoMarkRef.current = contest
+    skipAutoMarkOnceRef.current = true
+    try {
+      const url = await resolveContestUrl(
+        contest.url,
+        contest.contentSnippet ?? contest.description
+      )
+      const win = window.open(url, '_blank', 'noopener,noreferrer')
+      if (!win) {
+        pendingAutoMarkRef.current = null
+        setOverlayContest(contest)
+        setStatusToast('Popup blocked — use Open & Enter in the sheet')
+        return
+      }
+      setStatusToast('Opened — will mark entered when you return')
+    } catch {
+      pendingAutoMarkRef.current = contest
+      window.open(contest.url, '_blank', 'noopener,noreferrer')
+      setStatusToast('Opened — will mark entered when you return')
+    }
+  }, [])
+
   const oneTapEnter = useCallback(
     async (contest: Contest) => {
       if (contest.id === '__offline_alert__') return
-      pendingAutoMarkRef.current = contest
-      skipAutoMarkOnceRef.current = true
-      try {
-        const url = await resolveContestUrl(
-          contest.url,
-          contest.contentSnippet ?? contest.description
-        )
-        const win = window.open(url, '_blank', 'noopener,noreferrer')
-        if (!win) {
-          // Popup blocked — fall back to Smart-Fill sheet without auto-mark yet
-          pendingAutoMarkRef.current = null
-          setOverlayContest(contest)
-          setStatusToast('Popup blocked — use Open & Enter in the sheet')
+
+      if (hasUnlimitedEntries) {
+        await openOneTapUrl(contest)
+        return
+      }
+
+      if (canEnterFree) {
+        await openOneTapUrl(contest)
+        try {
+          void useFreeEntry()
+        } catch (_) {
+          /* guest bookkeeping best-effort */
+        }
+        return
+      }
+
+      if (weeklyLimitReached && userIsFree) {
+        const cost = getEntryCost(contest)
+        if (balance >= cost && spendPointsForEntry(cost)) {
+          await openOneTapUrl(contest)
           return
         }
-        setStatusToast('Opened — will mark entered when you return')
-      } catch {
-        pendingAutoMarkRef.current = contest
-        window.open(contest.url, '_blank', 'noopener,noreferrer')
-        setStatusToast('Opened — will mark entered when you return')
+        navigate('/earn', { state: { returnToContestId: contest.id, entryCostPts: cost } })
+        setStatusToast(`Weekly free entries used — earn ${cost} pts (or go Pro) to continue`)
+        return
       }
+
+      await openOneTapUrl(contest)
     },
-    []
+    [
+      hasUnlimitedEntries,
+      canEnterFree,
+      weeklyLimitReached,
+      userIsFree,
+      getEntryCost,
+      balance,
+      spendPointsForEntry,
+      useFreeEntry,
+      openOneTapUrl,
+      navigate,
+    ]
   )
   oneTapEnterRef.current = oneTapEnter
 
@@ -634,7 +692,7 @@ export default function Dashboard() {
             contest={c}
             onOpenOverlay={locked ? () => setShowRailsPaywall(true) : setOverlayContest}
             onOneTapEnter={
-              locked ? () => setShowRailsPaywall(true) : (contest) => void oneTapEnter(contest)
+              locked ? () => setShowRailsPaywall(true) : (contest) => void openOneTapUrl(contest)
             }
             onShare={locked ? undefined : (contest) => void handleShare(contest)}
             variant="routine"
@@ -738,20 +796,42 @@ export default function Dashboard() {
           )}
         </div>
 
-        {homeMode === 'routine' && nextContest && (
-          <button
-            type="button"
-            onClick={() => void oneTapEnter(nextContest)}
-            className="w-full mb-3 px-4 py-3.5 rounded-xl bg-win text-on-win font-bold text-sm flex flex-col items-start gap-1 hover:opacity-90"
-          >
-            <span className="uppercase tracking-wide text-[10px] opacity-80">Enter next</span>
-            <span className="line-clamp-2 text-left">{nextContest.title}</span>
-            <span className="text-xs font-medium opacity-70">
-              Opens contest · marks entered when you return
-              {autoAdvance ? ' · then auto-advances' : ''}
-            </span>
-          </button>
-        )}
+        {homeMode === 'routine' && nextContest && (() => {
+          const nextCost = getEntryCost(nextContest)
+          const nextNeedsEarn =
+            weeklyLimitReached && userIsFree && !hasUnlimitedEntries && balance < nextCost
+          const nextNeedsPts =
+            weeklyLimitReached && userIsFree && !hasUnlimitedEntries && balance >= nextCost
+          return (
+            <button
+              type="button"
+              onClick={() => void oneTapEnter(nextContest)}
+              className={`w-full mb-3 px-4 py-3.5 rounded-xl font-bold text-sm flex flex-col items-start gap-1 hover:opacity-90 ${
+                nextNeedsEarn || nextNeedsPts
+                  ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
+                  : 'bg-win text-on-win'
+              }`}
+            >
+              <span className="uppercase tracking-wide text-[10px] opacity-80">
+                {nextNeedsEarn
+                  ? `Earn ${nextCost} pts · then enter`
+                  : nextNeedsPts
+                    ? `Spend ${nextCost} pts · enter next`
+                    : 'Enter next'}
+              </span>
+              <span className="line-clamp-2 text-left">{nextContest.title}</span>
+              <span className="text-xs font-medium opacity-70">
+                {nextNeedsEarn
+                  ? 'Weekly free entries used — earn pts or upgrade to Pro'
+                  : nextNeedsPts
+                    ? 'Weekly free entries used — prize-tier pts unlock this enter'
+                    : `Opens contest · marks entered when you return${
+                        autoAdvance ? ' · then auto-advances' : ''
+                      }`}
+              </span>
+            </button>
+          )
+        })()}
 
         <div className="flex gap-4 overflow-x-auto pb-2 -mx-4 px-4 scrollbar-thin">
           {routineContests.length === 0 ? (
@@ -766,7 +846,7 @@ export default function Dashboard() {
                 key={c.id}
                 contest={c}
                 onOpenOverlay={setOverlayContest}
-                onOneTapEnter={(contest) => void oneTapEnter(contest)}
+                onOneTapEnter={(contest) => void openOneTapUrl(contest)}
                 onShare={(contest) => void handleShare(contest)}
                 variant="routine"
                 entered={enteredIds.has(c.id)}
@@ -1020,7 +1100,7 @@ export default function Dashboard() {
                       key={c.id}
                       contest={c}
                       onOpenOverlay={setOverlayContest}
-                      onOneTapEnter={(contest) => void oneTapEnter(contest)}
+                      onOneTapEnter={(contest) => void openOneTapUrl(contest)}
                       onShare={(contest) => void handleShare(contest)}
                       variant="feed"
                       density={cardDensity}
@@ -1050,7 +1130,7 @@ export default function Dashboard() {
                       key={`hive-${c.id}`}
                       contest={c}
                       onOpenOverlay={setOverlayContest}
-                      onOneTapEnter={(contest) => void oneTapEnter(contest)}
+                      onOneTapEnter={(contest) => void openOneTapUrl(contest)}
                       onShare={(contest) => void handleShare(contest)}
                       variant="feed"
                       daysLeft={daysLeft(c)}

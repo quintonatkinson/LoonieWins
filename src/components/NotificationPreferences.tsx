@@ -65,10 +65,11 @@ export default function NotificationPreferences() {
       setMsg(error)
       return
     }
+    // Guests persist locally (same as DisplayPreferences); cloud + Expo delivery need sign-in.
     setMsg(
       user
-        ? 'Saved to your account.'
-        : 'Saved on this device. Sign in later to sync across phones.'
+        ? 'Saved.'
+        : 'Saved on this device. Sign in to sync to your account; push delivery is on the Expo app.'
     )
   }
 
@@ -81,8 +82,8 @@ export default function NotificationPreferences() {
         </h2>
       </div>
       <p className="text-xs text-gray-500">
-        Alerts deliver on the Expo mobile app. Web saves preferences only — browser
-        Web Push is not enabled yet.
+        Alerts deliver on the Expo mobile app. Web saves preferences on this device
+        (and to your account when signed in). Browser Web Push is not enabled yet.
         {!user && (
           <span className="block mt-1 text-amber-400/80">
             Guest mode: prefs stick on this device until you sign in.
