@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
+import { Link2 } from 'lucide-react'
 import { giveaways, isSupabaseConfigured } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { useUserEarn } from '../contexts/UserEarnContext'
@@ -13,6 +15,7 @@ import {
   rpcEnsureReferralCode,
 } from '../lib/monetization/progression'
 import ReferralInviteCard from '../components/ReferralInviteCard'
+import PageShell from '../components/PageShell'
 
 interface ReferralLink {
   id: string
@@ -154,15 +157,20 @@ export default function Referrals() {
   }
 
   return (
-    <div className="p-4 space-y-6 pb-24">
-      <div>
-        <h1 className="text-xl font-semibold text-gray-50">Referrals</h1>
-        <p className="text-gray-400 text-sm mt-1">
-          Real points, not karma. Click credit = +{REFERRAL_CLICK_POINTS} pts to the link owner
-          (once per friend). Invite code: you +{REFERRAL_SIGNUP_REFEREE_POINTS}, friend +
-          {REFERRAL_SIGNUP_REFERRER_POINTS}.
-        </p>
-        <p className="text-amber-400 text-sm mt-2">Balance: {balance.toLocaleString()} Pts</p>
+    <PageShell className="space-y-6" testId="referrals">
+      <div className="flex items-center gap-3">
+        <div className="flex items-center justify-center w-10 h-10 rounded-full bg-win/20 border border-win/40 shrink-0">
+          <Link2 className="w-5 h-5 text-win" strokeWidth={2.25} />
+        </div>
+        <div className="min-w-0">
+          <h1 className="text-xl font-semibold text-gray-50">Referrals</h1>
+          <p className="text-gray-400 text-sm mt-0.5">
+            Real points, not karma. Click credit = +{REFERRAL_CLICK_POINTS} pts (once per friend).
+            Invite: you +{REFERRAL_SIGNUP_REFEREE_POINTS}, friend +
+            {REFERRAL_SIGNUP_REFERRER_POINTS}.
+          </p>
+          <p className="text-amber-400 text-sm mt-1">Balance: {balance.toLocaleString()} Pts</p>
+        </div>
       </div>
 
       <ReferralInviteCard />
@@ -224,7 +232,22 @@ export default function Referrals() {
         {loading ? (
           <p className="text-gray-500 text-sm">Loading…</p>
         ) : links.length === 0 ? (
-          <p className="text-gray-500 text-sm">No referral links yet. Be the first.</p>
+          <div className="empty-panel space-y-3">
+            <p className="text-white font-medium">
+              {!isSupabaseConfigured ? 'Cloud referrals need Supabase' : 'No referral links yet'}
+            </p>
+            <p className="text-sm text-gray-400 max-w-sm mx-auto">
+              {!isSupabaseConfigured
+                ? 'Guest mode keeps invite UI local. Community link credits go live with cloud sync.'
+                : 'Be the first — add a contest link above so friends can earn you click credits.'}
+            </p>
+            <Link
+              to="/earn"
+              className="inline-flex items-center justify-center px-4 py-2.5 rounded-lg bg-win text-on-win font-semibold text-sm"
+            >
+              Earn points another way
+            </Link>
+          </div>
         ) : (
           <ul className="space-y-3">
             {links.map((link) => (
@@ -248,6 +271,6 @@ export default function Referrals() {
           </ul>
         )}
       </section>
-    </div>
+    </PageShell>
   )
 }
