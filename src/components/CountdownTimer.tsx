@@ -1,50 +1,41 @@
 import { useState, useEffect } from 'react'
-import { getMillisUntilExpiry } from '../lib/utils/expiryDate'
+import {
+  countdownToneClass,
+  getCountdownLabel,
+  type CountdownLabel,
+} from '../lib/utils/countdownLabel'
 
 interface CountdownTimerProps {
   targetDate: string
+  /** card = short urgency label; detail = label + live precise ticker */
+  variant?: 'card' | 'detail'
 }
 
-const MS_24_HOURS = 24 * 60 * 60 * 1000
-const MS_1_HOUR = 60 * 60 * 1000
-
-function formatRemaining(ms: number): string {
-  if (ms <= 0) return 'Ended'
-  const sec = Math.floor((ms / 1000) % 60)
-  const min = Math.floor((ms / (1000 * 60)) % 60)
-  const hour = Math.floor((ms / (1000 * 60 * 60)) % 24)
-  const day = Math.floor(ms / (1000 * 60 * 60 * 24))
-  const parts: string[] = []
-  if (day > 0) parts.push(`${day}d`)
-  parts.push(`${hour}h`)
-  parts.push(`${min}m`)
-  parts.push(`${sec}s`)
-  return parts.join(' ')
-}
-
-function colorClass(ms: number): string {
-  if (ms <= 0) return 'text-red-500'
-  if (ms < MS_1_HOUR) return 'text-red-400'
-  if (ms < MS_24_HOURS) return 'text-orange-400'
-  return 'text-gray-400'
-}
-
-export default function CountdownTimer({ targetDate }: CountdownTimerProps) {
-  const [ms, setMs] = useState(() => getMillisUntilExpiry(targetDate))
+export default function CountdownTimer({ targetDate, variant = 'card' }: CountdownTimerProps) {
+  const [info, setInfo] = useState<CountdownLabel>(() => getCountdownLabel(targetDate))
 
   useEffect(() => {
-    setMs(getMillisUntilExpiry(targetDate))
+    setInfo(getCountdownLabel(targetDate))
     const id = setInterval(() => {
-      setMs(getMillisUntilExpiry(targetDate))
+      setInfo(getCountdownLabel(targetDate))
     }, 1000)
     return () => clearInterval(id)
   }, [targetDate])
 
-  const text = formatRemaining(ms)
-  const className = colorClass(ms)
+  const className = countdownToneClass(info.urgency)
+  const text = variant === 'detail' ? `${info.label} · ${info.precise}` : info.label
 
   return (
-    <span className={`flex items-center gap-1 ${className}`} role="timer" aria-live="polite">
+    <span
+      className={`inline-flex items-center gap-1 font-medium ${className} ${
+        info.urgency === 'tonight' || info.urgency === 'critical'
+          ? 'rounded-full px-2 py-0.5 bg-orange-500/15 border border-orange-500/30'
+          : ''
+      }`}
+      role="timer"
+      aria-live="polite"
+      title={info.precise}
+    >
       <span aria-hidden>🕐</span>
       {text}
     </span>

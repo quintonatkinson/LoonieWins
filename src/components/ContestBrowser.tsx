@@ -1,22 +1,65 @@
-import { useEffect, useState, useRef, useCallback } from 'react'
+import { useEffect, useState, useRef, useCallback, useMemo } from 'react'
+import { Link } from 'react-router-dom'
 import type { Contest } from '../lib/rssFetcher'
 import { resolveContestUrl } from '../lib/rssFetcher'
 import { reportUrl } from '../lib/utils/reportedUrls'
 import { getInjectionScript } from '../lib/autofill/assassin'
 import type { AutoFillData } from '../types/profile'
+import { daysLeftUntilExpiry } from '../lib/utils/expiryDate'
+import { shareContest } from '../lib/utils/shareContest'
+import { copyText } from '../lib/utils/copyText'
+import {
+  deadLinkLabel,
+  isDeadLink,
+  isDeadLinkStatus,
+  probeContestUrl,
+} from '../lib/utils/linkHealth'
+import { markVaultLinkStatus } from '../hooks/useContestVault'
+import CountdownTimer from './CountdownTimer'
+import AgeGateModal from './AgeGateModal'
+import {
+  badgeToneClass,
+  getRequirementBadges,
+} from '../lib/utils/requirementBadges'
+import {
+  contestRequiresAgeGate,
+  loadAgeConfirmed,
+  saveAgeConfirmed,
+} from '../lib/utils/ageGate'
+import { formatEntriesToday } from '../hooks/useContestSocialProof'
+import { resolveFeedDisplayPrefs } from '../lib/utils/userSettings'
+import { useAuth } from '../contexts/AuthContext'
 
 interface ContestBrowserProps {
   contest: Contest | null
   open: boolean
   onClose: () => void
-  onMarkEntered?: (contest: Contest) => void
+  onMarkEntered?: (contest: Contest, status?: 'entered' | 'submitted') => void | Promise<unknown>
   autoFillData?: AutoFillData
+  onAutoFillUsed?: () => void
+  /** Free-tier paywall: block Smart-Fill when exhausted */
+  smartFillBlocked?: boolean
+  smartFillsRemaining?: number | null
+  /** When true, returning from Open & Enter auto-marks entered (with brief undo). */
+  autoMarkOnReturn?: boolean
+  /** Anonymized entries today */
+  entriesToday?: number | null
+  onAgeConfirmed?: () => void
 }
 
 const DEFAULT_AUTOFILL: AutoFillData = {
   name: '',
   email: '',
   address: '',
+}
+
+function decodeTitle(title: string): string {
+  return title
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
 }
 
 function CheatSheetBar({
@@ -28,54 +71,72 @@ function CheatSheetBar({
 }) {
   const [copied, setCopied] = useState<string | null>(null)
 
+  const chips = useMemo(() => {
+    const first =
+      autoFillData.firstName ||
+      autoFillData.name?.trim().split(/\s+/)[0] ||
+      ''
+    const last =
+      autoFillData.lastName ||
+      autoFillData.name?.trim().split(/\s+/).slice(1).join(' ') ||
+      ''
+    const full =
+      autoFillData.name ||
+      [first, last].filter(Boolean).join(' ') ||
+      ''
+    return [
+      { label: 'Name', value: full },
+      { label: 'First', value: first },
+      { label: 'Last', value: last },
+      { label: 'Email', value: autoFillData.email ?? '' },
+      { label: 'Phone', value: autoFillData.phone ?? '' },
+      { label: 'Addr', value: autoFillData.address ?? '' },
+      { label: 'City', value: autoFillData.city ?? '' },
+      { label: 'Prov', value: autoFillData.province ?? '' },
+      { label: 'Postal', value: autoFillData.postalCode ?? '' },
+    ].filter((c) => c.value.trim().length > 0)
+  }, [autoFillData])
+
   const copy = useCallback(
     async (label: string, value: string) => {
       if (!value) return
-      try {
-        await navigator.clipboard.writeText(value)
-        setCopied(label)
-        onCopied?.()
-        setTimeout(() => setCopied(null), 1500)
-      } catch (_) {}
+      const ok = await copyText(value)
+      if (!ok) return
+      setCopied(label)
+      onCopied?.()
+      setTimeout(() => setCopied(null), 1500)
     },
     [onCopied]
   )
 
+  if (chips.length === 0) {
+    return (
+      <div className="px-3 py-2 bg-surface border-t border-gray-600/50 shrink-0 text-xs text-amber-300">
+        No autofill fields set —{' '}
+        <Link to="/profile" className="underline text-win">
+          add them in Profile
+        </Link>
+      </div>
+    )
+  }
+
   return (
-    <div className="flex gap-2 px-3 py-2 bg-surface border-t border-gray-600/50 shrink-0">
-      <button
-        type="button"
-        onClick={() => copy('Name', autoFillData.name ?? '')}
-        className={`px-4 py-2 rounded-full text-sm font-medium border transition-colors ${
-          copied === 'Name'
-            ? 'bg-win/30 text-win border-win/50'
-            : 'bg-surface-light border-gray-600/50 text-gray-300 hover:text-gray-50'
-        }`}
-      >
-        {copied === 'Name' ? 'Copied!' : '[Name]'}
-      </button>
-      <button
-        type="button"
-        onClick={() => copy('Email', autoFillData.email ?? '')}
-        className={`px-4 py-2 rounded-full text-sm font-medium border transition-colors ${
-          copied === 'Email'
-            ? 'bg-win/30 text-win border-win/50'
-            : 'bg-surface-light border-gray-600/50 text-gray-300 hover:text-gray-50'
-        }`}
-      >
-        {copied === 'Email' ? 'Copied!' : '[Email]'}
-      </button>
-      <button
-        type="button"
-        onClick={() => copy('Addr', autoFillData.address ?? '')}
-        className={`px-4 py-2 rounded-full text-sm font-medium border transition-colors ${
-          copied === 'Addr'
-            ? 'bg-win/30 text-win border-win/50'
-            : 'bg-surface-light border-gray-600/50 text-gray-300 hover:text-gray-50'
-        }`}
-      >
-        {copied === 'Addr' ? 'Copied!' : '[Addr]'}
-      </button>
+    <div className="flex gap-2 px-3 py-2 bg-surface border-t border-gray-600/50 shrink-0 overflow-x-auto">
+      {chips.map(({ label, value }) => (
+        <button
+          key={label}
+          type="button"
+          onClick={() => void copy(label, value)}
+          title={value}
+          className={`shrink-0 px-3 py-2 rounded-full text-sm font-medium border transition-colors ${
+            copied === label
+              ? 'bg-win/30 text-win border-win/50'
+              : 'bg-surface-light border-gray-600/50 text-gray-300 hover:text-gray-50'
+          }`}
+        >
+          {copied === label ? 'Copied!' : `[${label}]`}
+        </button>
+      ))}
     </div>
   )
 }
@@ -86,24 +147,68 @@ export default function ContestBrowser({
   onClose,
   onMarkEntered,
   autoFillData = DEFAULT_AUTOFILL,
+  onAutoFillUsed,
+  smartFillBlocked = false,
+  smartFillsRemaining = null,
+  autoMarkOnReturn = false,
+  entriesToday = null,
+  onAgeConfirmed,
 }: ContestBrowserProps) {
+  const { profile } = useAuth()
+  const preferSystemBrowser =
+    resolveFeedDisplayPrefs({ settings: profile?.settings }).openContestsIn === 'browser'
   const [resolvedUrl, setResolvedUrl] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [iframeLikelyBlocked, setIframeLikelyBlocked] = useState(false)
   const [reportToast, setReportToast] = useState(false)
+  const [autoFillMsg, setAutoFillMsg] = useState<string | null>(null)
+  const [pendingMark, setPendingMark] = useState(false)
+  const [statusMsg, setStatusMsg] = useState<string | null>(null)
+  const [awaitingReturn, setAwaitingReturn] = useState(false)
+  const [showAgeGate, setShowAgeGate] = useState(false)
+  const [pendingAgeAction, setPendingAgeAction] = useState<'enter' | 'mark-entered' | 'mark-submitted' | null>(null)
+  const [linkHealthMsg, setLinkHealthMsg] = useState<string | null>(null)
+  const [injectWorks, setInjectWorks] = useState(false)
   const iframeRef = useRef<HTMLIFrameElement>(null)
   const isNativeRef = useRef<boolean | null>(null)
   const iframeLoadTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const skipReturnOnceRef = useRef(false)
+
+  const hasProfile =
+    Boolean(autoFillData.email?.trim()) ||
+    Boolean(autoFillData.name?.trim()) ||
+    Boolean(autoFillData.firstName?.trim())
 
   useEffect(() => {
     if (!open || !contest) return
     setLoading(true)
     setResolvedUrl(null)
     setIframeLikelyBlocked(false)
+    setInjectWorks(false)
+    setPendingMark(false)
+    setAwaitingReturn(false)
+    setAutoFillMsg(null)
+    setStatusMsg(null)
+    setLinkHealthMsg(null)
+    if (isDeadLink(contest)) {
+      setLinkHealthMsg(`${deadLinkLabel(contest.linkStatus)} — try Open & Enter or Report bad link.`)
+    }
     resolveContestUrl(contest.url, contest.contentSnippet ?? contest.description).then((url) => {
       setResolvedUrl(url)
       setLoading(false)
     })
+    // Lightweight client recheck (corsproxy) — surface dead status without inventing cloud cron
+    let cancelled = false
+    void probeContestUrl(contest.url).then((status) => {
+      if (cancelled || status == null) return
+      if (isDeadLinkStatus(status)) {
+        markVaultLinkStatus(contest.url, status)
+        setLinkHealthMsg(`${deadLinkLabel(status)} (rechecked) — Open & Enter may still fail.`)
+      }
+    })
+    return () => {
+      cancelled = true
+    }
   }, [open, contest])
 
   useEffect(() => {
@@ -112,8 +217,49 @@ export default function ContestBrowser({
     }
   }, [])
 
+  const confirmMark = useCallback(
+    async (status: 'entered' | 'submitted' = 'entered') => {
+      if (!contest || !onMarkEntered) return
+      if (contestRequiresAgeGate(contest) && !loadAgeConfirmed()) {
+        setPendingAgeAction(status === 'submitted' ? 'mark-submitted' : 'mark-entered')
+        setShowAgeGate(true)
+        return
+      }
+      await onMarkEntered(contest, status)
+      setPendingMark(false)
+      setAwaitingReturn(false)
+      setStatusMsg(status === 'submitted' ? 'Marked as submitted' : 'Marked as entered')
+      setTimeout(() => onClose(), 450)
+    },
+    [contest, onMarkEntered, onClose]
+  )
+
+  // Auto-mark when user returns after Open & Enter
+  useEffect(() => {
+    if (!open || !autoMarkOnReturn || !awaitingReturn || !onMarkEntered || !contest) return
+    const onReturn = () => {
+      if (skipReturnOnceRef.current) {
+        skipReturnOnceRef.current = false
+        return
+      }
+      if (document.visibilityState && document.visibilityState !== 'visible') return
+      setAwaitingReturn(false)
+      void confirmMark('entered')
+    }
+    const onVis = () => {
+      if (document.visibilityState === 'visible') onReturn()
+    }
+    window.addEventListener('focus', onReturn)
+    document.addEventListener('visibilitychange', onVis)
+    return () => {
+      window.removeEventListener('focus', onReturn)
+      document.removeEventListener('visibilitychange', onVis)
+    }
+  }, [open, autoMarkOnReturn, awaitingReturn, onMarkEntered, contest, confirmMark])
+
   const openNativeWebView = useCallback(
     async (url: string) => {
+      if (preferSystemBrowser) return false
       try {
         const { Capacitor } = await import('@capacitor/core')
         if (!Capacitor.isNativePlatform()) return false
@@ -131,45 +277,162 @@ export default function ContestBrowser({
         InAppBrowser.addListener('browserPageLoaded', async () => {
           try {
             await InAppBrowser.executeScript({ code: script })
+            onAutoFillUsed?.()
           } catch (_) {}
         })
 
         InAppBrowser.addListener('closeEvent', () => {
           InAppBrowser.removeAllListeners()
+          if (autoMarkOnReturn && onMarkEntered) {
+            void confirmMark('entered')
+          } else if (onMarkEntered) {
+            setPendingMark(true)
+          }
         })
         return true
       } catch (_) {
         return false
       }
     },
-    [autoFillData, contest?.title]
+    [
+      preferSystemBrowser,
+      autoFillData,
+      contest?.title,
+      onAutoFillUsed,
+      onMarkEntered,
+      autoMarkOnReturn,
+      confirmMark,
+    ]
   )
 
   const handleEnterContest = useCallback(() => {
     if (!resolvedUrl) return
+    if (contest && contestRequiresAgeGate(contest) && !loadAgeConfirmed()) {
+      setPendingAgeAction('enter')
+      setShowAgeGate(true)
+      return
+    }
+    skipReturnOnceRef.current = true
     openNativeWebView(resolvedUrl).then((opened) => {
       if (!opened) {
         window.open(resolvedUrl, '_blank', 'noopener,noreferrer')
+        if (autoMarkOnReturn && onMarkEntered) {
+          setAwaitingReturn(true)
+          setStatusMsg('Opened — marking entered when you return')
+        } else if (onMarkEntered) {
+          setPendingMark(true)
+        }
       }
     })
-  }, [resolvedUrl, openNativeWebView])
+  }, [resolvedUrl, openNativeWebView, onMarkEntered, autoMarkOnReturn, contest])
+
+  const handleAgeConfirm = useCallback(() => {
+    saveAgeConfirmed(true)
+    onAgeConfirmed?.()
+    setShowAgeGate(false)
+    const action = pendingAgeAction
+    setPendingAgeAction(null)
+    if (action === 'enter') {
+      // Re-run enter without age check (now confirmed)
+      if (!resolvedUrl) return
+      skipReturnOnceRef.current = true
+      void openNativeWebView(resolvedUrl).then((opened) => {
+        if (!opened) {
+          window.open(resolvedUrl, '_blank', 'noopener,noreferrer')
+          if (autoMarkOnReturn && onMarkEntered) {
+            setAwaitingReturn(true)
+            setStatusMsg('Opened — marking entered when you return')
+          } else if (onMarkEntered) {
+            setPendingMark(true)
+          }
+        }
+      })
+      return
+    }
+    if (action === 'mark-entered' || action === 'mark-submitted') {
+      void (async () => {
+        if (!contest || !onMarkEntered) return
+        await onMarkEntered(contest, action === 'mark-submitted' ? 'submitted' : 'entered')
+        setPendingMark(false)
+        setAwaitingReturn(false)
+        setStatusMsg(action === 'mark-submitted' ? 'Marked as submitted' : 'Marked as entered')
+        setTimeout(() => onClose(), 450)
+      })()
+    }
+  }, [
+    pendingAgeAction,
+    resolvedUrl,
+    openNativeWebView,
+    autoMarkOnReturn,
+    onMarkEntered,
+    contest,
+    onClose,
+    onAgeConfirmed,
+  ])
+
+  const handleEnterAndTrack = useCallback(() => {
+    handleEnterContest()
+  }, [handleEnterContest])
+
+  const handleShare = useCallback(async () => {
+    if (!contest) return
+    const result = await shareContest(contest)
+    if (result === 'shared') setStatusMsg('Shared')
+    else if (result === 'copied') setStatusMsg('Link copied')
+    else setStatusMsg('Could not share')
+  }, [contest])
 
   const handleAutoFill = () => {
+    if (iframeLikelyBlocked || !injectWorks) {
+      setAutoFillMsg(
+        'In-app Auto-Fill can’t reach this site (embed blocked). Use Open & Enter + copy chips, the browser extension, or the native app.'
+      )
+      setIframeLikelyBlocked(true)
+      return
+    }
+    if (smartFillBlocked) {
+      setAutoFillMsg('Smart-Fills exhausted on Free — upgrade to Pro for unlimited.')
+      onAutoFillUsed?.()
+      return
+    }
+    if (!hasProfile) {
+      setAutoFillMsg('Add autofill details in Profile first.')
+      return
+    }
     try {
       const doc = iframeRef.current?.contentDocument
-      if (!doc) return
+      if (!doc) {
+        setAutoFillMsg(
+          'In-app form is blocked by the contest site. Use Open & Enter + copy chips, then Mark Entered.'
+        )
+        setIframeLikelyBlocked(true)
+        setInjectWorks(false)
+        return
+      }
       const script = document.createElement('script')
       script.textContent = getInjectionScript(autoFillData)
       doc.body?.appendChild(script)
       script.remove()
-    } catch (_) {}
+      onAutoFillUsed?.()
+      setAutoFillMsg(
+        smartFillsRemaining != null
+          ? `Autofill injected (${Math.max(0, smartFillsRemaining - 1)} left). Mark as Entered when done.`
+          : 'Autofill injected — check fields, then Mark as Entered.'
+      )
+    } catch (_) {
+      setAutoFillMsg(
+        'Could not reach the form (cross-origin). Open & Enter and tap the copy chips — or install the LoonieWins extension.'
+      )
+      setIframeLikelyBlocked(true)
+      setInjectWorks(false)
+    }
   }
 
-  const daysLeft = contest?.expiryDate
-    ? Math.ceil(
-        (new Date(contest.expiryDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24)
-      )
-    : null
+  const showInjectButton = injectWorks && !iframeLikelyBlocked
+
+  const daysLeft = daysLeftUntilExpiry(contest?.expiryDate)
+  const reqBadges = contest ? getRequirementBadges(contest) : []
+  const socialLabel = formatEntriesToday(entriesToday)
 
   if (!open) return null
 
@@ -188,19 +451,40 @@ export default function ContestBrowser({
         aria-label="Contest entry – Smart Fill"
       >
         <div className="flex items-start justify-between p-4 border-b border-white/10 shrink-0">
-          <div>
-            <h2 className="font-semibold text-lg line-clamp-2">{contest?.title}</h2>
-            <div className="flex gap-3 mt-1 text-sm text-white/80">
-              {contest?.prizeValue != null && <span>${contest.prizeValue}</span>}
-              {daysLeft != null && (
+          <div className="min-w-0 pr-2">
+            <h2 className="font-semibold text-lg line-clamp-2">
+              {decodeTitle(contest?.title ?? '')}
+            </h2>
+            <div className="flex flex-wrap gap-2 mt-2 items-center text-sm text-white/80">
+              {contest?.prizeValue != null && <span>${contest.prizeValue.toLocaleString()}</span>}
+              {contest?.expiryDate ? (
+                <CountdownTimer targetDate={contest.expiryDate} variant="detail" />
+              ) : daysLeft != null ? (
                 <span>{daysLeft > 0 ? `${daysLeft} days left` : 'Ended'}</span>
+              ) : null}
+              {socialLabel && (
+                <span className="text-white/50 text-xs" title="Anonymized Hive Mind count">
+                  {socialLabel}
+                </span>
               )}
             </div>
+            {reqBadges.length > 0 && (
+              <div className="flex flex-wrap gap-1.5 mt-2">
+                {reqBadges.map((b) => (
+                  <span
+                    key={b.kind}
+                    className={`rounded-full px-2 py-0.5 text-xs font-medium border ${badgeToneClass(b)}`}
+                  >
+                    {b.icon} {b.label}
+                  </span>
+                ))}
+              </div>
+            )}
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="p-2 rounded-lg hover:bg-white/10 text-white/80"
+            className="p-2 rounded-lg hover:bg-white/10 text-white/80 shrink-0"
             aria-label="Close"
           >
             ✕
@@ -208,22 +492,63 @@ export default function ContestBrowser({
         </div>
 
         <div className="px-4 py-3 border-b border-white/10 shrink-0">
-          <h3 className="text-sm font-medium text-white/90 mb-2">Auto-Fill</h3>
-          <div className="text-sm text-white/70 space-y-1">
-            <p>
-              <span className="text-white/50">Name:</span> {autoFillData.name || '—'}
-            </p>
-            <p>
-              <span className="text-white/50">Email:</span> {autoFillData.email || '—'}
-            </p>
-            <p>
-              <span className="text-white/50">Address:</span>{' '}
-              {autoFillData.address || '—'}
-            </p>
+          <div className="flex items-center justify-between mb-2">
+            <h3 className="text-sm font-medium text-white/90">Smart-Fill</h3>
+            <Link to="/profile" className="text-xs text-win hover:underline">
+              Edit in Profile
+            </Link>
           </div>
+          {linkHealthMsg && (
+            <p
+              className="text-xs text-amber-300 mb-2 rounded-lg bg-amber-500/10 border border-amber-500/30 px-2 py-1.5"
+              role="status"
+              data-testid="link-health-banner"
+            >
+              {linkHealthMsg}
+            </p>
+          )}
+          {!hasProfile ? (
+            <p className="text-sm text-amber-300">
+              Set your name & email in Profile for one-tap copy chips.
+            </p>
+          ) : (
+            <div className="text-sm text-white/70 space-y-1">
+              <p>
+                <span className="text-white/50">Name:</span>{' '}
+                {autoFillData.name ||
+                  [autoFillData.firstName, autoFillData.lastName].filter(Boolean).join(' ') ||
+                  '—'}
+              </p>
+              <p>
+                <span className="text-white/50">Email:</span> {autoFillData.email || '—'}
+              </p>
+              <p>
+                <span className="text-white/50">Address:</span>{' '}
+                {[autoFillData.address, autoFillData.city, autoFillData.province, autoFillData.postalCode]
+                  .filter(Boolean)
+                  .join(', ') || '—'}
+              </p>
+              {autoFillData.phone && (
+                <p>
+                  <span className="text-white/50">Phone:</span> {autoFillData.phone}
+                </p>
+              )}
+            </div>
+          )}
           <p className="text-xs text-yellow-400/90 mt-2">
-            Tap chips below to copy. Math / skill-test fields need your input.
+            Most sponsor sites block in-app embedding. Use <strong className="font-semibold">Open &amp; Enter</strong>, then
+            tap the copy chips below to paste into the form. Math / skill-test fields need your input.
           </p>
+          <p className="text-xs text-white/45 mt-1.5">
+            Full in-page fill: install the{' '}
+            <span className="text-white/70">extension/</span> Chrome/Edge add-on (Load unpacked — see{' '}
+            <code className="text-[10px] text-win/90">extension/README.md</code>) or use the native app.
+          </p>
+          {autoFillMsg && (
+            <p className="text-xs text-win mt-2" role="status">
+              {autoFillMsg}
+            </p>
+          )}
         </div>
 
         <div className="flex-1 min-h-0 relative flex flex-col">
@@ -256,39 +581,62 @@ export default function ContestBrowser({
                         const doc = iframeRef.current?.contentDocument
                         if (doc && doc.body) {
                           const len = (doc.body.innerText || doc.body.textContent || '').length
-                          if (len < 80) setIframeLikelyBlocked(true)
+                          if (len < 80) {
+                            setIframeLikelyBlocked(true)
+                            setInjectWorks(false)
+                          } else {
+                            setInjectWorks(true)
+                            setIframeLikelyBlocked(false)
+                          }
+                        } else {
+                          setIframeLikelyBlocked(true)
+                          setInjectWorks(false)
                         }
                       } catch {
-                        // Cross-origin: we can't read content; don't assume blocked
+                        // Cross-origin: can't inject — hide broken Auto-Fill
+                        setIframeLikelyBlocked(true)
+                        setInjectWorks(false)
                       }
-                    }, 2500)
+                    }, 1800)
                   }}
                 />
                 {iframeLikelyBlocked && (
                   <div
-                    className="absolute inset-x-2 bottom-2 rounded-lg bg-black/80 text-white text-sm px-3 py-2 flex items-center justify-between gap-2"
+                    className="absolute inset-x-2 bottom-2 rounded-lg bg-black/85 text-white text-sm px-3 py-2 flex items-center justify-between gap-2"
                     role="status"
                   >
-                    <span>This contest can&apos;t be shown in-app.</span>
+                    <span>Preview blocked — Open &amp; Enter + copy chips.</span>
                     <button
                       type="button"
                       onClick={handleEnterContest}
-                      className="shrink-0 px-3 py-1.5 rounded-lg bg-win text-slate-950 font-semibold text-xs"
+                      className="shrink-0 px-3 py-1.5 rounded-lg bg-win text-on-win font-semibold text-xs"
                     >
-                      Open in Browser
+                      Open &amp; Enter
                     </button>
                   </div>
                 )}
-                <button
-                  type="button"
-                  onClick={handleAutoFill}
-                  className="absolute bottom-16 right-4 px-4 py-2 rounded-xl bg-win text-slate-950 font-semibold shadow-lg hover:opacity-90"
-                >
-                  ⚡ Auto-Fill Form
-                </button>
+                {showInjectButton && (
+                  <button
+                    type="button"
+                    onClick={handleAutoFill}
+                    className={`absolute bottom-16 right-4 px-4 py-2 rounded-xl font-semibold shadow-lg hover:opacity-90 ${
+                      smartFillBlocked
+                        ? 'bg-amber-500/20 text-amber-400 border border-amber-500/40'
+                        : 'bg-win text-on-win'
+                    }`}
+                  >
+                    {smartFillBlocked
+                      ? 'Unlock Smart-Fills (Pro)'
+                      : smartFillsRemaining != null
+                        ? `⚡ Auto-Fill (${smartFillsRemaining} left)`
+                        : '⚡ Auto-Fill Form'}
+                  </button>
+                )}
               </div>
               <p className="text-xs text-white/50 px-2 py-1 shrink-0">
-                This area shows the contest. If it stays blank, the contest site may block embedding—tap Open in Browser to enter.
+                {iframeLikelyBlocked
+                  ? 'Web iframe can’t fill most sponsors — Open & Enter is the real path; chips copy for paste.'
+                  : 'If the preview stays blank, Open & Enter — we’ll remind you to mark entered.'}
               </p>
             </>
           ) : (
@@ -302,31 +650,76 @@ export default function ContestBrowser({
 
         {contest && (
           <div className="p-4 border-t border-white/10 shrink-0 flex flex-col gap-2">
+            {pendingMark && onMarkEntered && (
+              <div className="rounded-xl bg-win/15 border border-win/40 p-3 space-y-2">
+                <p className="text-sm text-white font-medium">Did you finish entering?</p>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => void confirmMark('entered')}
+                    className="flex-1 py-2 rounded-lg bg-win text-on-win font-semibold text-sm"
+                  >
+                    Yes — Mark Entered
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void confirmMark('submitted')}
+                    className="flex-1 py-2 rounded-lg glass text-win font-medium text-sm"
+                  >
+                    Submitted form
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPendingMark(false)}
+                    className="px-3 py-2 rounded-lg text-xs text-white/60"
+                  >
+                    Not yet
+                  </button>
+                </div>
+              </div>
+            )}
             <div className="flex gap-2">
               <button
                 type="button"
-                onClick={handleEnterContest}
-                className="flex-1 py-2.5 rounded-lg bg-win text-gray-900 font-semibold hover:opacity-90"
+                onClick={handleEnterAndTrack}
+                className="flex-1 py-2.5 rounded-lg bg-win text-on-win font-semibold hover:opacity-90"
               >
-                Open in Browser
+                Open & Enter
               </button>
               {onMarkEntered && (
+                <button
+                  type="button"
+                  onClick={() => void confirmMark('entered')}
+                  className="flex-1 py-2.5 rounded-lg glass text-win font-medium"
+                >
+                  Mark Entered
+                </button>
+              )}
+            </div>
+            <div className="flex gap-3 items-center">
               <button
                 type="button"
-                onClick={() => {
-                  onMarkEntered(contest)
-                  onClose()
-                }}
-                className="flex-1 py-2.5 rounded-lg glass text-win font-medium"
+                onClick={() => void handleShare()}
+                className="text-xs text-white/60 hover:text-win"
               >
-                Mark as Entered
+                Share contest
               </button>
-            )}
+              {onMarkEntered && (
+                <button
+                  type="button"
+                  onClick={() => void confirmMark('submitted')}
+                  className="text-xs text-white/60 hover:text-win"
+                >
+                  Mark as submitted instead
+                </button>
+              )}
             </div>
             <button
               type="button"
               onClick={() => {
-                reportUrl(contest.url)
+                reportUrl(contest.url, 410)
+                markVaultLinkStatus(contest.url, 410)
+                setLinkHealthMsg('Marked as bad link — dropped from this device’s live feed.')
                 setReportToast(true)
                 setTimeout(() => setReportToast(false), 2500)
               }}
@@ -334,14 +727,23 @@ export default function ContestBrowser({
             >
               Report bad link
             </button>
-            {reportToast && (
+            {(reportToast || statusMsg) && (
               <p className="text-xs text-win" role="status">
-                Thanks, we&apos;ll look into it.
+                {statusMsg || 'Thanks — saved locally and removed from your live feed.'}
               </p>
             )}
           </div>
         )}
       </div>
+      <AgeGateModal
+        open={showAgeGate}
+        contestTitle={contest?.title}
+        onCancel={() => {
+          setShowAgeGate(false)
+          setPendingAgeAction(null)
+        }}
+        onConfirm={handleAgeConfirm}
+      />
     </>
   )
 }

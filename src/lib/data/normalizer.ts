@@ -26,6 +26,10 @@ export interface Contest {
   eligibilityUnverified?: boolean
   requirements?: string[]
   linkStatus?: number
+  /** Hive Mind / feed created timestamp (ISO) — used for New rails */
+  createdAt?: string
+  /** ISO publish time from RSS when available — also powers Pro New rail */
+  postedAt?: string
 }
 
 export interface RawFeedItem {
@@ -60,8 +64,28 @@ const TITLE_CLEAN_PATTERNS = [
   /\s*\[Daily\]\s*/gi,
 ]
 
+function decodeHtmlEntities(text: string): string {
+  if (!text.includes('&')) return text
+  try {
+    if (typeof document !== 'undefined') {
+      const el = document.createElement('textarea')
+      el.innerHTML = text
+      return el.value
+    }
+  } catch {
+    /* fall through */
+  }
+  return text
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&apos;/g, "'")
+}
+
 function cleanTitle(title: string): string {
-  let t = title
+  let t = decodeHtmlEntities(title)
   for (const re of TITLE_CLEAN_PATTERNS) {
     t = t.replace(re, ' ')
   }
@@ -117,7 +141,7 @@ const DATE_PREFIX =
  */
 function extractExpiryDate(
   contentText: string,
-  postedAtIso: string | undefined
+  _postedAtIso: string | undefined
 ): { expiryDate?: string; is_estimated_expiry: boolean } {
   const text = contentText.replace(/\s+/g, ' ').trim()
   const now = new Date()
@@ -256,11 +280,54 @@ function extractImageFromJsonItem(item: Rss2JsonItem, body: string): string | un
 /**
  * Normalize an item from rss2json (Strategy A) into a Contest.
  */
+/** Prefer text-scanned eligibility; fall back to the feed's declared country. */
+function resolveEligibility(
+  scanned: ReturnType<typeof scanForMetadata>,
+  source: Source
+): Pick<Contest, 'eligibility' | 'eligibilityUnverified'> {
+  if (scanned.eligibility !== 'Unknown') {
+    return {
+      eligibility: scanned.eligibility,
+      eligibilityUnverified: scanned.eligibilityUnverified,
+    }
+  }
+  if (source.country === 'CA' || source.country === 'US') {
+    return { eligibility: source.country, eligibilityUnverified: true }
+  }
+  return { eligibility: 'Unknown', eligibilityUnverified: true }
+}
+
+function mergeUnique(base: string[], extras?: string[]): string[] {
+  if (!extras?.length) return base
+  const out = [...base]
+  for (const x of extras) {
+    if (!out.includes(x)) out.push(x)
+  }
+  return out
+}
+
+function applySourceDefaults(
+  tags: string[],
+  requirements: string[],
+  source: Source
+): { tags: string[]; requirements: string[] } {
+  return {
+    tags: mergeUnique(tags, source.defaultTags),
+    requirements: mergeUnique(requirements, source.defaultRequirements),
+  }
+}
+
 export function normalizeJsonItem(item: Rss2JsonItem, source: Source, index: number): Contest {
   const title = cleanTitle(item.title)
   const body = [item.description ?? '', item.content ?? ''].join(' ')
-  const { tags, restrictions } = autoCategorize(item.title, body)
-  const { eligibility, eligibilityUnverified, requirements } = scanForMetadata(item.title, body)
+  const categorized = autoCategorize(item.title, body)
+  const scanned = scanForMetadata(item.title, body)
+  const { eligibility, eligibilityUnverified } = resolveEligibility(scanned, source)
+  const { tags, requirements } = applySourceDefaults(
+    categorized.tags,
+    scanned.requirements,
+    source
+  )
 
   const imageUrl =
     extractImageFromJsonItem(item, body) ?? SOURCE_FALLBACK_IMAGES[source.id]
@@ -283,10 +350,12 @@ export function normalizeJsonItem(item: Rss2JsonItem, source: Source, index: num
     description: item.description,
     contentSnippet: body,
     tags,
-    restrictions,
+    restrictions: categorized.restrictions,
     eligibility,
     eligibilityUnverified,
     requirements,
+    postedAt: postedAtIso,
+    createdAt: postedAtIso,
   }
 }
 
@@ -297,8 +366,14 @@ export function normalizeJsonItem(item: Rss2JsonItem, source: Source, index: num
 export function normalizeXmlItem(item: RawFeedItem, source: Source, index: number): Contest {
   const title = cleanTitle(item.title)
   const body = [item.description ?? '', item.contentEncoded ?? '', item.content ?? ''].join(' ')
-  const { tags, restrictions } = autoCategorize(item.title, body)
-  const { eligibility, eligibilityUnverified, requirements } = scanForMetadata(item.title, body)
+  const categorized = autoCategorize(item.title, body)
+  const scanned = scanForMetadata(item.title, body)
+  const { eligibility, eligibilityUnverified } = resolveEligibility(scanned, source)
+  const { tags, requirements } = applySourceDefaults(
+    categorized.tags,
+    scanned.requirements,
+    source
+  )
 
   const imageUrl =
     extractImage(item) ?? SOURCE_FALLBACK_IMAGES[source.id]
@@ -321,9 +396,11 @@ export function normalizeXmlItem(item: RawFeedItem, source: Source, index: numbe
     description: item.description,
     contentSnippet: body,
     tags,
-    restrictions,
+    restrictions: categorized.restrictions,
     eligibility,
     eligibilityUnverified,
     requirements,
+    postedAt: postedAtIso,
+    createdAt: postedAtIso,
   }
 }

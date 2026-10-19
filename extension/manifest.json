@@ -1,0 +1,62 @@
+{
+  "manifest_version": 3,
+  "name": "LoonieWins Autofill",
+  "version": "0.1.0",
+  "description": "Fill giveaway forms with your LoonieWins profile. Sync from the web app localStorage or Supabase (anon key only).",
+  "icons": {
+    "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "action": {
+    "default_title": "LoonieWins Autofill",
+    "default_popup": "popup/popup.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "32": "icons/icon32.png",
+      "48": "icons/icon48.png"
+    }
+  },
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "options_ui": {
+    "page": "options/options.html",
+    "open_in_tab": true
+  },
+  "permissions": [
+    "storage",
+    "activeTab",
+    "scripting",
+    "contextMenus"
+  ],
+  "host_permissions": [
+    "http://localhost/*",
+    "http://127.0.0.1/*",
+    "https://*.supabase.co/*"
+  ],
+  "optional_host_permissions": [
+    "https://*/*",
+    "http://*/*"
+  ],
+  "content_scripts": [
+    {
+      "matches": [
+        "http://localhost/*",
+        "http://127.0.0.1/*"
+      ],
+      "js": ["content/bridge.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "commands": {
+    "fill-page": {
+      "suggested_key": {
+        "default": "Alt+Shift+L"
+      },
+      "description": "Fill the active tab with LoonieWins profile data"
+    }
+  }
+}

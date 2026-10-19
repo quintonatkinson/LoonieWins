@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>LoonieWins Autofill — demo form</title>
+    <style>
+      body {
+        font-family: system-ui, sans-serif;
+        max-width: 480px;
+        margin: 2rem auto;
+        padding: 0 1rem;
+      }
+      label {
+        display: block;
+        margin: 0.75rem 0;
+      }
+      input,
+      select {
+        width: 100%;
+        padding: 0.4rem;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Demo giveaway form</h1>
+    <p>Load the unpacked extension, save a profile, then Fill this page.</p>
+    <form>
+      <label>Email <input name="email" type="email" placeholder="Email" /></label>
+      <label>First name <input name="first_name" placeholder="First name" /></label>
+      <label>Last name <input name="last_name" placeholder="Last name" /></label>
+      <label>Address <input name="address" placeholder="Street address" /></label>
+      <label>City <input name="city" placeholder="City" /></label>
+      <label
+        >Province
+        <select name="province">
+          <option value="">Select</option>
+          <option>ON</option>
+          <option>QC</option>
+          <option>BC</option>
+          <option>AB</option>
+        </select>
+      </label>
+      <label>Postal code <input name="postal" placeholder="Postal code" /></label>
+      <label>Phone <input name="phone" type="tel" placeholder="Phone" /></label>
+      <label for="skill">Skill testing: 2 + 2 = ?</label>
+      <input id="skill" name="skill" />
+      <button type="submit">Enter</button>
+    </form>
+  </body>
+</html>

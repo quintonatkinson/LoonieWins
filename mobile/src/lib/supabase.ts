@@ -1,11 +1,6 @@
-/**
- * Supabase client for React Native with AsyncStorage for auth/session persistence.
- * Uses EXPO_PUBLIC_ env vars.
- */
-
+import { createClient } from '@supabase/supabase-js'
 import 'react-native-url-polyfill/auto'
 import AsyncStorage from '@react-native-async-storage/async-storage'
-import { createClient } from '@supabase/supabase-js'
 
 const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL
 const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY
@@ -43,3 +38,8 @@ export const supabase = createClient(supabaseUrl ?? '', supabaseAnonKey ?? '', {
     detectSessionInUrl: false,
   },
 })
+
+export const isSupabaseConfigured = Boolean(supabaseUrl && supabaseAnonKey)
+
+export const tracking = () => supabase.schema('tracking')
+export const giveaways = () => supabase.schema('giveaways')

@@ -1,0 +1,40 @@
+/**
+ * Store product catalog for LoonieWins Pro.
+ * Quinton creates these IDs in App Store Connect + Play Console, then maps them in RevenueCat.
+ */
+
+export type BillingPlanId = 'weekly' | 'monthly'
+
+/** Apple App Store Connect — Auto-Renewable Subscriptions */
+export const APPLE_PRODUCT_IDS = {
+  weekly: 'com.quinton.looniewins.pro.weekly',
+  monthly: 'com.quinton.looniewins.pro.monthly',
+} as const
+
+/** Google Play Console — Subscriptions (base plan product ids) */
+export const GOOGLE_PRODUCT_IDS = {
+  weekly: 'looniewins_pro_weekly',
+  monthly: 'looniewins_pro_monthly',
+} as const
+
+/** RevenueCat entitlement identifier (must match dashboard) */
+export const REVENUECAT_ENTITLEMENT_ID = 'pro'
+
+/** RevenueCat package identifiers inside the default offering */
+export const REVENUECAT_PACKAGE_IDS: Record<BillingPlanId, string> = {
+  weekly: '$rc_weekly',
+  monthly: '$rc_monthly',
+}
+
+export const PLAN_DISPLAY = {
+  weekly: { title: 'Bi-Weekly Coffee', priceLabel: '$1.49 / week' },
+  monthly: { title: 'Monthly Saver', priceLabel: '$4.99 / mo' },
+} as const
+
+export function storeProductIdForPlatform(
+  planId: BillingPlanId,
+  platform: 'ios' | 'android' | 'web'
+): string {
+  if (platform === 'android') return GOOGLE_PRODUCT_IDS[planId]
+  return APPLE_PRODUCT_IDS[planId]
+}

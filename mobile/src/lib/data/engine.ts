@@ -1,11 +1,11 @@
 /**
- * Data Aggregation Engine: round-robin fetch (rss2json → corsproxy).
- * enrichContest runs Deep Scrape + Smart Valuation.
+ * Data Aggregation Engine: round-robin fetch (rss2json → corsproxy → safety net).
+ * Returns JSON-friendly data with offline fallback.
+ * enrichContest runs Deep Scrape + Smart Valuation for expiry/value enrichment.
  */
 
-import { DOMParser } from '@xmldom/xmldom'
 import { toExpiryEndOfDay } from '../utils/expiryDate'
-import { MASTER_SOURCES } from './sources'
+import { getActiveSources, itemMatchesSourceFilter, type Source } from './sources'
 import type { Contest, RawFeedItem, Rss2JsonItem } from './normalizer'
 import { normalizeJsonItem, normalizeXmlItem } from './normalizer'
 import { deepScrape } from './linkResolver'
@@ -19,34 +19,57 @@ type FetchResult =
   | { strategy: 'B'; data: string }
   | { strategy: 'C' }
 
-const apiKey = typeof process !== 'undefined' && process.env?.EXPO_PUBLIC_RSS2JSON_API_KEY
-const RSS2JSON_COUNT = apiKey ? 100 : 50
+const RSS2JSON_COUNT = import.meta.env.VITE_RSS2JSON_API_KEY ? 100 : 50
 
-async function fetchWithFallback(feedUrl: string): Promise<FetchResult> {
+/**
+ * Try Strategy B (corsproxy XML) first for full feeds, then A (rss2json), then C (no data).
+ * For `rss2json_first` sources (Cloudflare-sensitive hosts), reverse the order.
+ * Free rss2json ≈10 items; with `VITE_RSS2JSON_API_KEY` count rises to 50–100.
+ */
+async function fetchWithFallback(
+  feedUrl: string,
+  strategy: 'direct_first' | 'rss2json_first' = 'direct_first'
+): Promise<FetchResult> {
   const encodedUrl = encodeURIComponent(feedUrl)
   const cacheBust = '&t=' + Date.now()
+  const apiKey = import.meta.env.VITE_RSS2JSON_API_KEY
   const rss2jsonParams = apiKey
     ? `rss_url=${encodedUrl}&api_key=${apiKey}&count=${RSS2JSON_COUNT}${cacheBust}`
     : `rss_url=${encodedUrl}${cacheBust}`
 
-  try {
-    const resB = await fetch(CORSPROXY_URL + encodedUrl)
-    const xml = await resB.text()
-    const rawItems = parseFeedXml(xml)
-    if (rawItems.length >= 5) {
-      return { strategy: 'B', data: xml }
+  const tryRss2Json = async (): Promise<FetchResult | null> => {
+    try {
+      const resA = await fetch(`${RSS2JSON_URL}?${rss2jsonParams}`)
+      const json = (await resA.json()) as { status?: string; items?: Rss2JsonItem[] }
+      if (json.status === 'ok' && Array.isArray(json.items) && json.items.length > 0) {
+        console.log('Success using Strategy A (rss2json)', json.items.length, 'items')
+        return { strategy: 'A', data: json as { status: string; items: Rss2JsonItem[] } }
+      }
+    } catch (_) {
+      /* fall through */
     }
-  } catch (_) {}
+    return null
+  }
 
-  try {
-    const resA = await fetch(`${RSS2JSON_URL}?${rss2jsonParams}`)
-    const json = (await resA.json()) as { status?: string; items?: Rss2JsonItem[] }
-    if (json.status === 'ok' && Array.isArray(json.items) && json.items.length > 0) {
-      return { strategy: 'A', data: json as { status: string; items: Rss2JsonItem[] } }
+  const tryCorsProxy = async (): Promise<FetchResult | null> => {
+    try {
+      const resB = await fetch(CORSPROXY_URL + encodedUrl)
+      const xml = await resB.text()
+      const rawItems = parseFeedXml(xml)
+      if (rawItems.length >= 1) {
+        console.log('Strategy B (corsproxy)', rawItems.length, 'items')
+        return { strategy: 'B', data: xml }
+      }
+    } catch (_) {
+      /* fall through */
     }
-  } catch (_) {}
+    return null
+  }
 
-  return { strategy: 'C' }
+  if (strategy === 'rss2json_first') {
+    return (await tryRss2Json()) ?? (await tryCorsProxy()) ?? { strategy: 'C' }
+  }
+  return (await tryCorsProxy()) ?? (await tryRss2Json()) ?? { strategy: 'C' }
 }
 
 function parseFeedXml(xml: string): RawFeedItem[] {
@@ -56,6 +79,7 @@ function parseFeedXml(xml: string): RawFeedItem[] {
   const atomNodes = doc.querySelectorAll('entry')
   const nodes = itemNodes.length ? itemNodes : atomNodes
   const entries: RawFeedItem[] = []
+
   const feedLinkPattern = /\/(feed|rss)(\/|$)|atom\.xml$/i
 
   nodes.forEach((item) => {
@@ -65,25 +89,53 @@ function parseFeedXml(xml: string): RawFeedItem[] {
     for (const el of linkEls) {
       if (el.getAttribute('rel') === 'self') continue
       const href = (el.getAttribute('href') ?? el.textContent?.trim() ?? '').trim()
-      if (!href || feedLinkPattern.test(href)) continue
+      if (!href) continue
+      if (feedLinkPattern.test(href)) continue
       link = href
       break
     }
     if (!link && linkEls.length > 0) {
-      link = (linkEls[0]?.getAttribute('href') ?? linkEls[0]?.textContent?.trim() ?? '').trim()
+      const first = linkEls[0]
+      link = (first?.getAttribute('href') ?? first?.textContent?.trim() ?? '').trim()
     }
-    const description = item.querySelector('description')?.textContent?.trim() ?? item.querySelector('summary')?.textContent?.trim()
-    const pubDate = item.querySelector('pubDate')?.textContent?.trim() ?? item.querySelector('published')?.textContent?.trim() ?? item.querySelector('updated')?.textContent?.trim()
+    const description =
+      item.querySelector('description')?.textContent?.trim() ??
+      item.querySelector('summary')?.textContent?.trim()
+    const pubDate =
+      item.querySelector('pubDate')?.textContent?.trim() ??
+      item.querySelector('published')?.textContent?.trim() ??
+      item.querySelector('updated')?.textContent?.trim()
     const enc = item.querySelector('enclosure')
     const enclosure = enc?.getAttribute('url') ?? undefined
-    const mediaContent = item.querySelector('media\\:content')?.getAttribute('url') ?? item.querySelector('content')?.getAttribute('url') ?? undefined
+    const mediaContent =
+      item.querySelector('media\\:content')?.getAttribute('url') ??
+      item.querySelector('content')?.getAttribute('url') ??
+      undefined
     const contentEncoded = item.querySelector('content\\:encoded')?.textContent?.trim()
     let content = item.querySelector('content')?.textContent?.trim()
-    if (!content && item.getElementsByTagName('content').length > 0) content = item.getElementsByTagName('content')[0]?.textContent?.trim() ?? undefined
-    if (!content) content = item.getElementsByTagNameNS('http://www.w3.org/2005/Atom', 'content')[0]?.textContent?.trim() ?? undefined
-    if (!content) content = item.querySelector('summary')?.textContent?.trim() ?? undefined
+    if (!content && item.getElementsByTagName('content').length > 0) {
+      content = item.getElementsByTagName('content')[0]?.textContent?.trim() ?? undefined
+    }
+    if (!content) {
+      const atomContent = item.getElementsByTagNameNS('http://www.w3.org/2005/Atom', 'content')[0]
+      content = atomContent?.textContent?.trim() ?? undefined
+    }
+    if (!content) {
+      content = item.querySelector('summary')?.textContent?.trim() ?? undefined
+    }
 
-    if (title && link) entries.push({ title, link, description, pubDate, enclosure, mediaContent, contentEncoded, content })
+    if (title && link) {
+      entries.push({
+        title,
+        link,
+        description,
+        pubDate,
+        enclosure,
+        mediaContent,
+        contentEncoded,
+        content,
+      })
+    }
   })
 
   return entries
@@ -114,69 +166,164 @@ const SAFETY_NET_CONTEST: Contest = {
   is_estimated_expiry: true,
 }
 
-async function fetchOneSource(source: (typeof MASTER_SOURCES)[0], results: Contest[]): Promise<void> {
+/**
+ * Fetch one source via fetchWithFallback and push normalized contests into results.
+ */
+async function fetchOneSource(source: Source, results: Contest[]): Promise<void> {
+  console.log('Fetching source:', source.name, `(${source.country})`)
   try {
-    const result = await fetchWithFallback(source.url)
-    if (result.strategy === 'A') result.data.items.forEach((item, i) => results.push(normalizeJsonItem(item, source, i)))
-    else if (result.strategy === 'B') parseFeedXml(result.data).forEach((item, i) => results.push(normalizeXmlItem(item, source, i)))
+    const result = await fetchWithFallback(source.url, source.fetchStrategy ?? 'direct_first')
+    if (result.strategy === 'A') {
+      result.data.items.forEach((item, i) => {
+        const body = [item.description ?? '', item.content ?? ''].join(' ')
+        if (!itemMatchesSourceFilter(source, item.title, body)) return
+        results.push(normalizeJsonItem(item, source, i))
+      })
+    } else if (result.strategy === 'B') {
+      const rawItems = parseFeedXml(result.data)
+      rawItems.forEach((item, i) => {
+        const body = [item.description ?? '', item.contentEncoded ?? '', item.content ?? ''].join(' ')
+        if (!itemMatchesSourceFilter(source, item.title, body)) return
+        results.push(normalizeXmlItem(item, source, i))
+      })
+    }
+    // C: add nothing
   } catch (error) {
     console.error('Failed source:', source.name, error)
     throw error
   }
 }
 
-export async function fetchAllContests(): Promise<{ contests: Contest[]; offlineMode: boolean }> {
+/**
+ * Fetch all contests. Returns contests and offlineMode (true when only safety net is returned).
+ */
+export async function fetchAllContests(): Promise<{
+  contests: Contest[]
+  offlineMode: boolean
+}> {
   const results: Contest[] = []
-  const settled = await Promise.allSettled(MASTER_SOURCES.map((s) => fetchOneSource(s, results)))
+  const sources = getActiveSources()
+
+  const settled = await Promise.allSettled(
+    sources.map(async (source) => {
+      await fetchOneSource(source, results)
+    })
+  )
+
   const failedIndices: number[] = []
-  settled.forEach((outcome, i) => { if (outcome.status === 'rejected') failedIndices.push(i) })
-  for (const i of failedIndices) {
-    try { await fetchOneSource(MASTER_SOURCES[i], results) } catch (_) {}
+  settled.forEach((outcome, i) => {
+    if (outcome.status === 'rejected') failedIndices.push(i)
+  })
+
+  if (failedIndices.length > 0) {
+    for (const i of failedIndices) {
+      const source = sources[i]
+      if (!source) continue
+      try {
+        await fetchOneSource(source, results)
+      } catch (error) {
+        console.error('Retry failed for source:', source.name, error)
+      }
+    }
   }
 
-  if (results.length === 0) return { contests: [SAFETY_NET_CONTEST], offlineMode: true }
+  let contests: Contest[]
+  let offlineMode: boolean
 
-  const byUrl = new Map<string, Contest>()
-  for (const c of results) if (!byUrl.has(c.url)) byUrl.set(c.url, c)
-  let list = [...byUrl.values()].sort((a, b) => {
-    const da = a.expiryDate ? new Date(a.expiryDate).getTime() : 0
-    const db = b.expiryDate ? new Date(b.expiryDate).getTime() : 0
-    return db - da
-  })
-  const deduped: Contest[] = []
-  for (const c of list) if (!deduped.some((r) => isDuplicateTitle(r.title, c.title))) deduped.push(c)
-  const live = deduped.filter((c) => {
-    if (c.id === '__offline_alert__') return true
-    if (!c.expiryDate) return true
-    const end = toExpiryEndOfDay(c.expiryDate)
-    return Number.isNaN(end.getTime()) || end > new Date()
-  })
-  return { contests: live, offlineMode: false }
+  if (results.length === 0) {
+    contests = [SAFETY_NET_CONTEST]
+    offlineMode = true
+  } else {
+    offlineMode = false
+    const byUrl = new Map<string, Contest>()
+    for (const c of results) {
+      if (!byUrl.has(c.url)) byUrl.set(c.url, c)
+    }
+    let list = [...byUrl.values()]
+    list.sort((a, b) => {
+      const da = a.expiryDate ? new Date(a.expiryDate).getTime() : 0
+      const db = b.expiryDate ? new Date(b.expiryDate).getTime() : 0
+      return db - da
+    })
+    const deduped: Contest[] = []
+    for (const c of list) {
+      const isDup = deduped.some((r) => isDuplicateTitle(r.title, c.title))
+      if (!isDup) deduped.push(c)
+    }
+    const live = deduped.filter((c) => {
+      if (c.id === '__offline_alert__') return true
+      if (!c.expiryDate) return true
+      const end = toExpiryEndOfDay(c.expiryDate)
+      if (Number.isNaN(end.getTime())) return true
+      return end > new Date()
+    })
+    contests = live
+  }
+
+  return { contests, offlineMode }
 }
 
-export async function fetchRawContests(): Promise<{ contests: Contest[]; offlineMode: boolean }> {
+/**
+ * Fetch raw contests: same as fetchAllContests but without the expiry filter.
+ * Used by the pipeline Phase 1 (The Net). Returns deduped list only.
+ */
+export async function fetchRawContests(): Promise<{
+  contests: Contest[]
+  offlineMode: boolean
+}> {
   const results: Contest[] = []
-  const settled = await Promise.allSettled(MASTER_SOURCES.map((s) => fetchOneSource(s, results)))
+  const sources = getActiveSources()
+
+  const settled = await Promise.allSettled(
+    sources.map(async (source) => {
+      await fetchOneSource(source, results)
+    })
+  )
+
   const failedIndices: number[] = []
-  settled.forEach((outcome, i) => { if (outcome.status === 'rejected') failedIndices.push(i) })
-  for (const i of failedIndices) {
-    try { await fetchOneSource(MASTER_SOURCES[i], results) } catch (_) {}
+  settled.forEach((outcome, i) => {
+    if (outcome.status === 'rejected') failedIndices.push(i)
+  })
+
+  if (failedIndices.length > 0) {
+    for (const i of failedIndices) {
+      const source = sources[i]
+      if (!source) continue
+      try {
+        await fetchOneSource(source, results)
+      } catch (error) {
+        console.error('Retry failed for source:', source.name, error)
+      }
+    }
   }
 
-  if (results.length === 0) return { contests: [SAFETY_NET_CONTEST], offlineMode: true }
+  if (results.length === 0) {
+    return { contests: [SAFETY_NET_CONTEST], offlineMode: true }
+  }
 
   const byUrl = new Map<string, Contest>()
-  for (const c of results) if (!byUrl.has(c.url)) byUrl.set(c.url, c)
-  let list = [...byUrl.values()].sort((a, b) => {
+  for (const c of results) {
+    if (!byUrl.has(c.url)) byUrl.set(c.url, c)
+  }
+  let list = [...byUrl.values()]
+  list.sort((a, b) => {
     const da = a.expiryDate ? new Date(a.expiryDate).getTime() : 0
     const db = b.expiryDate ? new Date(b.expiryDate).getTime() : 0
     return db - da
   })
   const deduped: Contest[] = []
-  for (const c of list) if (!deduped.some((r) => isDuplicateTitle(r.title, c.title))) deduped.push(c)
+  for (const c of list) {
+    const isDup = deduped.some((r) => isDuplicateTitle(r.title, c.title))
+    if (!isDup) deduped.push(c)
+  }
+
   return { contests: deduped, offlineMode: false }
 }
 
+/**
+ * Enrich a contest in the background: Deep Scrape for expiry/value, then Smart Valuation.
+ * Use scrapedExpiry when expiry is missing or estimated; use scrapedValue when prizeValue is missing.
+ */
 export async function enrichContest(contest: Contest): Promise<Contest> {
   if (contest.id === '__offline_alert__') return contest
 
@@ -190,13 +337,20 @@ export async function enrichContest(contest: Contest): Promise<Contest> {
     expiryDate = result.scrapedExpiry
     is_estimated_expiry = false
   }
-  if (result.scrapedValue != null && (prizeValue == null || prizeValue === 0)) prizeValue = result.scrapedValue
+
+  if (result.scrapedValue != null && (prizeValue == null || prizeValue === 0)) {
+    prizeValue = result.scrapedValue
+  }
 
   const eligibility = result.scrapedEligibility ?? contest.eligibility
   const eligibilityUnverified = result.scrapedEligibilityUnverified ?? contest.eligibilityUnverified
   const requirements = result.scrapedRequirements ?? contest.requirements ?? []
-  const tags = [...new Set([...(contest.tags ?? []), ...(result.scrapedTags ?? [])])]
-  const restrictions = [...new Set([...(contest.restrictions ?? []), ...(result.scrapedRestrictions ?? [])])]
+  const rssTags = contest.tags ?? []
+  const rssRestrictions = contest.restrictions ?? []
+  const scrapedTags = result.scrapedTags ?? []
+  const scrapedRestrictions = result.scrapedRestrictions ?? []
+  const tags = [...new Set([...rssTags, ...scrapedTags])]
+  const restrictions = [...new Set([...rssRestrictions, ...scrapedRestrictions])]
 
   if (prizeValue == null || prizeValue === 0) {
     const estimated = estimatePrizeValue(contest.title, contest.description)

@@ -1,0 +1,152 @@
+:root {
+  --bg: #0f1419;
+  --panel: #1a2332;
+  --text: #f4f7fb;
+  --muted: #9aabbd;
+  --accent: #c41e3a;
+  --accent-2: #2dd4bf;
+  --border: #2a384c;
+  --focus: #5b9fd4;
+  font-family: "Segoe UI", "IBM Plex Sans", system-ui, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  width: 340px;
+  color: var(--text);
+  background:
+    radial-gradient(120% 80% at 0% 0%, rgba(196, 30, 58, 0.22), transparent 55%),
+    radial-gradient(90% 70% at 100% 0%, rgba(45, 212, 191, 0.12), transparent 50%),
+    var(--bg);
+  padding: 12px;
+}
+
+header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.brand {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.brand strong {
+  display: block;
+  font-size: 14px;
+  letter-spacing: 0.02em;
+}
+
+.brand span {
+  display: block;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+header a {
+  color: var(--accent-2);
+  font-size: 12px;
+  text-decoration: none;
+}
+
+.status {
+  min-height: 1.2em;
+  margin: 0 0 10px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.status.ok {
+  color: var(--accent-2);
+}
+
+.status.err {
+  color: #ff8a9a;
+}
+
+form {
+  display: grid;
+  gap: 8px;
+}
+
+label {
+  display: grid;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+input {
+  width: 100%;
+  border: 1px solid var(--border);
+  background: var(--panel);
+  color: var(--text);
+  border-radius: 8px;
+  padding: 7px 9px;
+  font-size: 13px;
+}
+
+input:focus {
+  outline: 2px solid var(--focus);
+  outline-offset: 1px;
+}
+
+.actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.actions.secondary {
+  grid-template-columns: 1fr;
+}
+
+button {
+  border: 1px solid var(--border);
+  background: var(--panel);
+  color: var(--text);
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+button.primary {
+  background: #243044;
+}
+
+button.accent {
+  background: var(--accent);
+  border-color: #a01830;
+  font-weight: 600;
+}
+
+button:hover {
+  filter: brightness(1.08);
+}
+
+footer {
+  margin-top: 12px;
+  display: grid;
+  gap: 4px;
+}
+
+footer small {
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.35;
+}

@@ -4,9 +4,17 @@
 @tailwind components;
 @tailwind utilities;
 
+/*
+  Accent tokens — ThemeProvider sets data-accent + inline vars at runtime.
+  Defaults match neon-green so FOUC / no-JS stays the current look.
+*/
 :root {
   --accent-win: #39FF14;
+  --color-win: 57 255 20;
+  --on-win: #111827;
+  --color-on-win: 17 24 39;
   --accent-earn: #FFD700;
+  --color-earn: 255 215 0;
 }
 
 body {
