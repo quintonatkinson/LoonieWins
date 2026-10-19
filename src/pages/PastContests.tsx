@@ -1,8 +1,18 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
+import { Link } from 'react-router-dom'
 import ContestCard from '../components/ContestCard'
 import { getPastContests } from '../hooks/useContestVault'
 import type { Contest } from '../lib/rssFetcher'
-import { getExpirySortKey } from '../lib/utils/expiryDate'
+import { getExpirySortKey, isExpired } from '../lib/utils/expiryDate'
+
+function formatEndedDay(expiryDate?: string): string | null {
+  if (!expiryDate?.trim()) return null
+  const day = expiryDate.trim().slice(0, 10)
+  if (/^\d{4}-\d{2}-\d{2}$/.test(day)) return day
+  const t = Date.parse(expiryDate)
+  if (!Number.isFinite(t)) return null
+  return new Date(t).toISOString().slice(0, 10)
+}
 
 export default function PastContests() {
   const [pastContests, setPastContests] = useState<Contest[]>([])
@@ -21,38 +31,85 @@ export default function PastContests() {
     }
   }, [])
 
-  const sorted = [...pastContests].sort(
-    (a, b) => getExpirySortKey(b.expiryDate) - getExpirySortKey(a.expiryDate)
+  const sorted = useMemo(
+    () =>
+      [...pastContests].sort(
+        (a, b) => getExpirySortKey(b.expiryDate) - getExpirySortKey(a.expiryDate)
+      ),
+    [pastContests]
   )
 
+  const withKnownEnd = sorted.filter((c) => c.expiryDate && isExpired(c.expiryDate)).length
+
   return (
-    <div className="flex flex-col bg-gray-900">
+    <div className="flex flex-col bg-gray-900" data-testid="past-contests">
       <section className="px-4 pt-4 pb-24">
-        <h2 className="text-base font-bold text-gray-50 flex items-center gap-2 mb-3">
-          <span className="text-gray-400">📦</span>
+        <h2 className="text-base font-bold text-gray-50 flex items-center gap-2 mb-1">
+          <span className="text-gray-400" aria-hidden>
+            📦
+          </span>
           FOMO Vault — Past Contests
         </h2>
-        <p className="text-sm text-gray-400 mb-4">
+        <p className="text-sm text-gray-400 mb-1">
           Contests that have ended. Tap to view the original page.
         </p>
+        {sorted.length > 0 && (
+          <p className="text-xs text-gray-500 mb-4" data-testid="past-contests-counts">
+            {sorted.length} past
+            {withKnownEnd > 0 ? ` · ${withKnownEnd} with end dates` : ''}
+          </p>
+        )}
         {sorted.length === 0 ? (
-          <div className="rounded-xl bg-surface border border-gray-600/50 p-8 text-center">
-            <p className="text-gray-400">No past contests yet.</p>
-            <p className="text-sm text-gray-500 mt-2">
-              Expired contests will appear here once they drop off the live feed.
+          <div
+            className="rounded-xl border border-dashed border-gray-600/60 bg-surface px-4 py-10 text-center space-y-3"
+            data-testid="past-empty-state"
+          >
+            <p className="text-white font-medium">Vault is empty — nothing expired yet</p>
+            <p className="text-sm text-gray-400 max-w-sm mx-auto">
+              When live contests end, they drop here so you can still open the sponsor page. Browse
+              Home to fill the Hive Mind feed first.
+            </p>
+            <Link
+              to="/"
+              className="inline-flex items-center justify-center px-4 py-2.5 rounded-lg bg-win text-on-win font-semibold text-sm"
+            >
+              Browse live contests
+            </Link>
+            <p className="text-xs text-gray-500">
+              Tracking what you entered? That lives on{' '}
+              <Link to="/my-giveaways" className="text-win hover:underline">
+                My Giveaways
+              </Link>
+              .
             </p>
           </div>
         ) : (
-          <div className="opacity-60 grayscale space-y-2">
+          <div className="opacity-80 space-y-2">
             <ul className="space-y-2">
-              {sorted.map((c) => (
-                <ContestCard
-                  key={c.id}
-                  contest={c}
-                  onOpenOverlay={() => {}}
-                  variant="ended"
-                />
-              ))}
+              {sorted.map((c) => {
+                const endedDay = formatEndedDay(c.expiryDate)
+                return (
+                  <li key={c.id} className="space-y-1">
+                    {endedDay && (
+                      <p
+                        className="text-[11px] font-medium text-red-400/90 px-1"
+                        data-testid="past-ended-date"
+                      >
+                        Ended {endedDay}
+                        {c.is_estimated_expiry ? ' · estimated' : ''}
+                      </p>
+                    )}
+                    {!endedDay && (
+                      <p className="text-[11px] text-gray-500 px-1">End date unknown</p>
+                    )}
+                    <ContestCard
+                      contest={c}
+                      onOpenOverlay={() => {}}
+                      variant="ended"
+                    />
+                  </li>
+                )
+              })}
             </ul>
           </div>
         )}

@@ -86,6 +86,8 @@ function rowToContest(row: ContestRow): Contest {
     tags,
     requirements,
     linkStatus: row.link_status ?? undefined,
+    // Cloud rows lack link_checked_at — use updated_at as a soft “last known” stamp
+    linkCheckedAt: row.link_status != null ? row.updated_at ?? undefined : undefined,
     isLocked: row.is_locked,
     createdAt: row.created_at ?? undefined,
     restrictions: deriveRestrictions(row.title, tags),
@@ -307,16 +309,18 @@ export function getVaultContestCount(): { total: number; live: number; past: num
 /**
  * Patch linkStatus on a vault row by URL (e.g. Report bad link / client recheck).
  * Drops dead links from the live feed on next getLiveContests().
+ * Always stamps linkCheckedAt for Hive Mind trust hints.
  */
 export function markVaultLinkStatus(url: string, status: number): boolean {
   if (!url?.trim() || !Number.isFinite(status)) return false
   const vault = loadVault()
   const key = normalizeUrl(url)
   let found = false
+  const checkedAt = new Date().toISOString()
   const next = vault.map((c) => {
     if (normalizeUrl(c.url) !== key) return c
     found = true
-    return { ...c, linkStatus: status }
+    return { ...c, linkStatus: status, linkCheckedAt: checkedAt }
   })
   if (!found) return false
   saveVault(next)
@@ -324,6 +328,13 @@ export function markVaultLinkStatus(url: string, status: number): boolean {
     window.dispatchEvent(new CustomEvent('loonie_vault_updated'))
   }
   return true
+}
+
+/** Look up a vault row by contest URL (for trust hints on cards). */
+export function findVaultContestByUrl(url: string): Contest | null {
+  if (!url?.trim()) return null
+  const key = normalizeUrl(url)
+  return loadVault().find((c) => normalizeUrl(c.url) === key) ?? null
 }
 
 export { isDeadLink, DEAD_LINK_STATUSES as DEAD_STATUSES }

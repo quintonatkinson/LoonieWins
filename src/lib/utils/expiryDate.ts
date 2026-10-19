@@ -86,3 +86,20 @@ export function isExpired(dateStr?: string | null, now = new Date()): boolean {
 export function sortByEndingSoon<T extends { expiryDate?: string }>(list: T[]): T[] {
   return [...list].sort((a, b) => compareExpiryAscending(a.expiryDate, b.expiryDate))
 }
+
+/** Default “ending soon” window for My Giveaways / Home teasers (48h). */
+export const ENDING_SOON_MS = 48 * 60 * 60 * 1000
+
+/**
+ * True when expiry is known, still open, and within `withinMs` (default 48h).
+ * Used for Current-tab badges and “Ending in your list” teasers.
+ */
+export function isEndingSoon(
+  dateStr?: string | null,
+  withinMs: number = ENDING_SOON_MS
+): boolean {
+  if (!dateStr?.trim()) return false
+  const ms = getMillisUntilExpiry(dateStr)
+  if (!Number.isFinite(ms) || ms <= 0) return false
+  return ms <= withinMs
+}
