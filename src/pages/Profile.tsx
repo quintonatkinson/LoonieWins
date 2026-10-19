@@ -14,6 +14,10 @@ import {
   Scale,
   LogOut,
   PlusCircle,
+  Link2,
+  History,
+  Award,
+  Package,
 } from 'lucide-react'
 import { useUserEarn } from '../contexts/UserEarnContext'
 import { useAuth } from '../contexts/AuthContext'
@@ -30,6 +34,7 @@ import { loadAutoFillData, saveAutoFillData } from '../lib/utils/autoFillStorage
 import { isSupabaseConfigured } from '../lib/supabase'
 import { PRO_LOCKED_FEATURES } from '../lib/monetization/tiers'
 import { isCurrentContestEntry } from '../lib/utils/contestEntryScope'
+import PageShell from '../components/PageShell'
 
 const AUTO_FILL_FIELDS: { key: keyof AutoFillData; label: string }[] = [
   { key: 'firstName', label: 'First Name' },
@@ -160,7 +165,7 @@ export default function Profile() {
   }
 
   return (
-    <div className="p-4 space-y-6 pb-24">
+    <PageShell className="space-y-6" testId="profile">
       <div className="flex items-center gap-3">
         <div className="flex items-center justify-center w-10 h-10 rounded-full bg-win/20 border border-win/40">
           <User className="w-5 h-5 text-win" strokeWidth={2.5} />
@@ -337,6 +342,42 @@ export default function Profile() {
         )}
       </section>
 
+      {/* History — also in bottom-nav History sheet */}
+      <section>
+        <div className="flex items-center gap-2 mb-3">
+          <History className="w-5 h-5 text-win" />
+          <h2 className="text-sm font-semibold text-white uppercase tracking-wide">History</h2>
+        </div>
+        <ul className="rounded-xl bg-gray-800/80 border border-gray-600/50 divide-y divide-gray-600/50 overflow-hidden">
+          <li>
+            <Link
+              to="/winners"
+              className="flex items-center gap-3 w-full text-left px-4 py-3 hover:bg-white/5 transition-colors"
+            >
+              <Award className="w-5 h-5 text-win shrink-0" />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm text-white font-medium">Winners</p>
+                <p className="text-xs text-gray-500">Community wins shared with LoonieWins</p>
+              </div>
+              <ChevronRight className="w-5 h-5 text-gray-500 shrink-0" />
+            </Link>
+          </li>
+          <li>
+            <Link
+              to="/past"
+              className="flex items-center gap-3 w-full text-left px-4 py-3 hover:bg-white/5 transition-colors"
+            >
+              <Package className="w-5 h-5 text-gray-300 shrink-0" />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm text-white font-medium">Past contests</p>
+                <p className="text-xs text-gray-500">FOMO vault — expired Hive Mind drops</p>
+              </div>
+              <ChevronRight className="w-5 h-5 text-gray-500 shrink-0" />
+            </Link>
+          </li>
+        </ul>
+      </section>
+
       {/* Community */}
       <section>
         <h2 className="text-sm font-semibold text-white uppercase tracking-wide mb-3">Community</h2>
@@ -350,6 +391,18 @@ export default function Profile() {
               <div>
                 <p className="text-sm text-white font-medium">Submit a contest</p>
                 <p className="text-xs text-gray-500">Moderated — approved items join the Hive Mind feed</p>
+              </div>
+            </Link>
+          </li>
+          <li>
+            <Link
+              to="/referrals"
+              className="flex items-center gap-3 w-full text-left px-4 py-3 hover:bg-white/5 transition-colors"
+            >
+              <Link2 className="w-5 h-5 text-win shrink-0" />
+              <div>
+                <p className="text-sm text-white font-medium">Referrals</p>
+                <p className="text-xs text-gray-500">Invite codes &amp; friend link credits</p>
               </div>
             </Link>
           </li>
@@ -519,6 +572,6 @@ export default function Profile() {
         onSelectPlan={(planId) => void upgradeToPro(planId)}
         showComparison
       />
-    </div>
+    </PageShell>
   )
 }

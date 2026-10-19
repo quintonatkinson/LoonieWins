@@ -70,10 +70,11 @@ export default function SubscriptionModal({
         aria-labelledby="subscription-title"
       >
         <h2 id="subscription-title" className="text-lg font-bold text-gray-50">
-          Go Pro — unlock everything
+          Go Pro — unlock the locked list
         </h2>
         <p className="text-sm text-gray-400 mt-2 mb-4">
-          Weekly or monthly subscription. Not a one-time buy — cancel anytime in the store.
+          Free still browses and enters with weekly caps + points. Pro is a weekly or monthly
+          subscription — not a one-time buy. Cancel anytime in the store.
         </p>
 
         {/* Scannable list of everything locked behind Pro */}

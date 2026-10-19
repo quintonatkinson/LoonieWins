@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom'
 import type { LegalSection } from '../lib/legal/content'
 import { useAuth } from '../contexts/AuthContext'
+import PageShell from './PageShell'
 
 export default function LegalPage({
   title,
@@ -13,7 +14,7 @@ export default function LegalPage({
 }) {
   const { session } = useAuth()
   return (
-    <div className="p-4 pb-24 max-w-2xl mx-auto space-y-6">
+    <PageShell className="space-y-6">
       <div>
         <Link to={session ? '/profile' : '/'} className="text-sm text-win hover:underline">
           {session ? '← Back to Profile' : '← LoonieWins'}
@@ -42,6 +43,6 @@ export default function LegalPage({
           )}
         </section>
       ))}
-    </div>
+    </PageShell>
   )
 }

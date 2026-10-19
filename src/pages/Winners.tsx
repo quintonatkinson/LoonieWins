@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Trophy, ExternalLink, ChevronDown, ChevronUp } from 'lucide-react'
+import { Trophy, ExternalLink, ChevronDown, ChevronUp, Package } from 'lucide-react'
 import { giveaways, isSupabaseConfigured } from '../lib/supabase'
+import PageShell from '../components/PageShell'
 
 interface WinnerCard {
   id: string
@@ -96,13 +97,15 @@ export default function Winners() {
   }, [winners])
 
   return (
-    <div className="p-4 space-y-6 pb-24">
-      <div>
-        <h1 className="text-xl font-semibold flex items-center gap-2">
-          <Trophy className="w-5 h-5 text-win" />
-          Winners
-        </h1>
-        <p className="text-white/70 text-sm mt-1">Recent wins. You could be next.</p>
+    <PageShell className="space-y-6" testId="winners">
+      <div className="flex items-center gap-3">
+        <div className="flex items-center justify-center w-10 h-10 rounded-full bg-win/20 border border-win/40 shrink-0">
+          <Trophy className="w-5 h-5 text-win" strokeWidth={2.5} />
+        </div>
+        <div className="min-w-0">
+          <h1 className="text-xl font-semibold text-white">Winners</h1>
+          <p className="text-sm text-gray-400 mt-0.5">Recent wins. You could be next.</p>
+        </div>
       </div>
 
       <div className="glass rounded-xl p-4 flex flex-wrap gap-4 text-sm">
@@ -119,14 +122,18 @@ export default function Winners() {
         </p>
       </div>
 
-      <div className="flex gap-2">
+      <div className="flex flex-wrap gap-2" role="tablist" aria-label="Winner time filter">
         {(['week', 'month', 'all'] as TimeFilter[]).map((f) => (
           <button
             key={f}
             type="button"
+            role="tab"
+            aria-selected={timeFilter === f}
             onClick={() => setTimeFilter(f)}
-            className={`px-3 py-1.5 rounded-full text-xs font-medium ${
-              timeFilter === f ? 'bg-win text-on-win' : 'bg-surface border border-gray-600/50 text-gray-400'
+            className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${
+              timeFilter === f
+                ? 'bg-win text-on-win border-win'
+                : 'bg-surface border-gray-600/50 text-gray-400 hover:text-gray-200'
             }`}
           >
             {f === 'week' ? 'This week' : f === 'month' ? 'This month' : 'All time'}
@@ -136,47 +143,69 @@ export default function Winners() {
 
       {loading ? (
         <p className="text-gray-500 text-sm py-6 text-center">Loading wins…</p>
+      ) : filtered.length === 0 ? (
+        <div className="empty-panel space-y-3">
+          <p className="text-white font-medium">
+            {!isSupabaseConfigured
+              ? 'Winner feed needs cloud sync'
+              : 'No wins in this period yet'}
+          </p>
+          <p className="text-sm text-gray-400 max-w-sm mx-auto">
+            {!isSupabaseConfigured
+              ? 'Guest mode shows the layout. Shared community wins appear here once Supabase is live.'
+              : 'Wins appear when users share them to the community feed. Keep entering from Home.'}
+          </p>
+          <div className="flex flex-wrap items-center justify-center gap-2">
+            <Link
+              to="/"
+              className="inline-flex items-center justify-center px-4 py-2.5 rounded-lg bg-win text-on-win font-semibold text-sm"
+            >
+              Enter from Home
+            </Link>
+            <Link
+              to="/past"
+              className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-lg border border-gray-600/50 text-sm text-gray-300 hover:text-white"
+            >
+              <Package className="w-3.5 h-3.5" />
+              Past contests
+            </Link>
+          </div>
+        </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          {filtered.length === 0 ? (
-            <p className="col-span-2 text-gray-500 text-sm py-6 text-center">
-              No wins in this period yet. Wins appear when users share them to the community feed.
-            </p>
-          ) : (
-            filtered.map((w) => {
-              const big = (w.prizeValueEstimate ?? 0) >= BIG_WIN_THRESHOLD
-              return (
-                <article
-                  key={w.id}
-                  className={`rounded-xl glass p-4 border ${
-                    big ? 'border-win/40' : 'border-gray-600/40'
-                  }`}
-                >
-                  <div className="flex items-start justify-between gap-2">
-                    <h3 className="font-semibold text-sm text-white line-clamp-2">{w.contestName}</h3>
-                    {w.contestUrl && (
-                      <a
-                        href={w.contestUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-win shrink-0"
-                      >
-                        <ExternalLink className="w-4 h-4" />
-                      </a>
-                    )}
-                  </div>
-                  <p className="text-win font-medium text-sm mt-2">{w.prize}</p>
-                  <p className="text-xs text-gray-400 mt-1">
-                    {w.winnerDisplay}
-                    {w.winnerRegion ? ` · ${w.winnerRegion}` : ''} · {w.wonAt}
-                  </p>
-                  {w.contestSource && (
-                    <p className="text-xs text-gray-500 mt-1">{w.contestSource}</p>
+          {filtered.map((w) => {
+            const big = (w.prizeValueEstimate ?? 0) >= BIG_WIN_THRESHOLD
+            return (
+              <article
+                key={w.id}
+                className={`rounded-xl glass p-4 border ${
+                  big ? 'border-win/40' : 'border-gray-600/40'
+                }`}
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <h3 className="font-semibold text-sm text-white line-clamp-2">{w.contestName}</h3>
+                  {w.contestUrl && (
+                    <a
+                      href={w.contestUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-win shrink-0"
+                    >
+                      <ExternalLink className="w-4 h-4" />
+                    </a>
                   )}
-                </article>
-              )
-            })
-          )}
+                </div>
+                <p className="text-win font-medium text-sm mt-2">{w.prize}</p>
+                <p className="text-xs text-gray-400 mt-1">
+                  {w.winnerDisplay}
+                  {w.winnerRegion ? ` · ${w.winnerRegion}` : ''} · {w.wonAt}
+                </p>
+                {w.contestSource && (
+                  <p className="text-xs text-gray-500 mt-1">{w.contestSource}</p>
+                )}
+              </article>
+            )
+          })}
         </div>
       )}
 
@@ -191,9 +220,13 @@ export default function Winners() {
       {showHowChosen && (
         <p className="text-sm text-gray-500">
           Winners are drawn by the contest sponsor. We only display wins shared with us or from
-          public winner lists. See our <Link to="/terms" className="text-win">Terms</Link>.
+          public winner lists. See our{' '}
+          <Link to="/terms" className="text-win">
+            Terms
+          </Link>
+          .
         </p>
       )}
-    </div>
+    </PageShell>
   )
 }
