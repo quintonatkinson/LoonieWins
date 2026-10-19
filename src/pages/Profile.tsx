@@ -28,7 +28,7 @@ import DisplayPreferences from '../components/DisplayPreferences'
 import type { AutoFillData } from '../types/profile'
 import { downloadWebDataExport, deleteAccountAndLocalData } from '../lib/account/deleteAccount'
 import { downloadAppliedContestsCsv } from '../lib/account/exportAppliedCsv'
-import { SUPPORT_EMAIL } from '../lib/legal/constants'
+import { displaySupportEmail } from '../lib/legal/constants'
 import { loadAutoFillData, saveAutoFillData } from '../lib/utils/autoFillStorage'
 import { isSupabaseConfigured } from '../lib/supabase'
 import { hasFeature, PRO_LOCKED_FEATURES } from '../lib/monetization/tiers'
@@ -610,7 +610,7 @@ export default function Profile() {
               <LifeBuoy className="w-5 h-5 text-gray-400 shrink-0" />
               <div>
                 <p className="text-sm font-medium text-white">Support</p>
-                <p className="text-xs text-gray-500">{SUPPORT_EMAIL}</p>
+                <p className="text-xs text-gray-500">{displaySupportEmail()}</p>
               </div>
             </Link>
           </li>

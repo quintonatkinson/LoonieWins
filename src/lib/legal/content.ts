@@ -1,8 +1,9 @@
 import {
   APP_NAME,
-  OPERATOR_NAME,
-  PRIVACY_EMAIL,
-  SUPPORT_EMAIL,
+  displayOperatorName,
+  displayPrivacyEmail,
+  displaySupportEmail,
+  isLegalConfigured,
   legalUrl,
 } from './constants'
 
@@ -19,9 +20,13 @@ export function getPrivacySections(): LegalSection[] {
     {
       heading: 'Who we are',
       paragraphs: [
-        `This Privacy Policy describes how ${OPERATOR_NAME} (“we”, “us”) handles information in connection with the ${APP_NAME} mobile and web applications (the “App”).`,
-        `Contact for privacy questions: ${PRIVACY_EMAIL}.`,
-        'CUSTOMIZE: replace OPERATOR_NAME and PRIVACY_EMAIL in src/lib/legal/constants.ts (and the matching values in public/legal/*.html) before publishing.',
+        `This Privacy Policy describes how ${displayOperatorName()} (“we”, “us”) handles information in connection with the ${APP_NAME} mobile and web applications (the “App”).`,
+        `Contact for privacy questions: ${displayPrivacyEmail()}.`,
+        ...(isLegalConfigured()
+          ? []
+          : [
+              'Store-listing contact details are still being finalized. Use in-app Profile → Support once a support inbox is published.',
+            ]),
       ],
     },
     {
@@ -101,7 +106,7 @@ export function getPrivacySections(): LegalSection[] {
       paragraphs: [
         `You can review this policy in-app (Profile → Privacy) or at ${legalUrl('privacy')}.`,
         `You can export App data from Profile → Export Data (local keys plus signed-in cloud profile/entries/transactions/referrals/wins when available), and permanently clear local data / request account deletion from Profile → Delete Account. Google Play users can also use the web deletion resource at ${legalUrl('delete-account')}.`,
-        `Support: ${SUPPORT_EMAIL}.`,
+        `Support: ${displaySupportEmail()}.`,
       ],
     },
     {
@@ -130,8 +135,7 @@ export function getTermsSections(): LegalSection[] {
     {
       heading: 'Agreement',
       paragraphs: [
-        `These Terms of Use govern your use of ${APP_NAME} operated by ${OPERATOR_NAME}. By using the App you agree to these terms. If you do not agree, do not use the App.`,
-        'CUSTOMIZE: replace OPERATOR_NAME and SUPPORT_EMAIL before publishing.',
+        `These Terms of Use govern your use of ${APP_NAME} operated by ${displayOperatorName()}. By using the App you agree to these terms. If you do not agree, do not use the App.`,
       ],
     },
     {
@@ -172,7 +176,7 @@ export function getTermsSections(): LegalSection[] {
     },
     {
       heading: 'Contact',
-      paragraphs: [`Questions: ${SUPPORT_EMAIL}.`],
+      paragraphs: [`Questions: ${displaySupportEmail()}.`],
     },
   ]
 }
@@ -182,10 +186,14 @@ export function getSupportSections(): LegalSection[] {
     {
       heading: 'How to reach us',
       paragraphs: [
-        `Email: ${SUPPORT_EMAIL}`,
-        `Privacy: ${PRIVACY_EMAIL}`,
-        `Operator: ${OPERATOR_NAME}`,
-        'CUSTOMIZE: set SUPPORT_EMAIL / PRIVACY_EMAIL / OPERATOR_NAME in src/lib/legal/constants.ts and public/legal/support.html.',
+        `Email: ${displaySupportEmail()}`,
+        `Privacy: ${displayPrivacyEmail()}`,
+        `Operator: ${displayOperatorName()}`,
+        ...(isLegalConfigured()
+          ? []
+          : [
+              'A public support inbox will appear here after store-listing contacts are configured. Until then, use Profile → Delete Account for local data wipe and the in-app legal pages for policy text.',
+            ]),
       ],
     },
     {
