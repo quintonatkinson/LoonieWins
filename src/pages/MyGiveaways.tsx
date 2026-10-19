@@ -9,6 +9,7 @@ import { hasFeature } from '../lib/monetization/tiers'
 import { daysLeftUntilExpiry, isExpired } from '../lib/utils/expiryDate'
 import { isCurrentContestEntry } from '../lib/utils/contestEntryScope'
 import SubscriptionModal from '../components/SubscriptionModal'
+import PageShell from '../components/PageShell'
 
 type ScopeTab = 'current' | 'all'
 type StatusFilter = 'all' | ContestEntryStatus
@@ -117,7 +118,7 @@ export default function MyGiveaways() {
         }
 
   return (
-    <div className="p-4 space-y-4 pb-24" data-testid="my-giveaways">
+    <PageShell className="space-y-4" testId="my-giveaways">
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div className="flex items-center gap-3 min-w-0">
           <div className="flex items-center justify-center w-10 h-10 rounded-full bg-win/20 border border-win/40 shrink-0">
@@ -224,7 +225,7 @@ export default function MyGiveaways() {
 
       <ul className="space-y-2">
         {visible.length === 0 ? (
-          <li className="rounded-xl border border-dashed border-gray-600/60 bg-gray-800/40 px-4 py-8 text-center space-y-3">
+          <li className="empty-panel space-y-3">
             <p className="text-white font-medium">{emptyCopy.title}</p>
             <p className="text-sm text-gray-400 max-w-sm mx-auto">{emptyCopy.body}</p>
             <Link
@@ -346,6 +347,6 @@ export default function MyGiveaways() {
         onSelectPlan={() => setShowPlanModal(false)}
         showComparison
       />
-    </div>
+    </PageShell>
   )
 }

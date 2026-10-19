@@ -114,10 +114,10 @@ export default function DisplayPreferences() {
   }
 
   return (
-    <div className="px-4 pb-4 space-y-1 border-t border-gray-600/40 bg-gray-900/40">
-      <div className="rounded-xl border border-win/25 bg-win/5 p-3 mt-3">
+    <div className="px-4 pb-5 space-y-2 border-t border-gray-600/40 bg-gray-900/50">
+      <div className="rounded-xl border border-win/25 bg-win/5 p-3.5 mt-3">
         <p className="text-sm font-semibold text-white">Your feed fingerprint</p>
-        <p className="text-xs text-gray-400 mt-0.5">
+        <p className="text-xs text-gray-400 mt-1 leading-relaxed">
           {chips.length === 0
             ? 'Defaults — tweak filters & layout below to make Home yours.'
             : `${chips.length} custom touch${chips.length === 1 ? '' : 'es'} active`}

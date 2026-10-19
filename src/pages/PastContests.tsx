@@ -1,5 +1,8 @@
 import { useState, useEffect } from 'react'
+import { Link } from 'react-router-dom'
+import { Package } from 'lucide-react'
 import ContestCard from '../components/ContestCard'
+import PageShell from '../components/PageShell'
 import { getPastContests } from '../hooks/useContestVault'
 import type { Contest } from '../lib/rssFetcher'
 import { getExpirySortKey } from '../lib/utils/expiryDate'
@@ -26,37 +29,59 @@ export default function PastContests() {
   )
 
   return (
-    <div className="flex flex-col bg-gray-900">
-      <section className="px-4 pt-4 pb-24">
-        <h2 className="text-base font-bold text-gray-50 flex items-center gap-2 mb-3">
-          <span className="text-gray-400">📦</span>
-          FOMO Vault — Past Contests
-        </h2>
-        <p className="text-sm text-gray-400 mb-4">
-          Contests that have ended. Tap to view the original page.
-        </p>
-        {sorted.length === 0 ? (
-          <div className="rounded-xl bg-surface border border-gray-600/50 p-8 text-center">
-            <p className="text-gray-400">No past contests yet.</p>
-            <p className="text-sm text-gray-500 mt-2">
-              Expired contests will appear here once they drop off the live feed.
-            </p>
-          </div>
-        ) : (
-          <div className="opacity-60 grayscale space-y-2">
-            <ul className="space-y-2">
-              {sorted.map((c) => (
-                <ContestCard
-                  key={c.id}
-                  contest={c}
-                  onOpenOverlay={() => {}}
-                  variant="ended"
-                />
-              ))}
-            </ul>
-          </div>
-        )}
-      </section>
-    </div>
+    <PageShell className="space-y-4" testId="past-contests">
+      <div className="flex items-center gap-3">
+        <div className="flex items-center justify-center w-10 h-10 rounded-full bg-gray-800 border border-gray-600/50 shrink-0">
+          <Package className="w-5 h-5 text-gray-300" strokeWidth={2.25} />
+        </div>
+        <div className="min-w-0">
+          <h1 className="text-xl font-semibold text-white">Past contests</h1>
+          <p className="text-sm text-gray-400 mt-0.5">
+            FOMO vault — contests that already ended
+          </p>
+        </div>
+      </div>
+
+      <p className="text-sm text-gray-500">
+        Tap a card to open the original page. Your personal entries live under{' '}
+        <Link to="/my-giveaways" className="text-win hover:underline">
+          Mine
+        </Link>
+        ; community wins are on{' '}
+        <Link to="/winners" className="text-win hover:underline">
+          Winners
+        </Link>
+        .
+      </p>
+
+      {sorted.length === 0 ? (
+        <div className="empty-panel space-y-3">
+          <p className="text-white font-medium">No past contests yet</p>
+          <p className="text-sm text-gray-400 max-w-sm mx-auto">
+            When live Hive Mind contests expire, they drop here so you can still peek — without
+            cluttering Home.
+          </p>
+          <Link
+            to="/"
+            className="inline-flex items-center justify-center px-4 py-2.5 rounded-lg bg-win text-on-win font-semibold text-sm"
+          >
+            Browse live feed
+          </Link>
+        </div>
+      ) : (
+        <div className="opacity-70 grayscale-[35%] space-y-2">
+          <ul className="space-y-2">
+            {sorted.map((c) => (
+              <ContestCard
+                key={c.id}
+                contest={c}
+                onOpenOverlay={() => {}}
+                variant="ended"
+              />
+            ))}
+          </ul>
+        </div>
+      )}
+    </PageShell>
   )
 }

@@ -10,6 +10,7 @@ import {
 } from '../lib/monetization/entryPointCost'
 import { hasFeature, isProTier } from '../lib/monetization/tiers'
 import SubscriptionModal from '../components/SubscriptionModal'
+import PageShell from '../components/PageShell'
 import {
   isSandboxOffer,
   openOfferwallSession,
@@ -79,7 +80,21 @@ export default function Earn() {
   const closeSuccess = useCallback(() => setSuccessTask(null), [])
 
   return (
-    <div className="p-4 space-y-6 pb-24">
+    <PageShell className="space-y-6" testId="earn">
+      <div className="flex items-center gap-3">
+        <div className="flex items-center justify-center w-10 h-10 rounded-full bg-amber-500/15 border border-amber-500/40 shrink-0">
+          <span className="text-lg" aria-hidden>
+            🪙
+          </span>
+        </div>
+        <div className="min-w-0">
+          <h1 className="text-xl font-semibold text-white">Earn</h1>
+          <p className="text-sm text-gray-400 mt-0.5">
+            Points unlock prize-tiered entries after your free weekly cap
+          </p>
+        </div>
+      </div>
+
       <div className="rounded-xl glass border border-amber-500/20 p-4">
         <p className="text-gray-300 text-sm">Your Balance</p>
         <p className="text-amber-400 font-bold text-2xl mt-1 flex items-center gap-2">
@@ -241,6 +256,6 @@ export default function Earn() {
         onSelectPlan={(planId) => void upgradeToPro(planId)}
         showComparison
       />
-    </div>
+    </PageShell>
   )
 }

@@ -9,6 +9,8 @@ import {
   submitContestSuggestion,
   isStaffModerator,
 } from '../lib/contestSubmissions'
+import { isSupabaseConfigured } from '../lib/supabase'
+import PageShell from '../components/PageShell'
 
 const ELIG_OPTIONS: { value: ContestEligibility; label: string }[] = [
   { value: 'CA', label: 'Canada' },
@@ -87,23 +89,56 @@ export default function SubmitContest() {
 
   if (loading) {
     return (
-      <div className="p-4">
+      <PageShell>
         <p className="text-win animate-pulse">Loading…</p>
-      </div>
+      </PageShell>
+    )
+  }
+
+  if (!isSupabaseConfigured) {
+    return (
+      <PageShell className="space-y-6" testId="submit-contest">
+        <div className="flex items-center gap-3">
+          <div className="flex items-center justify-center w-10 h-10 rounded-full bg-win/20 border border-win/40 shrink-0">
+            <PlusCircle className="w-5 h-5 text-win" strokeWidth={2.25} />
+          </div>
+          <div>
+            <h1 className="text-xl font-semibold text-white">Submit a contest</h1>
+            <p className="text-gray-400 text-sm mt-0.5">
+              Moderated suggestions join the Hive Mind after review
+            </p>
+          </div>
+        </div>
+        <div className="empty-panel space-y-3">
+          <p className="text-white font-medium">Cloud submit needs Supabase</p>
+          <p className="text-sm text-gray-400 max-w-sm mx-auto">
+            Guest mode keeps browsing and local tracking. Contest suggestions go live once the project
+            is connected — nothing is lost from the product surface.
+          </p>
+          <Link
+            to="/"
+            className="inline-flex items-center justify-center px-4 py-2.5 rounded-lg bg-win text-on-win font-semibold text-sm"
+          >
+            Back to Home
+          </Link>
+        </div>
+      </PageShell>
     )
   }
 
   if (!session) {
     return (
-      <div className="p-4 space-y-6 max-w-lg mx-auto">
-        <div>
-          <h1 className="text-xl font-semibold text-white flex items-center gap-2">
-            <PlusCircle className="w-5 h-5 text-win" />
-            Submit a contest
-          </h1>
-          <p className="text-gray-400 text-sm mt-1">
-            Sign in to suggest a giveaway. Submissions are moderated before they reach the Hive Mind feed.
-          </p>
+      <PageShell className="space-y-6" testId="submit-contest">
+        <div className="flex items-center gap-3">
+          <div className="flex items-center justify-center w-10 h-10 rounded-full bg-win/20 border border-win/40 shrink-0">
+            <PlusCircle className="w-5 h-5 text-win" strokeWidth={2.25} />
+          </div>
+          <div>
+            <h1 className="text-xl font-semibold text-white">Submit a contest</h1>
+            <p className="text-gray-400 text-sm mt-0.5">
+              Sign in to suggest a giveaway. Submissions are moderated before they reach the feed.
+            </p>
+          </div>
         </div>
         <form onSubmit={onSignIn} className="glass rounded-xl p-4 space-y-3">
           <input
@@ -127,7 +162,7 @@ export default function SubmitContest() {
           {err && <p className="text-red-400 text-sm">{err}</p>}
           <button
             type="submit"
-            className="w-full py-2.5 rounded-lg bg-win text-gray-900 font-semibold hover:opacity-90"
+            className="w-full py-2.5 rounded-lg bg-win text-on-win font-semibold hover:opacity-90"
           >
             Sign in to submit
           </button>
@@ -135,12 +170,12 @@ export default function SubmitContest() {
         <Link to="/" className="text-sm text-gray-400 hover:text-win">
           ← Back to Home
         </Link>
-      </div>
+      </PageShell>
     )
   }
 
   return (
-    <div className="p-4 space-y-6 max-w-lg mx-auto pb-24">
+    <PageShell className="space-y-6" testId="submit-contest">
       <div className="flex items-start justify-between gap-3">
         <div>
           <h1 className="text-xl font-semibold text-white flex items-center gap-2">
@@ -236,7 +271,10 @@ export default function SubmitContest() {
       <section>
         <h2 className="text-sm font-medium text-gray-300 mb-3">Your submissions</h2>
         {mine.length === 0 ? (
-          <p className="text-gray-500 text-sm">Nothing yet.</p>
+          <div className="empty-panel py-6">
+            <p className="text-white font-medium">Nothing submitted yet</p>
+            <p className="text-sm text-gray-400 mt-1">Your reviewed suggestions will list here.</p>
+          </div>
         ) : (
           <ul className="space-y-2">
             {mine.map((s) => (
@@ -271,6 +309,6 @@ export default function SubmitContest() {
       <Link to="/" className="inline-block text-sm text-gray-400 hover:text-win">
         ← Back to Home
       </Link>
-    </div>
+    </PageShell>
   )
 }

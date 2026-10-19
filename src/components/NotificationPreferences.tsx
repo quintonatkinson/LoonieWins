@@ -56,17 +56,20 @@ export default function NotificationPreferences() {
   const [msg, setMsg] = useState<string | null>(null)
 
   const setPref = async (patch: Partial<NotificationPrefs>) => {
-    if (!user) {
-      setMsg('Sign in to sync notification preferences to your account.')
-      return
-    }
     setBusy(true)
     setMsg(null)
     const nextSettings = withNotificationPrefs(profile?.settings, patch)
     const { error } = await updateProfile({ settings: nextSettings })
     setBusy(false)
-    if (error) setMsg(error)
-    else setMsg('Saved.')
+    if (error) {
+      setMsg(error)
+      return
+    }
+    setMsg(
+      user
+        ? 'Saved to your account.'
+        : 'Saved on this device. Sign in later to sync across phones.'
+    )
   }
 
   return (
@@ -80,6 +83,11 @@ export default function NotificationPreferences() {
       <p className="text-xs text-gray-500">
         Alerts deliver on the Expo mobile app. Web saves preferences only — browser
         Web Push is not enabled yet.
+        {!user && (
+          <span className="block mt-1 text-amber-400/80">
+            Guest mode: prefs stick on this device until you sign in.
+          </span>
+        )}
       </p>
       <ul className="rounded-xl bg-gray-800/80 border border-gray-600/50 divide-y divide-gray-600/50 overflow-hidden">
         {TOGGLES.map(({ key, label, hint }) => {
