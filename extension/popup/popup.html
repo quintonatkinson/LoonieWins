@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>LoonieWins Autofill</title>
+    <title>LoonieWins Smart-Fill</title>
     <link rel="stylesheet" href="popup.css" />
   </head>
   <body>
@@ -12,11 +12,16 @@
         <img src="../icons/icon32.png" alt="" width="24" height="24" />
         <div>
           <strong>LoonieWins</strong>
-          <span>Autofill</span>
+          <span>Smart-Fill</span>
         </div>
       </div>
       <a href="../options/options.html" target="_blank" rel="noreferrer">Options</a>
     </header>
+
+    <p class="honesty">
+      Best-effort match for name, email, address, phone. Review every field before
+      submit. Skill-tests are highlighted, not solved.
+    </p>
 
     <p id="status" class="status" role="status"></p>
 
@@ -37,7 +42,7 @@
 
       <div class="actions">
         <button type="submit" class="primary">Save profile</button>
-        <button type="button" id="fill-btn" class="accent">Fill this page</button>
+        <button type="button" id="fill-btn" class="accent">Try fill this page</button>
       </div>
       <div class="actions secondary">
         <button type="button" id="sync-tab-btn">Sync from LoonieWins tab</button>

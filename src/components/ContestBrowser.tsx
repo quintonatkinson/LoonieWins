@@ -274,11 +274,20 @@ export default function ContestBrowser({
           preShowScript: script,
         })
 
+        // Capgo executeScript returns void — we cannot verify filled count.
+        // Do not burn a Smart-Fill on inject attempt; Expo WebView only
+        // decrements when status === 'filled'. Show honesty on close.
         InAppBrowser.addListener('browserPageLoaded', async () => {
           try {
             await InAppBrowser.executeScript({ code: script })
-            onAutoFillUsed?.()
-          } catch (_) {}
+            setStatusMsg(
+              'Native shell tried best-effort field inject — verify every field; math / skill-tests stay yours.'
+            )
+          } catch (_) {
+            setStatusMsg(
+              'Could not inject into the contest page. Use copy chips or the browser extension, then Mark Entered.'
+            )
+          }
         })
 
         InAppBrowser.addListener('closeEvent', () => {
@@ -298,7 +307,6 @@ export default function ContestBrowser({
       preferSystemBrowser,
       autoFillData,
       contest?.title,
-      onAutoFillUsed,
       onMarkEntered,
       autoMarkOnReturn,
       confirmMark,
@@ -416,8 +424,8 @@ export default function ContestBrowser({
       onAutoFillUsed?.()
       setAutoFillMsg(
         smartFillsRemaining != null
-          ? `Autofill injected (${Math.max(0, smartFillsRemaining - 1)} left). Mark as Entered when done.`
-          : 'Autofill injected — check fields, then Mark as Entered.'
+          ? `Best-effort inject (${Math.max(0, smartFillsRemaining - 1)} left). Check fields; math/skill still manual — then Mark Entered.`
+          : 'Best-effort inject — check fields; math/skill still manual — then Mark Entered.'
       )
     } catch (_) {
       setAutoFillMsg(
@@ -540,9 +548,10 @@ export default function ContestBrowser({
             tap the copy chips below to paste into the form. Math / skill-test fields need your input.
           </p>
           <p className="text-xs text-white/45 mt-1.5">
-            Full in-page fill: install the{' '}
+            Best-effort in-page fill on the real tab: install the{' '}
             <span className="text-white/70">extension/</span> Chrome/Edge add-on (Load unpacked — see{' '}
             <code className="text-[10px] text-win/90">extension/README.md</code>) or use the native app.
+            Matching fields only — you still review and submit.
           </p>
           {autoFillMsg && (
             <p className="text-xs text-win mt-2" role="status">

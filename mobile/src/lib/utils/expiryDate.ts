@@ -54,3 +54,11 @@ export function daysLeftUntilExpiry(dateStr?: string | null): number | null {
   if (ms <= 0) return 0
   return Math.max(0, Math.ceil(ms / (1000 * 60 * 60 * 24)))
 }
+
+/** True when expiry is known and already past end-of-day EST. Missing/invalid → false. */
+export function isExpired(dateStr?: string | null, now = new Date()): boolean {
+  if (!dateStr?.trim()) return false
+  const end = toExpiryEndOfDay(dateStr)
+  if (Number.isNaN(end.getTime())) return false
+  return end.getTime() <= now.getTime()
+}

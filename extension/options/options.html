@@ -3,14 +3,15 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>LoonieWins Autofill — Options</title>
+    <title>LoonieWins Smart-Fill — Options</title>
     <link rel="stylesheet" href="options.css" />
   </head>
   <body>
     <main>
-      <h1>LoonieWins Autofill</h1>
+      <h1>LoonieWins Smart-Fill</h1>
       <p class="lede">
-        Configure how the extension syncs your giveaway profile. Use the
+        Configure how the extension syncs your giveaway profile. Best-effort field
+        match only — you review and submit. Use the
         <strong>anon</strong> (publishable) Supabase key only — never
         <code>service_role</code>.
       </p>
@@ -53,9 +54,9 @@
         <h2>Install &amp; use</h2>
         <ol>
           <li>Open <code>chrome://extensions</code> (or Edge equivalent).</li>
-          <li>Enable Developer mode → Load unpacked → select this <code>extension/</code> folder.</li>
-          <li>Run LoonieWins locally, save Profile autofill (key <code>looniewins_autofill</code>), then click <em>Sync from LoonieWins tab</em>.</li>
-          <li>Open a giveaway form → click the extension → <em>Fill this page</em> (or Alt+Shift+L / right-click menu).</li>
+          <li>Enable Developer mode → Load unpacked → select the folder that contains <code>manifest.json</code> (this <code>extension/</code> folder).</li>
+          <li>Smoke-test with <code>demo/form.html</code>, then run LoonieWins (<code>npm run dev</code>, usually <code>:5173</code>), save Profile autofill, <strong>focus that tab</strong>, click <em>Sync from LoonieWins tab</em>.</li>
+          <li>Open a giveaway form → click the extension → <em>Try fill this page</em> (or Alt+Shift+L / right-click) → <strong>review</strong> fields (skill-tests not filled).</li>
         </ol>
         <p>
           To sync from a hosted LoonieWins origin, add that host under the extension’s
