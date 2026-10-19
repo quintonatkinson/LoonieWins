@@ -10,6 +10,7 @@ export interface AppliedContestCsvRow {
   submitted_at?: string | null
   prize_value?: number | null
   contest_url?: string | null
+  expires_at?: string | null
 }
 
 const HEADER = [
@@ -20,6 +21,7 @@ const HEADER = [
   'submitted_at',
   'prize_value',
   'contest_url',
+  'expires_at',
 ] as const
 
 function csvEscape(value: string): string {
@@ -45,6 +47,7 @@ export function buildAppliedContestsCsv(rows: AppliedContestCsvRow[]): string {
             : ''
         ),
         csvEscape(row.contest_url ?? ''),
+        csvEscape(row.expires_at ?? ''),
       ].join(',')
     )
   }

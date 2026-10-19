@@ -35,7 +35,7 @@ import {
   saveAutoAdvance,
   type HomeMode,
 } from '../lib/utils/feedPrefs'
-import { searchHiveMind } from '../hooks/useContestVault'
+import { searchHiveMind, getVaultContestCount } from '../hooks/useContestVault'
 import { shareContest } from '../lib/utils/shareContest'
 import type { GeoFilterValue } from '../components/CountryToggle'
 import {
@@ -407,6 +407,25 @@ export default function Dashboard() {
     else setStatusToast('Could not share')
   }, [])
 
+  const hiveMindCounterLabel = useMemo(() => {
+    const vault = getVaultContestCount()
+    const liveCount = Math.max(liveContests.length, vault.live)
+    const totalTracked = Math.max(vault.total, liveCount)
+    const hivePieces: string[] = []
+    if (liveCount > 0) {
+      hivePieces.push(
+        `${liveCount.toLocaleString()} live contest${liveCount === 1 ? '' : 's'} in Hive Mind`
+      )
+    } else if (isFinished) {
+      hivePieces.push('0 live contests in Hive Mind right now')
+    }
+    if (totalTracked > liveCount) {
+      hivePieces.push(`${totalTracked.toLocaleString()} tracked incl. past`)
+    }
+    if (social.hiveLabel) hivePieces.push(`${social.hiveLabel} across LoonieWins`)
+    return hivePieces.length ? hivePieces.join(' · ') : null
+  }, [liveContests.length, isFinished, social.hiveLabel])
+
   // Hive Mind history search (debounced)
   useEffect(() => {
     const q = search.trim()
@@ -681,9 +700,13 @@ export default function Dashboard() {
         ))}
       </div>
 
-      {social.hiveLabel && (
-        <p className="px-4 pb-1 text-xs text-gray-500" title="Anonymized Hive Mind count — no usernames">
-          {social.hiveLabel} across LoonieWins
+      {hiveMindCounterLabel && (
+        <p
+          className="px-4 pb-1 text-xs text-gray-500"
+          title="Local Hive Mind vault count (guest-safe). Cloud all-time total needs live Supabase."
+          data-testid="hive-mind-counter"
+        >
+          {hiveMindCounterLabel}
         </p>
       )}
 

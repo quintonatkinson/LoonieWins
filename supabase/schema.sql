@@ -102,6 +102,7 @@ create table if not exists tracking.contest_entries (
     check (status in ('entered', 'submitted', 'won', 'lost', 'expired')),
   entered_at timestamptz not null default now(),
   submitted_at timestamptz,
+  expires_at timestamptz,
   updated_at timestamptz not null default now(),
   primary key (user_id, contest_id)
 );

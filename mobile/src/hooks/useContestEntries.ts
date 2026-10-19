@@ -18,6 +18,8 @@ export interface ContestEntry {
   status: ContestEntryStatus
   entered_at: string
   submitted_at: string | null
+  /** Contest end date (ISO) when known — shown on Applied Contests */
+  expires_at: string | null
 }
 
 const LOCAL_KEY = 'looniewins_contest_entries'
@@ -37,9 +39,11 @@ async function loadLocal(): Promise<ContestEntry[]> {
         status: 'entered' as const,
         entered_at: new Date().toISOString(),
         submitted_at: null,
+        expires_at: null,
       }))
     }
-    return JSON.parse(raw) as ContestEntry[]
+    const parsed = JSON.parse(raw) as ContestEntry[]
+    return parsed.map((e) => ({ ...e, expires_at: e.expires_at ?? null }))
   } catch {
     return []
   }
@@ -159,6 +163,7 @@ export function useContestEntries() {
         entered_at: existing?.entered_at || now,
         submitted_at:
           status === 'submitted' ? existing?.submitted_at || now : existing?.submitted_at ?? null,
+        expires_at: contest.expiryDate ?? existing?.expires_at ?? null,
       }
 
       setEntries((prev) => {
@@ -185,6 +190,7 @@ export function useContestEntries() {
               status: row.status,
               entered_at: row.entered_at,
               submitted_at: row.submitted_at,
+              expires_at: row.expires_at,
             },
             { onConflict: 'user_id,contest_id' }
           )
