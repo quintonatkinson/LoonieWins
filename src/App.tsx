@@ -1,4 +1,4 @@
-import { Routes, Route, useLocation } from 'react-router-dom'
+import { Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
 import { UserEarnProvider } from './contexts/UserEarnContext'
 import { ThemeProvider } from './contexts/ThemeContext'
@@ -34,6 +34,8 @@ function MainAppRoutes() {
             <Route path="/past" element={<PastContests />} />
             <Route path="/my-giveaways" element={<MyGiveaways />} />
             <Route path="/profile" element={<Profile />} />
+            {/* Settings live on Profile (Appearance / Notifications / Preferences). */}
+            <Route path="/settings" element={<Navigate to="/profile" replace />} />
             <Route path="/submit" element={<SubmitContest />} />
             <Route path="/moderate" element={<ModerateContests />} />
             <Route path="/privacy" element={<Privacy />} />
