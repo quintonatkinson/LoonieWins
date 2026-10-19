@@ -35,3 +35,28 @@ export function legalUrl(path: 'privacy' | 'terms' | 'support' | 'delete-account
 export function isLegalConfigured(): boolean {
   return !LEGAL_SITE_ORIGIN.startsWith('REPLACE_') && !SUPPORT_EMAIL.startsWith('REPLACE_')
 }
+
+/** True when Quinton has not replaced a `REPLACE_*` placeholder yet. */
+export function isLegalPlaceholder(value: string): boolean {
+  return value.startsWith('REPLACE_')
+}
+
+/**
+ * Customer-facing contact strings. Never surface raw `REPLACE_*` tokens in the UI.
+ * Real emails still come only from constants once Quinton fills them in (ops checklist).
+ */
+export function displayOperatorName(): string {
+  return isLegalPlaceholder(OPERATOR_NAME) ? APP_NAME : OPERATOR_NAME
+}
+
+export function displaySupportEmail(): string {
+  return isLegalPlaceholder(SUPPORT_EMAIL)
+    ? 'support contact pending setup (Profile → Support)'
+    : SUPPORT_EMAIL
+}
+
+export function displayPrivacyEmail(): string {
+  return isLegalPlaceholder(PRIVACY_EMAIL)
+    ? 'privacy contact pending setup (Profile → Privacy)'
+    : PRIVACY_EMAIL
+}

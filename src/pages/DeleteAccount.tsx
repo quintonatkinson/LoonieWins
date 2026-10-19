@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { SUPPORT_EMAIL, legalUrl } from '../lib/legal/constants'
+import { displaySupportEmail, legalUrl } from '../lib/legal/constants'
 import { deleteAccountAndLocalData } from '../lib/account/deleteAccount'
 
 /**
@@ -23,7 +23,7 @@ export default function DeleteAccountPage() {
       setResultMsg(result.message)
       if (result.error && !result.deletedRemoteAccount && result.hadSession) {
         setError(
-          `Server note: ${result.error}. If a cloud account remains, email ${SUPPORT_EMAIL} from the address on the account.`
+          `Server note: ${result.error}. If a cloud account remains, email ${displaySupportEmail()} from the address on the account.`
         )
       }
     } catch (err) {
@@ -82,7 +82,7 @@ export default function DeleteAccountPage() {
       {error && <p className="text-sm text-amber-400">{error}</p>}
 
       <p className="text-xs text-gray-500">
-        Prefer email? Contact {SUPPORT_EMAIL}. This page is also the Play Console external deletion
+        Prefer email? Contact {displaySupportEmail()}. This page is also the Play Console external deletion
         URL ({legalUrl('delete-account')}).
       </p>
     </div>
