@@ -1,0 +1,8 @@
+.env
+.env.local
+mobile/.env
+mobile-config/.env
+mobile/google-services.json
+mobile/GoogleService-Info.plist
+
+node_modules/

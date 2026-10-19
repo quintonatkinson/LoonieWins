@@ -1,0 +1,39 @@
+-- =============================================================================
+-- OPT-IN: lock public.contests writes to service_role only
+-- =============================================================================
+-- DO NOT run this until:
+--   1) Edge Function ingest-giveaways is deployed and cron/GitHub Action succeeds
+--   2) Client no longer depends on anon upsert into public.contests
+--      (guest Hive Mind may still use local vault — check app code first)
+--
+-- Why: bootstrap policies allow anon INSERT/UPDATE on contests so the app
+-- can seed Hive Mind before server ingest. That is convenient but means any
+-- anon key holder can write contest rows. After server ingest is reliable,
+-- uncomment the block below in SQL Editor and Run once.
+--
+-- This file is intentionally a no-op when executed as-is (comments only),
+-- so Priority 2 migrations stay safe to paste-run in order.
+-- =============================================================================
+
+-- BEGIN OPT-IN (uncomment to apply):
+--
+-- drop policy if exists "Allow public insert contests" on public.contests;
+-- drop policy if exists "Allow public update contests" on public.contests;
+--
+-- -- Keep public READ of live contests
+-- drop policy if exists "Allow public read live contests" on public.contests;
+-- create policy "Allow public read live contests"
+--   on public.contests for select
+--   to anon, authenticated
+--   using (expiry_date > now() or expiry_date is null);
+--
+-- -- Optional: authenticated can still report link_status via a security-definer RPC
+-- -- (not included here). Writes go through ingest-giveaways / verify-contest-links
+-- -- using the service_role key (bypasses RLS).
+--
+-- comment on table public.contests is
+--   'Hive Mind contests. Reads: anon+auth (live rows). Writes: service_role Edge Functions only after lockdown.';
+--
+-- END OPT-IN
+
+select 1 as rls_contests_write_lockdown_noop;

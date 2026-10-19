@@ -1,0 +1,55 @@
+/**
+ * CSV builder for My Giveaways — share via RN Share sheet (no browser download).
+ */
+
+export interface AppliedContestCsvRow {
+  contest_id: string
+  title: string | null
+  status: string
+  entered_at: string
+  submitted_at?: string | null
+  prize_value?: number | null
+  contest_url?: string | null
+  expires_at?: string | null
+}
+
+const HEADER = [
+  'contest_id',
+  'title',
+  'status',
+  'entered_at',
+  'submitted_at',
+  'prize_value',
+  'contest_url',
+  'expires_at',
+] as const
+
+function csvEscape(value: string): string {
+  if (/[",\n\r]/.test(value)) {
+    return `"${value.replace(/"/g, '""')}"`
+  }
+  return value
+}
+
+export function buildAppliedContestsCsv(rows: AppliedContestCsvRow[]): string {
+  const lines = [HEADER.join(',')]
+  for (const row of rows) {
+    lines.push(
+      [
+        csvEscape(row.contest_id ?? ''),
+        csvEscape(row.title ?? ''),
+        csvEscape(row.status ?? ''),
+        csvEscape(row.entered_at ?? ''),
+        csvEscape(row.submitted_at ?? ''),
+        csvEscape(
+          row.prize_value != null && !Number.isNaN(row.prize_value)
+            ? String(row.prize_value)
+            : ''
+        ),
+        csvEscape(row.contest_url ?? ''),
+        csvEscape(row.expires_at ?? ''),
+      ].join(',')
+    )
+  }
+  return lines.join('\n') + '\n'
+}
