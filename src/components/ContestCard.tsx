@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, type ReactNode } from 'react'
+import { useState, useCallback, useEffect, useMemo, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
 import type { Contest } from '../lib/rssFetcher'
@@ -18,7 +18,8 @@ import {
   saveAgeConfirmed,
 } from '../lib/utils/ageGate'
 import { formatEntriesToday } from '../hooks/useContestSocialProof'
-import { deadLinkLabel, isDeadLink } from '../lib/utils/linkHealth'
+import { linkHealthHint, isDeadLink } from '../lib/utils/linkHealth'
+import { findVaultContestByUrl } from '../hooks/useContestVault'
 
 interface ContestCardProps {
   contest: Contest
@@ -77,8 +78,21 @@ export default function ContestCard({
   const canAffordEntry = balance >= entryCostPts
   const daysLeft = daysLeftProp ?? daysLeftUntilExpiry(contest.expiryDate)
   const socialLabel = formatEntriesToday(entriesToday)
-  const linkDead = isDeadLink(contest)
-  const linkDeadLabel = linkDead ? deadLinkLabel(contest.linkStatus) : null
+  const trustContest = useMemo(() => {
+    const vaultMatch =
+      contest.linkCheckedAt || contest.linkStatus != null
+        ? null
+        : contest.url
+          ? findVaultContestByUrl(contest.url)
+          : null
+    return {
+      linkStatus: contest.linkStatus ?? vaultMatch?.linkStatus,
+      linkCheckedAt: contest.linkCheckedAt ?? vaultMatch?.linkCheckedAt,
+    }
+  }, [contest.linkStatus, contest.linkCheckedAt, contest.url])
+  const linkDead = isDeadLink(trustContest)
+  const trustHint = linkHealthHint(trustContest)
+  const linkDeadLabel = linkDead ? trustHint : null
 
   useEffect(() => {
     if (!toast) return
@@ -402,10 +416,19 @@ export default function ContestCard({
             {linkDeadLabel && (
               <span
                 className="text-[10px] uppercase tracking-wide font-semibold px-1.5 py-0.5 rounded bg-red-500/20 text-red-400 border border-red-500/40"
-                title={linkDeadLabel}
+                title={`${linkDeadLabel} — Report bad link in Smart-Fill if it stays broken`}
                 data-testid="dead-link-badge"
               >
                 {linkDeadLabel}
+              </span>
+            )}
+            {!linkDead && trustHint && (
+              <span
+                className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-gray-600/40 text-gray-400 border border-gray-500/30"
+                title="Hive Mind link check on this device"
+                data-testid="link-trust-hint"
+              >
+                {trustHint}
               </span>
             )}
             {reqBadges
