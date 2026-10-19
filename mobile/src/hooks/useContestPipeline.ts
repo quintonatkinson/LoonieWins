@@ -6,6 +6,7 @@ import { syncToVault, syncToCloud, fetchFromCloud, getLiveContests, isVaultEmpty
 
 const PHRASES = ['Scanning feeds...', 'Analyzing CA + US sources...', 'Filtering dead contests...', 'Extracting odds...']
 const CONCURRENCY = 3
+const PHRASE_INTERVAL_MS = 2000
 const AUTO_REFRESH_MS = 30 * 60 * 1000
 const DEFAULT_ELIGIBILITY: 'CA' | 'US' = 'CA'
 
@@ -44,6 +45,46 @@ function isSimilarTitle(a: string, b: string): boolean {
   return na.includes(nb) || nb.includes(na)
 }
 
+async function buildSortedFeed(collected: Contest[]): Promise<Contest[]> {
+  const byResolvedUrl = new Map<string, Contest>()
+  for (const c of collected) {
+    const key = normalizeUrlForDedupe(c.url)
+    if (!byResolvedUrl.has(key)) byResolvedUrl.set(key, c)
+  }
+  let deduped = [...byResolvedUrl.values()]
+  const final: Contest[] = []
+  for (const c of deduped) {
+    const key = normalizeUrlForDedupe(c.url)
+    const similar = final.find((f) => normalizeUrlForDedupe(f.url) !== key && isSimilarTitle(f.title, c.title))
+    if (!similar) final.push(c)
+    else {
+      const scoreC = computeQualityScore(c)
+      const scoreS = computeQualityScore(similar)
+      if (scoreC > scoreS) final[final.indexOf(similar)] = c
+    }
+  }
+  deduped = final
+
+  const vaultLive = await getLiveContests()
+  const byUrl = new Map<string, Contest>()
+  for (const c of vaultLive) byUrl.set(normalizeUrlForDedupe(c.url), c)
+  for (const c of deduped) byUrl.set(normalizeUrlForDedupe(c.url), c)
+  const seasonal = getSeasonalPromos()
+  for (const s of seasonal) {
+    const key = normalizeUrlForDedupe(s.url)
+    if (!byUrl.has(key)) byUrl.set(key, s)
+  }
+  const merged = [...byUrl.values()]
+  return merged.sort((a, b) => {
+    const scoreA = computeQualityScore(a)
+    const scoreB = computeQualityScore(b)
+    if (scoreB !== scoreA) return scoreB - scoreA
+    const da = a.expiryDate ? new Date(a.expiryDate).getTime() : 0
+    const db = b.expiryDate ? new Date(b.expiryDate).getTime() : 0
+    return db - da
+  })
+}
+
 export function useContestPipeline() {
   const [liveContests, setLiveContests] = useState<Contest[]>([])
   const [isScanning, setIsScanning] = useState(true)
@@ -51,24 +92,40 @@ export function useContestPipeline() {
   const [isFinished, setIsFinished] = useState(false)
   const [offlineMode, setOfflineMode] = useState(false)
   const [phaseMessage, setPhaseMessage] = useState(PHRASES[0])
+  const [scanProgress, setScanProgress] = useState(0)
   const abortRef = useRef(false)
+  const enrichDoneRef = useRef(0)
 
   const runPipeline = useCallback(async () => {
     abortRef.current = false
-    setLiveContests([])
+    try {
+      const seeded = await getLiveContests()
+      if (seeded.length > 0) setLiveContests(seeded)
+    } catch {
+      /* empty */
+    }
     setIsScanning(true)
     setIsFinished(false)
     setOfflineMode(false)
+    setScanProgress(0)
+    enrichDoneRef.current = 0
 
     const empty = await isVaultEmpty()
     if (empty) {
       setIsSyncingCloud(true)
       await fetchFromCloud()
       setIsSyncingCloud(false)
+      try {
+        const after = await getLiveContests()
+        if (after.length > 0) setLiveContests(after)
+      } catch {
+        /* ignore */
+      }
     } else {
       void fetchFromCloud()
     }
 
+    setPhaseMessage(PHRASES[0])
     let rawItems: Contest[] = []
     try {
       const data = await fetchRawContests()
@@ -78,6 +135,7 @@ export function useContestPipeline() {
         setOfflineMode(true)
         setIsScanning(false)
         setIsFinished(true)
+        setScanProgress(100)
         return
       }
     } catch (_) {
@@ -87,9 +145,19 @@ export function useContestPipeline() {
     }
 
     const toProcess = rawItems.filter((c) => c.id !== '__offline_alert__')
+    const total = Math.max(toProcess.length, 1)
+    setScanProgress(5)
+    setPhaseMessage(PHRASES[1])
+
     let nextIndex = 0
     const collected: Contest[] = []
     const allEnriched: Contest[] = []
+
+    const bumpProgress = () => {
+      enrichDoneRef.current += 1
+      const pct = 5 + Math.round((enrichDoneRef.current / total) * 90)
+      setScanProgress(Math.min(95, pct))
+    }
 
     const processOne = async (): Promise<void> => {
       while (nextIndex < toProcess.length && !abortRef.current) {
@@ -101,6 +169,7 @@ export function useContestPipeline() {
           const enriched = await enrichContest(contest)
           if (abortRef.current) return
           allEnriched.push(enriched)
+          bumpProgress()
 
           const expired =
             enriched.expiryDate != null &&
@@ -109,10 +178,23 @@ export function useContestPipeline() {
               return !Number.isNaN(end.getTime()) && end <= new Date()
             })()
           if (expired) return
-          if (enriched.linkStatus === 404 || enriched.linkStatus === 403 || enriched.linkStatus === 500) return
+          if (
+            enriched.linkStatus === 404 ||
+            enriched.linkStatus === 403 ||
+            enriched.linkStatus === 410 ||
+            enriched.linkStatus === 500 ||
+            enriched.linkStatus === 502 ||
+            enriched.linkStatus === 503
+          )
+            return
 
           collected.push(enriched)
-        } catch (_) {}
+          if (collected.length === 1 || collected.length % 8 === 0) {
+            setLiveContests(await buildSortedFeed(collected))
+          }
+        } catch (_) {
+          bumpProgress()
+        }
       }
     }
 
@@ -122,45 +204,9 @@ export function useContestPipeline() {
       await syncToVault(allEnriched)
       void syncToCloud(allEnriched)
 
-      const byResolvedUrl = new Map<string, Contest>()
-      for (const c of collected) {
-        const key = normalizeUrlForDedupe(c.url)
-        if (!byResolvedUrl.has(key)) byResolvedUrl.set(key, c)
-      }
-      let deduped = [...byResolvedUrl.values()]
-
-      const final: Contest[] = []
-      for (const c of deduped) {
-        const key = normalizeUrlForDedupe(c.url)
-        const similar = final.find((f) => normalizeUrlForDedupe(f.url) !== key && isSimilarTitle(f.title, c.title))
-        if (!similar) final.push(c)
-        else {
-          const scoreC = computeQualityScore(c)
-          const scoreS = computeQualityScore(similar)
-          if (scoreC > scoreS) final[final.indexOf(similar)] = c
-        }
-      }
-      deduped = final
-
-      const vaultLive = await getLiveContests()
-      const byUrl = new Map<string, Contest>()
-      for (const c of vaultLive) byUrl.set(normalizeUrlForDedupe(c.url), c)
-      for (const c of deduped) byUrl.set(normalizeUrlForDedupe(c.url), c)
-      const seasonal = getSeasonalPromos()
-      for (const s of seasonal) {
-        const key = normalizeUrlForDedupe(s.url)
-        if (!byUrl.has(key)) byUrl.set(key, s)
-      }
-      const merged = [...byUrl.values()]
-      const sorted = merged.sort((a, b) => {
-        const scoreA = computeQualityScore(a)
-        const scoreB = computeQualityScore(b)
-        if (scoreB !== scoreA) return scoreB - scoreA
-        const da = a.expiryDate ? new Date(a.expiryDate).getTime() : 0
-        const db = b.expiryDate ? new Date(b.expiryDate).getTime() : 0
-        return db - da
-      })
+      const sorted = await buildSortedFeed(collected)
       setLiveContests(sorted)
+      setScanProgress(100)
       setIsScanning(false)
       setIsFinished(true)
     }
@@ -168,7 +214,9 @@ export function useContestPipeline() {
 
   useEffect(() => {
     runPipeline()
-    return () => { abortRef.current = true }
+    return () => {
+      abortRef.current = true
+    }
   }, [runPipeline])
 
   useEffect(() => {
@@ -178,6 +226,18 @@ export function useContestPipeline() {
     return () => clearInterval(id)
   }, [runPipeline])
 
+  useEffect(() => {
+    if (!isScanning) return
+    const id = setInterval(() => {
+      setPhaseMessage((prev) => {
+        const idx = PHRASES.indexOf(prev)
+        const next = (idx + 1) % PHRASES.length
+        return PHRASES[next]
+      })
+    }, PHRASE_INTERVAL_MS)
+    return () => clearInterval(id)
+  }, [isScanning])
+
   return {
     liveContests,
     isScanning,
@@ -185,6 +245,7 @@ export function useContestPipeline() {
     isFinished,
     offlineMode,
     phaseMessage,
+    scanProgress,
     refetch: runPipeline,
   }
 }

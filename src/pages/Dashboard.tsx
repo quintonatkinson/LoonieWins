@@ -6,6 +6,7 @@ import ContestBrowser from '../components/ContestBrowser'
 import ContestCard from '../components/ContestCard'
 import CountryToggle from '../components/CountryToggle'
 import RadarLoader from '../components/RadarLoader'
+import FeedWarmupSkeleton from '../components/FeedWarmupSkeleton'
 import SubscriptionModal from '../components/SubscriptionModal'
 import { useContestPipeline } from '../hooks/useContestPipeline'
 import { useContestEntries } from '../hooks/useContestEntries'
@@ -104,7 +105,16 @@ function passesGeo(c: Contest, geoFilter: GeoFilterValue): boolean {
 export default function Dashboard() {
   const navigate = useNavigate()
   const pipeline = useContestPipeline()
-  const { liveContests, isScanning, isSyncingCloud, isFinished, offlineMode, phaseMessage, refetch } = pipeline
+  const {
+    liveContests,
+    isScanning,
+    isSyncingCloud,
+    isFinished,
+    offlineMode,
+    phaseMessage,
+    scanProgress,
+    refetch,
+  } = pipeline
   const { profile, updateProfile } = useAuth()
   const { enteredIds, markEntered: persistEntered } = useContestEntries()
   const {
@@ -1040,7 +1050,11 @@ export default function Dashboard() {
               </p>
             </div>
           ) : (
-            <RadarLoader phaseMessage={phaseMessage} liveCount={liveContests.length} />
+            <FeedWarmupSkeleton
+              phaseMessage={phaseMessage}
+              progress={scanProgress > 0 ? scanProgress : undefined}
+              liveCount={liveContests.length}
+            />
           )
         ) : (
           <>
@@ -1114,7 +1128,12 @@ export default function Dashboard() {
                 </ul>
                 {hasMore && <div ref={sentinelRef} className="h-8 w-full" aria-hidden />}
                 {!isFinished && (
-                  <RadarLoader mini phaseMessage={phaseMessage} liveCount={liveContests.length} />
+                  <RadarLoader
+                    mini
+                    phaseMessage={phaseMessage}
+                    liveCount={liveContests.length}
+                    progress={scanProgress}
+                  />
                 )}
               </>
             )}
