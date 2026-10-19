@@ -76,6 +76,7 @@ create table if not exists public.contests (
   tags text[] default '{}'::text[],
   requirements text[] default '{}'::text[],
   link_status integer,
+  last_verified timestamptz,
   is_locked boolean default false,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
@@ -83,6 +84,8 @@ create table if not exists public.contests (
 
 create index if not exists idx_contests_expiry on public.contests (expiry_date);
 create index if not exists idx_contests_url on public.contests (url);
+create index if not exists idx_contests_last_verified
+  on public.contests (last_verified nulls first);
 
 drop trigger if exists contests_updated_at on public.contests;
 create trigger contests_updated_at
@@ -955,3 +958,36 @@ $$;
 
 revoke all on function public.delete_own_account() from public;
 grant execute on function public.delete_own_account() to authenticated;
+
+-- ---------------------------------------------------------------------------
+-- Platform contest counters (Home all-time / live Hive Mind)
+-- Full additive migrations: 20261019_link_health_and_platform_count.sql
+-- ---------------------------------------------------------------------------
+create or replace function public.platform_contest_count()
+returns bigint
+language sql
+security definer
+set search_path = public
+stable
+as $$
+  select count(*)::bigint from public.contests;
+$$;
+
+comment on function public.platform_contest_count() is
+  'All-time count(*) of public.contests for Home platform counter. No PII.';
+
+grant execute on function public.platform_contest_count() to anon, authenticated;
+
+create or replace function public.platform_live_contest_count()
+returns bigint
+language sql
+security definer
+set search_path = public
+stable
+as $$
+  select count(*)::bigint
+  from public.contests
+  where expiry_date is null or expiry_date > now();
+$$;
+
+grant execute on function public.platform_live_contest_count() to anon, authenticated;

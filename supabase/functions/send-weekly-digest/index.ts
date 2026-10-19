@@ -19,11 +19,7 @@
  */
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.0'
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-}
+import { corsHeaders, json, requireServiceBearer } from '../_shared/http.ts'
 
 interface NotificationPrefs {
   weeklyDigestEmail: boolean
@@ -120,6 +116,12 @@ Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
   }
+  if (req.method !== 'POST' && req.method !== 'GET') {
+    return json(405, { ok: false, reason: 'method_not_allowed' })
+  }
+
+  const denied = requireServiceBearer(req)
+  if (denied) return denied
 
   try {
     const body = req.method === 'POST' ? await req.json().catch(() => ({})) : {}
@@ -133,13 +135,16 @@ Deno.serve(async (req) => {
       Deno.env.get('DIGEST_DRY_RUN') === 'true' || body.dryRun === true
 
     if (!supabaseUrl || !serviceKey) {
-      return new Response(JSON.stringify({ error: 'Missing Supabase env' }), {
-        status: 500,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      return json(500, {
+        ok: false,
+        reason: 'server_misconfigured',
+        hint: 'Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY',
       })
     }
 
-    const admin = createClient(supabaseUrl, serviceKey)
+    const admin = createClient(supabaseUrl, serviceKey, {
+      auth: { persistSession: false, autoRefreshToken: false },
+    })
     const sinceWeek = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
     const nowIso = new Date().toISOString()
     const eodIso = torontoEndOfDayIso()
@@ -176,14 +181,12 @@ Deno.serve(async (req) => {
     })
 
     if (!resendKey && !dryRun) {
-      return new Response(
-        JSON.stringify({
-          ok: false,
-          error: 'RESEND_API_KEY not set — set Edge secret or use dryRun',
-          stats: { newCa: n, endingTonight: m, recipients: recipients.length },
-        }),
-        { status: 503, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      )
+      return json(503, {
+        ok: false,
+        reason: 'resend_not_configured',
+        hint: 'Set RESEND_API_KEY Edge secret or POST {"dryRun":true}',
+        stats: { newCa: n, endingTonight: m, recipients: recipients.length },
+      })
     }
 
     let sent = 0
@@ -260,26 +263,25 @@ Deno.serve(async (req) => {
       sent++
     }
 
-    return new Response(
-      JSON.stringify({
-        ok: true,
-        dryRun,
-        digestWeek,
-        stats: { newCa: n, endingTonight: m },
-        recipients: recipients.length,
-        sent,
-        skipped,
-        failed,
-        errors: errors.slice(0, 10),
-        resendConfigured: Boolean(resendKey),
-      }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    )
+    return json(200, {
+      ok: true,
+      dryRun,
+      digestWeek,
+      stats: { newCa: n, endingTonight: m },
+      recipients: recipients.length,
+      sent,
+      skipped,
+      failed,
+      errors: errors.slice(0, 10),
+      resendConfigured: Boolean(resendKey),
+      at: new Date().toISOString(),
+    })
   } catch (err) {
     console.error('[send-weekly-digest]', err)
-    return new Response(
-      JSON.stringify({ error: err instanceof Error ? err.message : String(err) }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    )
+    return json(500, {
+      ok: false,
+      reason: 'internal_error',
+      detail: err instanceof Error ? err.message : String(err),
+    })
   }
 })
