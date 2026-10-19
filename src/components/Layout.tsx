@@ -1,5 +1,5 @@
 import { NavLink } from 'react-router-dom'
-import { Coins, History, LogOut } from 'lucide-react'
+import { Coins, Trophy, LogOut } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { isSupabaseConfigured } from '../lib/supabase'
 
@@ -9,7 +9,7 @@ const ROUTES = [
   { path: '/referrals', label: 'Referrals', icon: '🔗' },
   { path: '/earn', label: 'Earn', icon: 'earn' as const },
   { path: '/winners', label: 'Winners', icon: '🏆' },
-  { path: '/past', label: 'Past', icon: 'past' as const },
+  { path: '/my-giveaways', label: 'Mine', icon: 'mine' as const },
   { path: '/profile', label: 'Profile', icon: '👤' },
 ] as const
 
@@ -97,8 +97,8 @@ export default function Layout({ children }: { children?: React.ReactNode }) {
           >
             {path === '/earn' ? (
               <Coins className="w-5 h-5 shrink-0" aria-hidden />
-            ) : path === '/past' ? (
-              <History className="w-5 h-5 shrink-0" aria-hidden />
+            ) : path === '/my-giveaways' ? (
+              <Trophy className="w-5 h-5 shrink-0" aria-hidden />
             ) : (
               <span className="text-lg">{icon}</span>
             )}

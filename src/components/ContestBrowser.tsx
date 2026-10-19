@@ -7,6 +7,14 @@ import { getInjectionScript } from '../lib/autofill/assassin'
 import type { AutoFillData } from '../types/profile'
 import { daysLeftUntilExpiry } from '../lib/utils/expiryDate'
 import { shareContest } from '../lib/utils/shareContest'
+import { copyText } from '../lib/utils/copyText'
+import {
+  deadLinkLabel,
+  isDeadLink,
+  isDeadLinkStatus,
+  probeContestUrl,
+} from '../lib/utils/linkHealth'
+import { markVaultLinkStatus } from '../hooks/useContestVault'
 import CountdownTimer from './CountdownTimer'
 import AgeGateModal from './AgeGateModal'
 import {
@@ -92,12 +100,11 @@ function CheatSheetBar({
   const copy = useCallback(
     async (label: string, value: string) => {
       if (!value) return
-      try {
-        await navigator.clipboard.writeText(value)
-        setCopied(label)
-        onCopied?.()
-        setTimeout(() => setCopied(null), 1500)
-      } catch (_) {}
+      const ok = await copyText(value)
+      if (!ok) return
+      setCopied(label)
+      onCopied?.()
+      setTimeout(() => setCopied(null), 1500)
     },
     [onCopied]
   )
@@ -160,6 +167,8 @@ export default function ContestBrowser({
   const [awaitingReturn, setAwaitingReturn] = useState(false)
   const [showAgeGate, setShowAgeGate] = useState(false)
   const [pendingAgeAction, setPendingAgeAction] = useState<'enter' | 'mark-entered' | 'mark-submitted' | null>(null)
+  const [linkHealthMsg, setLinkHealthMsg] = useState<string | null>(null)
+  const [injectWorks, setInjectWorks] = useState(false)
   const iframeRef = useRef<HTMLIFrameElement>(null)
   const isNativeRef = useRef<boolean | null>(null)
   const iframeLoadTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -175,14 +184,31 @@ export default function ContestBrowser({
     setLoading(true)
     setResolvedUrl(null)
     setIframeLikelyBlocked(false)
+    setInjectWorks(false)
     setPendingMark(false)
     setAwaitingReturn(false)
     setAutoFillMsg(null)
     setStatusMsg(null)
+    setLinkHealthMsg(null)
+    if (isDeadLink(contest)) {
+      setLinkHealthMsg(`${deadLinkLabel(contest.linkStatus)} — try Open & Enter or Report bad link.`)
+    }
     resolveContestUrl(contest.url, contest.contentSnippet ?? contest.description).then((url) => {
       setResolvedUrl(url)
       setLoading(false)
     })
+    // Lightweight client recheck (corsproxy) — surface dead status without inventing cloud cron
+    let cancelled = false
+    void probeContestUrl(contest.url).then((status) => {
+      if (cancelled || status == null) return
+      if (isDeadLinkStatus(status)) {
+        markVaultLinkStatus(contest.url, status)
+        setLinkHealthMsg(`${deadLinkLabel(status)} (rechecked) — Open & Enter may still fail.`)
+      }
+    })
+    return () => {
+      cancelled = true
+    }
   }, [open, contest])
 
   useEffect(() => {
@@ -357,6 +383,13 @@ export default function ContestBrowser({
   }, [contest])
 
   const handleAutoFill = () => {
+    if (iframeLikelyBlocked || !injectWorks) {
+      setAutoFillMsg(
+        'In-app Auto-Fill can’t reach this site (embed blocked). Use Open & Enter + copy chips, the browser extension, or the native app.'
+      )
+      setIframeLikelyBlocked(true)
+      return
+    }
     if (smartFillBlocked) {
       setAutoFillMsg('Smart-Fills exhausted on Free — upgrade to Pro for unlimited.')
       onAutoFillUsed?.()
@@ -370,9 +403,10 @@ export default function ContestBrowser({
       const doc = iframeRef.current?.contentDocument
       if (!doc) {
         setAutoFillMsg(
-          'In-app form is blocked by the contest site. Use Open in Browser + copy chips, then mark entered.'
+          'In-app form is blocked by the contest site. Use Open & Enter + copy chips, then Mark Entered.'
         )
         setIframeLikelyBlocked(true)
+        setInjectWorks(false)
         return
       }
       const script = document.createElement('script')
@@ -387,11 +421,14 @@ export default function ContestBrowser({
       )
     } catch (_) {
       setAutoFillMsg(
-        'Could not reach the form (cross-origin). Open in Browser and tap the copy chips.'
+        'Could not reach the form (cross-origin). Open & Enter and tap the copy chips — or install the LoonieWins extension.'
       )
       setIframeLikelyBlocked(true)
+      setInjectWorks(false)
     }
   }
+
+  const showInjectButton = injectWorks && !iframeLikelyBlocked
 
   const daysLeft = daysLeftUntilExpiry(contest?.expiryDate)
   const reqBadges = contest ? getRequirementBadges(contest) : []
@@ -456,14 +493,23 @@ export default function ContestBrowser({
 
         <div className="px-4 py-3 border-b border-white/10 shrink-0">
           <div className="flex items-center justify-between mb-2">
-            <h3 className="text-sm font-medium text-white/90">Auto-Fill</h3>
+            <h3 className="text-sm font-medium text-white/90">Smart-Fill</h3>
             <Link to="/profile" className="text-xs text-win hover:underline">
               Edit in Profile
             </Link>
           </div>
+          {linkHealthMsg && (
+            <p
+              className="text-xs text-amber-300 mb-2 rounded-lg bg-amber-500/10 border border-amber-500/30 px-2 py-1.5"
+              role="status"
+              data-testid="link-health-banner"
+            >
+              {linkHealthMsg}
+            </p>
+          )}
           {!hasProfile ? (
             <p className="text-sm text-amber-300">
-              Set your name & email in Profile for one-tap fill and copy chips.
+              Set your name & email in Profile for one-tap copy chips.
             </p>
           ) : (
             <div className="text-sm text-white/70 space-y-1">
@@ -490,7 +536,13 @@ export default function ContestBrowser({
             </div>
           )}
           <p className="text-xs text-yellow-400/90 mt-2">
-            Tap chips to copy when sites block embedding. Math / skill-test fields need your input.
+            Most sponsor sites block in-app embedding. Use <strong className="font-semibold">Open &amp; Enter</strong>, then
+            tap the copy chips below to paste into the form. Math / skill-test fields need your input.
+          </p>
+          <p className="text-xs text-white/45 mt-1.5">
+            Full in-page fill: install the{' '}
+            <span className="text-white/70">extension/</span> Chrome/Edge add-on (Load unpacked — see{' '}
+            <code className="text-[10px] text-win/90">extension/README.md</code>) or use the native app.
           </p>
           {autoFillMsg && (
             <p className="text-xs text-win mt-2" role="status">
@@ -529,47 +581,62 @@ export default function ContestBrowser({
                         const doc = iframeRef.current?.contentDocument
                         if (doc && doc.body) {
                           const len = (doc.body.innerText || doc.body.textContent || '').length
-                          if (len < 80) setIframeLikelyBlocked(true)
+                          if (len < 80) {
+                            setIframeLikelyBlocked(true)
+                            setInjectWorks(false)
+                          } else {
+                            setInjectWorks(true)
+                            setIframeLikelyBlocked(false)
+                          }
+                        } else {
+                          setIframeLikelyBlocked(true)
+                          setInjectWorks(false)
                         }
                       } catch {
-                        // Cross-origin: can't read; keep Open in Browser primary
+                        // Cross-origin: can't inject — hide broken Auto-Fill
+                        setIframeLikelyBlocked(true)
+                        setInjectWorks(false)
                       }
-                    }, 2500)
+                    }, 1800)
                   }}
                 />
                 {iframeLikelyBlocked && (
                   <div
-                    className="absolute inset-x-2 bottom-2 rounded-lg bg-black/80 text-white text-sm px-3 py-2 flex items-center justify-between gap-2"
+                    className="absolute inset-x-2 bottom-2 rounded-lg bg-black/85 text-white text-sm px-3 py-2 flex items-center justify-between gap-2"
                     role="status"
                   >
-                    <span>This contest can&apos;t be shown in-app.</span>
+                    <span>Preview blocked — Open &amp; Enter + copy chips.</span>
                     <button
                       type="button"
                       onClick={handleEnterContest}
                       className="shrink-0 px-3 py-1.5 rounded-lg bg-win text-on-win font-semibold text-xs"
                     >
-                      Open in Browser
+                      Open &amp; Enter
                     </button>
                   </div>
                 )}
-                <button
-                  type="button"
-                  onClick={handleAutoFill}
-                  className={`absolute bottom-16 right-4 px-4 py-2 rounded-xl font-semibold shadow-lg hover:opacity-90 ${
-                    smartFillBlocked
-                      ? 'bg-amber-500/20 text-amber-400 border border-amber-500/40'
-                      : 'bg-win text-on-win'
-                  }`}
-                >
-                  {smartFillBlocked
-                    ? 'Unlock Smart-Fills (Pro)'
-                    : smartFillsRemaining != null
-                      ? `⚡ Auto-Fill (${smartFillsRemaining} left)`
-                      : '⚡ Auto-Fill Form'}
-                </button>
+                {showInjectButton && (
+                  <button
+                    type="button"
+                    onClick={handleAutoFill}
+                    className={`absolute bottom-16 right-4 px-4 py-2 rounded-xl font-semibold shadow-lg hover:opacity-90 ${
+                      smartFillBlocked
+                        ? 'bg-amber-500/20 text-amber-400 border border-amber-500/40'
+                        : 'bg-win text-on-win'
+                    }`}
+                  >
+                    {smartFillBlocked
+                      ? 'Unlock Smart-Fills (Pro)'
+                      : smartFillsRemaining != null
+                        ? `⚡ Auto-Fill (${smartFillsRemaining} left)`
+                        : '⚡ Auto-Fill Form'}
+                  </button>
+                )}
               </div>
               <p className="text-xs text-white/50 px-2 py-1 shrink-0">
-                If the preview stays blank, open in browser — we&apos;ll remind you to mark entered.
+                {iframeLikelyBlocked
+                  ? 'Web iframe can’t fill most sponsors — Open & Enter is the real path; chips copy for paste.'
+                  : 'If the preview stays blank, Open & Enter — we’ll remind you to mark entered.'}
               </p>
             </>
           ) : (
@@ -650,7 +717,9 @@ export default function ContestBrowser({
             <button
               type="button"
               onClick={() => {
-                reportUrl(contest.url)
+                reportUrl(contest.url, 410)
+                markVaultLinkStatus(contest.url, 410)
+                setLinkHealthMsg('Marked as bad link — dropped from this device’s live feed.')
                 setReportToast(true)
                 setTimeout(() => setReportToast(false), 2500)
               }}
@@ -660,7 +729,7 @@ export default function ContestBrowser({
             </button>
             {(reportToast || statusMsg) && (
               <p className="text-xs text-win" role="status">
-                {statusMsg || "Thanks, we'll look into it."}
+                {statusMsg || 'Thanks — saved locally and removed from your live feed.'}
               </p>
             )}
           </div>

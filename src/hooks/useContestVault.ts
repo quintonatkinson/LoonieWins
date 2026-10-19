@@ -7,6 +7,7 @@
 import type { Contest } from '../lib/rssFetcher'
 import { toExpiryEndOfDay } from '../lib/utils/expiryDate'
 import { isDeadLink, DEAD_LINK_STATUSES } from '../lib/utils/linkHealth'
+import { getReportedUrls } from '../lib/utils/reportedUrls'
 import { supabase } from '../lib/supabase'
 import { autoCategorize } from '../lib/data/tagger'
 
@@ -223,10 +224,12 @@ export function syncToVault(enrichedContests: Contest[]): void {
 export function getLiveContests(): Contest[] {
   const vault = loadVault()
   const now = new Date()
+  const reported = getReportedUrls()
   return vault
     .map(withDerivedRestrictions)
     .filter((c) => {
       if (isDeadLink(c)) return false
+      if (reported.has(c.url.trim())) return false
       if (c.expiryDate == null) return true
       const end = toExpiryEndOfDay(c.expiryDate)
       return !Number.isNaN(end.getTime()) && end > now
@@ -299,6 +302,28 @@ export function getVaultContestCount(): { total: number; live: number; past: num
   const live = getLiveContests().length
   const past = getPastContests().length
   return { total: vault.length, live, past }
+}
+
+/**
+ * Patch linkStatus on a vault row by URL (e.g. Report bad link / client recheck).
+ * Drops dead links from the live feed on next getLiveContests().
+ */
+export function markVaultLinkStatus(url: string, status: number): boolean {
+  if (!url?.trim() || !Number.isFinite(status)) return false
+  const vault = loadVault()
+  const key = normalizeUrl(url)
+  let found = false
+  const next = vault.map((c) => {
+    if (normalizeUrl(c.url) !== key) return c
+    found = true
+    return { ...c, linkStatus: status }
+  })
+  if (!found) return false
+  saveVault(next)
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('loonie_vault_updated'))
+  }
+  return true
 }
 
 export { isDeadLink, DEAD_LINK_STATUSES as DEAD_STATUSES }

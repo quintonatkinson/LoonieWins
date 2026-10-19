@@ -6,6 +6,7 @@ import {
   computeLocalProgress,
   rpcAwardEntryProgress,
 } from '../lib/monetization/progression'
+import { reconcileExpiredEntries } from '../lib/utils/contestEntryScope'
 
 export type ContestEntryStatus = 'entered' | 'submitted' | 'won' | 'lost' | 'expired'
 
@@ -43,10 +44,13 @@ function loadLocal(): ContestEntry[] {
       }))
     }
     const parsed = JSON.parse(raw) as ContestEntry[]
-    return parsed.map((e) => ({
+    const normalized = parsed.map((e) => ({
       ...e,
       expires_at: e.expires_at ?? null,
     }))
+    const { entries, changed } = reconcileExpiredEntries(normalized)
+    if (changed) saveLocal(entries)
+    return entries
   } catch {
     return []
   }

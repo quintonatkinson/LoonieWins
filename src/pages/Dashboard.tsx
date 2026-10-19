@@ -419,8 +419,13 @@ export default function Dashboard() {
     } else if (isFinished) {
       hivePieces.push('0 live contests in Hive Mind right now')
     }
-    if (totalTracked > liveCount) {
-      hivePieces.push(`${totalTracked.toLocaleString()} tracked incl. past`)
+    // Guest-safe all-time stub from local vault — cloud platform total needs live Supabase
+    if (totalTracked > 0) {
+      hivePieces.push(
+        `${totalTracked.toLocaleString()} all-time on this device${
+          !isSupabaseConfigured ? ' (cloud total when Supabase is live)' : ''
+        }`
+      )
     }
     if (social.hiveLabel) hivePieces.push(`${social.hiveLabel} across LoonieWins`)
     return hivePieces.length ? hivePieces.join(' · ') : null

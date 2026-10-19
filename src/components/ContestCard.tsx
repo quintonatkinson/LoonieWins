@@ -18,6 +18,7 @@ import {
   saveAgeConfirmed,
 } from '../lib/utils/ageGate'
 import { formatEntriesToday } from '../hooks/useContestSocialProof'
+import { deadLinkLabel, isDeadLink } from '../lib/utils/linkHealth'
 
 interface ContestCardProps {
   contest: Contest
@@ -69,12 +70,15 @@ export default function ContestCard({
   const [showSubscription, setShowSubscription] = useState(false)
   const [showAgeGate, setShowAgeGate] = useState(false)
   const [toast, setToast] = useState(false)
+  const [deadToast, setDeadToast] = useState(false)
   const { upgradeToPro } = useUserEarn()
 
   const entryCostPts = getEntryCost(contest)
   const canAffordEntry = balance >= entryCostPts
   const daysLeft = daysLeftProp ?? daysLeftUntilExpiry(contest.expiryDate)
   const socialLabel = formatEntriesToday(entriesToday)
+  const linkDead = isDeadLink(contest)
+  const linkDeadLabel = linkDead ? deadLinkLabel(contest.linkStatus) : null
 
   useEffect(() => {
     if (!toast) return
@@ -82,13 +86,20 @@ export default function ContestCard({
     return () => clearTimeout(t)
   }, [toast])
 
+  useEffect(() => {
+    if (!deadToast) return
+    const t = setTimeout(() => setDeadToast(false), 3500)
+    return () => clearTimeout(t)
+  }, [deadToast])
+
   const openEntry = useCallback(() => {
+    if (linkDead) setDeadToast(true)
     if (onOneTapEnter) {
       onOneTapEnter(contest)
       return
     }
     onOpenOverlay(contest)
-  }, [contest, onOneTapEnter, onOpenOverlay])
+  }, [contest, onOneTapEnter, onOpenOverlay, linkDead])
 
   const openEntryWithAgeGate = useCallback(() => {
     if (contestRequiresAgeGate(contest) && (adultAlwaysConfirm || !loadAgeConfirmed())) {
@@ -211,6 +222,10 @@ export default function ContestCard({
   const toastEl = toast ? (
     <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-50 px-4 py-2 rounded-lg bg-win text-on-win font-medium text-sm shadow-lg">
       Entry Unlocked!
+    </div>
+  ) : deadToast && linkDeadLabel ? (
+    <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-50 px-4 py-2 rounded-lg bg-amber-500/95 text-gray-900 font-medium text-sm shadow-lg">
+      {linkDeadLabel} — sponsor page may not load
     </div>
   ) : null
 
@@ -382,6 +397,15 @@ export default function ContestCard({
             {entered && (
               <span className="text-[10px] uppercase tracking-wide font-semibold px-1.5 py-0.5 rounded bg-win/20 text-win border border-win/30">
                 Entered
+              </span>
+            )}
+            {linkDeadLabel && (
+              <span
+                className="text-[10px] uppercase tracking-wide font-semibold px-1.5 py-0.5 rounded bg-red-500/20 text-red-400 border border-red-500/40"
+                title={linkDeadLabel}
+                data-testid="dead-link-badge"
+              >
+                {linkDeadLabel}
               </span>
             )}
             {reqBadges
