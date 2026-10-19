@@ -17,11 +17,7 @@
  */
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.0'
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-}
+import { corsHeaders, json, requireServiceBearer } from '../_shared/http.ts'
 
 type AlertMode = 'new_contests' | 'ending_tonight'
 
@@ -224,14 +220,21 @@ Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
   }
+  if (req.method !== 'POST' && req.method !== 'GET') {
+    return json(405, { ok: false, reason: 'method_not_allowed' })
+  }
+
+  const denied = requireServiceBearer(req)
+  if (denied) return denied
 
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? ''
     const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     if (!supabaseUrl || !serviceKey) {
-      return new Response(JSON.stringify({ error: 'Missing Supabase env' }), {
-        status: 500,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      return json(500, {
+        ok: false,
+        reason: 'server_misconfigured',
+        hint: 'Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY',
       })
     }
 
@@ -241,8 +244,13 @@ Deno.serve(async (req) => {
       : (['new_contests', 'ending_tonight'] as AlertMode[])
     const lookbackMinutes = Number(body.lookbackMinutes ?? 90)
     const freeEndingCap = Number(body.freeEndingCap ?? FREE_ENDING_CAP)
+    if (!Number.isFinite(lookbackMinutes) || lookbackMinutes < 1) {
+      return json(400, { ok: false, reason: 'bad_lookbackMinutes' })
+    }
 
-    const admin = createClient(supabaseUrl, serviceKey)
+    const admin = createClient(supabaseUrl, serviceKey, {
+      auth: { persistSession: false, autoRefreshToken: false },
+    })
 
     const { data: tokens, error: tokenErr } = await admin
       .from('push_tokens')
@@ -250,9 +258,7 @@ Deno.serve(async (req) => {
     if (tokenErr) throw tokenErr
     const tokenRows = (tokens ?? []) as TokenRow[]
     if (tokenRows.length === 0) {
-      return new Response(JSON.stringify({ ok: true, skipped: 'no_tokens' }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      })
+      return json(200, { ok: true, skipped: 'no_tokens', modes })
     }
 
     const userIds = [...new Set(tokenRows.map((t) => t.user_id))]
@@ -409,23 +415,22 @@ Deno.serve(async (req) => {
       if (logErr) console.error('[send-push-alerts] log upsert', logErr.message)
     }
 
-    return new Response(
-      JSON.stringify({
-        ok: true,
-        modes,
-        queued: messages.length,
-        logRows: logRows.length,
-        endingTonight: { pro: proEndingQueued, free: freeEndingQueued, freeCap: freeEndingCap },
-        expo: sendResult,
-        expoAccessTokenConfigured: Boolean(Deno.env.get('EXPO_ACCESS_TOKEN')),
-      }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    )
+    return json(200, {
+      ok: true,
+      modes,
+      queued: messages.length,
+      logRows: logRows.length,
+      endingTonight: { pro: proEndingQueued, free: freeEndingQueued, freeCap: freeEndingCap },
+      expo: sendResult,
+      expoAccessTokenConfigured: Boolean(Deno.env.get('EXPO_ACCESS_TOKEN')),
+      at: new Date().toISOString(),
+    })
   } catch (err) {
     console.error('[send-push-alerts]', err)
-    return new Response(
-      JSON.stringify({ error: err instanceof Error ? err.message : String(err) }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    )
+    return json(500, {
+      ok: false,
+      reason: 'internal_error',
+      detail: err instanceof Error ? err.message : String(err),
+    })
   }
 })

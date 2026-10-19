@@ -2,6 +2,7 @@
 -- Does not modify contests schema or bootstrap tables owned by other tracks.
 -- After deploy of Edge Function ingest-giveaways, replace SERVICE_ROLE_KEY_REPLACE_ME
 -- and run this in SQL Editor (or rely on supabase/cron_ingest.sql).
+-- Companion: supabase/cron_verify_links.sql (link_status + last_verified recheck).
 
 CREATE EXTENSION IF NOT EXISTS pg_cron;
 CREATE EXTENSION IF NOT EXISTS pg_net;
