@@ -1,6 +1,8 @@
 import { useState, useEffect, useMemo } from 'react'
 import { Link } from 'react-router-dom'
+import { Archive } from 'lucide-react'
 import ContestCard from '../components/ContestCard'
+import PageHeader from '../components/PageHeader'
 import { getPastContests } from '../hooks/useContestVault'
 import type { Contest } from '../lib/rssFetcher'
 import { getExpirySortKey, isExpired } from '../lib/utils/expiryDate'
@@ -43,22 +45,23 @@ export default function PastContests() {
 
   return (
     <div className="flex flex-col bg-gray-900" data-testid="past-contests">
-      <section className="px-4 pt-4 pb-24">
-        <h2 className="text-base font-bold text-gray-50 flex items-center gap-2 mb-1">
-          <span className="text-gray-400" aria-hidden>
-            📦
-          </span>
-          FOMO Vault — Past Contests
-        </h2>
-        <p className="text-sm text-gray-400 mb-1">
-          Contests that have ended. Tap to view the original page.
-        </p>
-        {sorted.length > 0 && (
-          <p className="text-xs text-gray-500 mb-4" data-testid="past-contests-counts">
-            {sorted.length} past
-            {withKnownEnd > 0 ? ` · ${withKnownEnd} with end dates` : ''}
-          </p>
-        )}
+      <section className="px-4 pt-4 pb-24 max-w-3xl mx-auto w-full space-y-4">
+        <PageHeader
+          icon={<Archive className="w-5 h-5 text-win" strokeWidth={2.5} />}
+          title="Past contests"
+          subtitle={
+            <p>
+              FOMO vault — ended contests on this device.
+              {sorted.length > 0 && (
+                <span data-testid="past-contests-counts">
+                  {' '}
+                  {sorted.length} past
+                  {withKnownEnd > 0 ? ` · ${withKnownEnd} with end dates` : ''}
+                </span>
+              )}
+            </p>
+          }
+        />
         {sorted.length === 0 ? (
           <div
             className="rounded-xl border border-dashed border-gray-600/60 bg-surface px-4 py-10 text-center space-y-3"

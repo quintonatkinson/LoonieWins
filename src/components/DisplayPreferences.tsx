@@ -32,15 +32,16 @@ function SwitchRow({
   onChange: () => void
 }) {
   return (
-    <label className="flex items-center justify-between gap-3 pt-2">
-      <span className="text-sm text-gray-200">
+    <div className="flex items-center justify-between gap-3 py-2.5 border-b border-gray-700/40 last:border-0">
+      <span className="text-sm text-gray-100 min-w-0 pr-2">
         {label}
-        <span className="block text-xs text-gray-500">{hint}</span>
+        <span className="block text-xs text-gray-500 mt-0.5 leading-snug">{hint}</span>
       </span>
       <button
         type="button"
         role="switch"
         aria-checked={checked}
+        aria-label={label}
         onClick={onChange}
         className={`relative w-11 h-6 rounded-full transition-colors shrink-0 ${
           checked ? 'bg-win' : 'bg-gray-600'
@@ -52,15 +53,24 @@ function SwitchRow({
           }`}
         />
       </button>
-    </label>
+    </div>
   )
 }
 
-function SectionLabel({ children }: { children: React.ReactNode }) {
+function PrefSection({
+  title,
+  children,
+}: {
+  title: string
+  children: React.ReactNode
+}) {
   return (
-    <p className="text-[11px] font-semibold uppercase tracking-wider text-win/90 pt-3 first:pt-1">
+    <section className="rounded-xl border border-gray-600/45 bg-gray-800/50 p-3 space-y-1">
+      <h3 className="text-[11px] font-semibold uppercase tracking-wider text-win/90 pb-1">
+        {title}
+      </h3>
       {children}
-    </p>
+    </section>
   )
 }
 
@@ -114,10 +124,13 @@ export default function DisplayPreferences() {
   }
 
   return (
-    <div className="px-4 pb-4 space-y-1 border-t border-gray-600/40 bg-gray-900/40">
-      <div className="rounded-xl border border-win/25 bg-win/5 p-3 mt-3">
+    <div
+      className="px-3 pb-4 pt-1 space-y-3 border-t border-gray-600/40 bg-gray-900/50"
+      data-testid="display-preferences"
+    >
+      <div className="rounded-xl border border-win/25 bg-win/5 p-3 mt-2">
         <p className="text-sm font-semibold text-white">Your feed fingerprint</p>
-        <p className="text-xs text-gray-400 mt-0.5">
+        <p className="text-xs text-gray-400 mt-0.5 leading-relaxed">
           {chips.length === 0
             ? 'Defaults — tweak filters & layout below to make Home yours.'
             : `${chips.length} custom touch${chips.length === 1 ? '' : 'es'} active`}
@@ -136,45 +149,45 @@ export default function DisplayPreferences() {
         )}
       </div>
 
-      <SectionLabel>Feed filters</SectionLabel>
-      <SwitchRow
-        label="Québec-safe"
-        hint="Hide contests that exclude Quebec"
-        checked={quebecSafe}
-        onChange={() => {
-          const next = !quebecSafe
-          setQuebecSafe(next)
-          saveQuebecSafe(next)
-          void updateProfile({
-            settings: { ...(profile?.settings ?? {}), quebecSafe: next },
-          })
-        }}
-      />
-      <SwitchRow
-        label="Hide purchase-required"
-        hint="Exclude contests that need a receipt or purchase"
-        checked={prefs.hidePurchaseRequired}
-        onChange={() => patchPref({ hidePurchaseRequired: !prefs.hidePurchaseRequired })}
-      />
-      <SwitchRow
-        label="Hide 18+ contests"
-        hint="Exclude age-gated contests from Home"
-        checked={prefs.hideAdult}
-        onChange={() => patchPref({ hideAdult: !prefs.hideAdult })}
-      />
-      {!prefs.hideAdult && (
+      <PrefSection title="Feed filters">
         <SwitchRow
-          label="Always confirm 18+"
-          hint="Re-prompt age gate every time you enter an 18+ contest"
-          checked={prefs.adultAlwaysConfirm}
-          onChange={() => patchPref({ adultAlwaysConfirm: !prefs.adultAlwaysConfirm })}
+          label="Québec-safe"
+          hint="Hide contests that exclude Quebec"
+          checked={quebecSafe}
+          onChange={() => {
+            const next = !quebecSafe
+            setQuebecSafe(next)
+            saveQuebecSafe(next)
+            void updateProfile({
+              settings: { ...(profile?.settings ?? {}), quebecSafe: next },
+            })
+          }}
         />
-      )}
+        <SwitchRow
+          label="Hide purchase-required"
+          hint="Exclude contests that need a receipt or purchase"
+          checked={prefs.hidePurchaseRequired}
+          onChange={() => patchPref({ hidePurchaseRequired: !prefs.hidePurchaseRequired })}
+        />
+        <SwitchRow
+          label="Hide 18+ contests"
+          hint="Exclude age-gated contests from Home"
+          checked={prefs.hideAdult}
+          onChange={() => patchPref({ hideAdult: !prefs.hideAdult })}
+        />
+        {!prefs.hideAdult && (
+          <SwitchRow
+            label="Always confirm 18+"
+            hint="Re-prompt age gate every time you enter an 18+ contest"
+            checked={prefs.adultAlwaysConfirm}
+            onChange={() => patchPref({ adultAlwaysConfirm: !prefs.adultAlwaysConfirm })}
+          />
+        )}
+      </PrefSection>
 
-      <SectionLabel>Layout & sort</SectionLabel>
-      <div>
-        <p className="text-sm text-gray-200 mb-2 pt-1">Card density</p>
-        <div className="flex gap-2">
+      <PrefSection title="Layout & sort">
+        <p className="text-sm text-gray-200 mb-2">Card density</p>
+        <div className="flex gap-2 mb-3">
           {(
             [
               ['comfortable', 'Comfortable'],
@@ -185,41 +198,37 @@ export default function DisplayPreferences() {
               key={key}
               type="button"
               onClick={() => patchPref({ cardDensity: key as CardDensity })}
-              className={`flex-1 py-2 rounded-lg text-xs font-semibold ${
+              className={`flex-1 py-2.5 rounded-lg text-xs font-semibold ${
                 prefs.cardDensity === key
                   ? 'bg-win text-on-win'
-                  : 'bg-gray-800 text-gray-400 border border-gray-600/50'
+                  : 'bg-gray-900 text-gray-400 border border-gray-600/50'
               }`}
             >
               {label}
             </button>
           ))}
         </div>
-      </div>
-
-      <div>
-        <p className="text-sm text-gray-200 mb-2 pt-2">Default sort</p>
+        <p className="text-sm text-gray-200 mb-2">Default sort</p>
         <div className="flex flex-wrap gap-2">
           {SORT_DEFAULT_OPTIONS.map(({ key, label }) => (
             <button
               key={key}
               type="button"
               onClick={() => patchPref({ sortDefault: key as SortDefault })}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold ${
+              className={`px-3 py-2 rounded-lg text-xs font-semibold ${
                 prefs.sortDefault === key
                   ? 'bg-win text-on-win'
-                  : 'bg-gray-800 text-gray-400 border border-gray-600/50'
+                  : 'bg-gray-900 text-gray-400 border border-gray-600/50'
               }`}
             >
               {label}
             </button>
           ))}
         </div>
-      </div>
+      </PrefSection>
 
-      <SectionLabel>How contests open</SectionLabel>
-      <div>
-        <div className="flex gap-2 pt-1">
+      <PrefSection title="How contests open">
+        <div className="flex gap-2">
           {(
             [
               ['webview', 'In-app browser'],
@@ -230,55 +239,53 @@ export default function DisplayPreferences() {
               key={key}
               type="button"
               onClick={() => patchPref({ openContestsIn: key as OpenContestsIn })}
-              className={`flex-1 py-2 rounded-lg text-xs font-semibold ${
+              className={`flex-1 py-2.5 rounded-lg text-xs font-semibold ${
                 prefs.openContestsIn === key
                   ? 'bg-win text-on-win'
-                  : 'bg-gray-800 text-gray-400 border border-gray-600/50'
+                  : 'bg-gray-900 text-gray-400 border border-gray-600/50'
               }`}
             >
               {label}
             </button>
           ))}
         </div>
-        <p className="text-xs text-gray-500 mt-1">
+        <p className="text-xs text-gray-500 mt-2 leading-relaxed">
           Applies on mobile / native shells. Web desktop already opens in a new tab when not native.
         </p>
-      </div>
+      </PrefSection>
 
-      <SectionLabel>Home screen</SectionLabel>
-      <div className="flex gap-2 pt-1">
-        {(
-          [
-            ['routine', 'Daily Routine'],
-            ['browse', 'Browse all'],
-          ] as const
-        ).map(([key, label]) => (
-          <button
-            key={key}
-            type="button"
-            onClick={() => {
-              setHomeMode(key)
-              saveHomeMode(key)
-            }}
-            className={`flex-1 py-2 rounded-lg text-xs font-semibold ${
-              homeMode === key
-                ? 'bg-win text-on-win'
-                : 'bg-gray-800 text-gray-400 border border-gray-600/50'
-            }`}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
-
-      <div className="pt-3 border-t border-gray-600/40 mt-2">
-        <SectionLabel>Invite friends</SectionLabel>
-        <div className="pt-1">
-          <ReferralInviteCard compact />
+      <PrefSection title="Home screen">
+        <div className="flex gap-2">
+          {(
+            [
+              ['routine', 'Daily Routine'],
+              ['browse', 'Browse all'],
+            ] as const
+          ).map(([key, label]) => (
+            <button
+              key={key}
+              type="button"
+              onClick={() => {
+                setHomeMode(key)
+                saveHomeMode(key)
+              }}
+              className={`flex-1 py-2.5 rounded-lg text-xs font-semibold ${
+                homeMode === key
+                  ? 'bg-win text-on-win'
+                  : 'bg-gray-900 text-gray-400 border border-gray-600/50'
+              }`}
+            >
+              {label}
+            </button>
+          ))}
         </div>
-      </div>
+      </PrefSection>
 
-      <p className="text-xs text-gray-500 pt-2">
+      <PrefSection title="Invite friends">
+        <ReferralInviteCard compact />
+      </PrefSection>
+
+      <p className="text-xs text-gray-500 leading-relaxed px-0.5">
         Prefs sync to your account when signed in and stick in local storage for guests. Appearance
         accents stay under Appearance above. Quiet hours live under Notifications.
       </p>

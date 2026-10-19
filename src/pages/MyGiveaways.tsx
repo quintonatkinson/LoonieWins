@@ -15,6 +15,7 @@ import {
 import { isCurrentContestEntry } from '../lib/utils/contestEntryScope'
 import { shareEnteredGiveaway } from '../lib/utils/shareContest'
 import SubscriptionModal from '../components/SubscriptionModal'
+import PageHeader from '../components/PageHeader'
 
 type ScopeTab = 'current' | 'all'
 type StatusFilter = 'all' | ContestEntryStatus
@@ -178,44 +179,39 @@ export default function MyGiveaways() {
           }
 
   return (
-    <div className="p-4 space-y-4 pb-24" data-testid="my-giveaways">
-      <div className="flex items-start justify-between gap-3 flex-wrap">
-        <div className="flex items-center gap-3 min-w-0">
-          <div className="flex items-center justify-center w-10 h-10 rounded-full bg-win/20 border border-win/40 shrink-0">
-            <Trophy className="w-5 h-5 text-win" strokeWidth={2.5} />
-          </div>
-          <div className="min-w-0">
-            <h1 className="text-xl font-semibold text-white">My Giveaways</h1>
-            <p
-              className="text-sm text-gray-400 mt-0.5"
-              data-testid="my-giveaways-counts"
-            >
-              {activeCount} active · {allTimeCount} all-time
-              {endingSoonCount > 0 ? (
-                <span className="text-amber-300"> · {endingSoonCount} ending soon</span>
-              ) : null}
-            </p>
-          </div>
-        </div>
-        <button
-          type="button"
-          onClick={handleExportCsv}
-          disabled={entries.length === 0 && canExportCsv}
-          className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${
-            canExportCsv
-              ? 'border-win/40 text-win hover:bg-win/10 disabled:opacity-40'
-              : 'border-amber-500/40 text-amber-400 hover:bg-amber-500/10'
-          }`}
-          title={
-            canExportCsv
-              ? 'Download as CSV'
-              : 'Pro unlocks CSV export of My Giveaways'
-          }
-        >
-          <FileSpreadsheet className="w-3.5 h-3.5" />
-          {canExportCsv ? 'Export CSV' : 'CSV · Pro'}
-        </button>
-      </div>
+    <div className="p-4 space-y-4 pb-24 max-w-3xl mx-auto w-full" data-testid="my-giveaways">
+      <PageHeader
+        icon={<Trophy className="w-5 h-5 text-win" strokeWidth={2.5} />}
+        title="My Giveaways"
+        subtitle={
+          <p data-testid="my-giveaways-counts">
+            {activeCount} active · {allTimeCount} all-time
+            {endingSoonCount > 0 ? (
+              <span className="text-amber-300"> · {endingSoonCount} ending soon</span>
+            ) : null}
+          </p>
+        }
+        action={
+          <button
+            type="button"
+            onClick={handleExportCsv}
+            disabled={entries.length === 0 && canExportCsv}
+            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${
+              canExportCsv
+                ? 'border-win/40 text-win hover:bg-win/10 disabled:opacity-40'
+                : 'border-amber-500/40 text-amber-400 hover:bg-amber-500/10'
+            }`}
+            title={
+              canExportCsv
+                ? 'Download as CSV'
+                : 'Pro unlocks CSV export of My Giveaways'
+            }
+          >
+            <FileSpreadsheet className="w-3.5 h-3.5" />
+            {canExportCsv ? 'Export CSV' : 'CSV · Pro'}
+          </button>
+        }
+      />
 
       {isGuest && (
         <div

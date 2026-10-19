@@ -29,6 +29,8 @@ body {
 /* Accessibility: calm motion for users who prefer reduced motion */
 @media (prefers-reduced-motion: reduce) {
   .animate-pulse,
+  .animate-spin,
+  .motion-safe\:animate-spin,
   .motion-safe\:transition-colors {
     animation: none !important;
     transition: none !important;

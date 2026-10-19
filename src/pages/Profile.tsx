@@ -14,6 +14,8 @@ import {
   Scale,
   LogOut,
   PlusCircle,
+  Link2,
+  Archive,
 } from 'lucide-react'
 import { useUserEarn } from '../contexts/UserEarnContext'
 import { useAuth } from '../contexts/AuthContext'
@@ -30,6 +32,7 @@ import { loadAutoFillData, saveAutoFillData } from '../lib/utils/autoFillStorage
 import { isSupabaseConfigured } from '../lib/supabase'
 import { PRO_LOCKED_FEATURES } from '../lib/monetization/tiers'
 import { isCurrentContestEntry } from '../lib/utils/contestEntryScope'
+import PageHeader from '../components/PageHeader'
 
 const AUTO_FILL_FIELDS: { key: keyof AutoFillData; label: string }[] = [
   { key: 'firstName', label: 'First Name' },
@@ -160,28 +163,30 @@ export default function Profile() {
   }
 
   return (
-    <div className="p-4 space-y-6 pb-24">
-      <div className="flex items-center gap-3">
-        <div className="flex items-center justify-center w-10 h-10 rounded-full bg-win/20 border border-win/40">
-          <User className="w-5 h-5 text-win" strokeWidth={2.5} />
-        </div>
-        <div className="flex-1 min-w-0">
-          <h1 className="text-xl font-semibold text-white">Profile</h1>
-          <p className="text-gray-400 text-sm truncate">
-            {profile?.email || user?.email || (isSupabaseConfigured ? 'Signed in' : 'Guest (local)')}
+    <div className="p-4 space-y-5 pb-24 max-w-3xl mx-auto w-full" data-testid="profile-page">
+      <PageHeader
+        icon={<User className="w-5 h-5 text-win" strokeWidth={2.5} />}
+        title="Profile"
+        subtitle={
+          <p className="truncate">
+            {profile?.email ||
+              user?.email ||
+              (isSupabaseConfigured ? 'Signed in' : 'Guest (local) — prefs stay on this device')}
           </p>
-        </div>
-        {user && (
-          <button
-            type="button"
-            onClick={() => void signOut()}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-gray-600/50 text-sm text-gray-300 hover:text-win"
-          >
-            <LogOut className="w-4 h-4" />
-            Log out
-          </button>
-        )}
-      </div>
+        }
+        action={
+          user ? (
+            <button
+              type="button"
+              onClick={() => void signOut()}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-gray-600/50 text-sm text-gray-300 hover:text-win"
+            >
+              <LogOut className="w-4 h-4" />
+              Log out
+            </button>
+          ) : undefined
+        }
+      />
 
       <section className="rounded-xl bg-gray-800/80 border border-gray-600/50 p-4">
         <div className="flex items-center justify-between gap-4">
@@ -337,32 +342,75 @@ export default function Profile() {
         )}
       </section>
 
-      {/* Community */}
+      {/* Community + destinations moved out of crowded bottom nav */}
       <section>
-        <h2 className="text-sm font-semibold text-white uppercase tracking-wide mb-3">Community</h2>
+        <h2 className="text-sm font-semibold text-white uppercase tracking-wide mb-3">
+          Community &amp; more
+        </h2>
         <ul className="rounded-xl bg-gray-800/80 border border-gray-600/50 divide-y divide-gray-600/50 overflow-hidden">
           <li>
             <Link
               to="/submit"
-              className="flex items-center gap-3 w-full text-left px-4 py-3 hover:bg-white/5 transition-colors"
+              className="flex items-center gap-3 w-full text-left px-4 py-3.5 hover:bg-white/5 transition-colors"
             >
               <PlusCircle className="w-5 h-5 text-win shrink-0" />
-              <div>
+              <div className="min-w-0 flex-1">
                 <p className="text-sm text-white font-medium">Submit a contest</p>
                 <p className="text-xs text-gray-500">Moderated — approved items join the Hive Mind feed</p>
               </div>
+              <ChevronRight className="w-4 h-4 text-gray-500 shrink-0" />
+            </Link>
+          </li>
+          <li>
+            <Link
+              to="/referrals"
+              className="flex items-center gap-3 w-full text-left px-4 py-3.5 hover:bg-white/5 transition-colors"
+            >
+              <Link2 className="w-5 h-5 text-gray-400 shrink-0" />
+              <div className="min-w-0 flex-1">
+                <p className="text-sm text-white font-medium">Referrals</p>
+                <p className="text-xs text-gray-500">Invite codes &amp; click pool</p>
+              </div>
+              <ChevronRight className="w-4 h-4 text-gray-500 shrink-0" />
+            </Link>
+          </li>
+          <li>
+            <Link
+              to="/winners"
+              className="flex items-center gap-3 w-full text-left px-4 py-3.5 hover:bg-white/5 transition-colors"
+            >
+              <Trophy className="w-5 h-5 text-gray-400 shrink-0" />
+              <div className="min-w-0 flex-1">
+                <p className="text-sm text-white font-medium">Winners</p>
+                <p className="text-xs text-gray-500">Community wins feed</p>
+              </div>
+              <ChevronRight className="w-4 h-4 text-gray-500 shrink-0" />
+            </Link>
+          </li>
+          <li>
+            <Link
+              to="/past"
+              className="flex items-center gap-3 w-full text-left px-4 py-3.5 hover:bg-white/5 transition-colors"
+            >
+              <Archive className="w-5 h-5 text-gray-400 shrink-0" />
+              <div className="min-w-0 flex-1">
+                <p className="text-sm text-white font-medium">Past (FOMO vault)</p>
+                <p className="text-xs text-gray-500">Expired contests on this device</p>
+              </div>
+              <ChevronRight className="w-4 h-4 text-gray-500 shrink-0" />
             </Link>
           </li>
           <li>
             <Link
               to="/moderate"
-              className="flex items-center gap-3 w-full text-left px-4 py-3 hover:bg-white/5 transition-colors"
+              className="flex items-center gap-3 w-full text-left px-4 py-3.5 hover:bg-white/5 transition-colors"
             >
               <Shield className="w-5 h-5 text-gray-400 shrink-0" />
-              <div>
+              <div className="min-w-0 flex-1">
                 <p className="text-sm text-white font-medium">Moderation queue</p>
                 <p className="text-xs text-gray-500">Mods / admins only</p>
               </div>
+              <ChevronRight className="w-4 h-4 text-gray-500 shrink-0" />
             </Link>
           </li>
         </ul>
