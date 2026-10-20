@@ -207,9 +207,9 @@ export default function Dashboard({ onOpenOverlay, onPressUrl, enteredIds: enter
       const next = enterNextQueueRef.current.find((c) => c.id !== contest.id)
       if (!next) return
       setTimeout(() => {
-        setStatusToast('Next up — opening next contest')
+        setStatusToast('Next up')
         void oneTapEnterRef.current(next)
-      }, 600)
+      }, 180)
     },
     [persistEntered, social]
   )
@@ -255,6 +255,16 @@ export default function Dashboard({ onOpenOverlay, onPressUrl, enteredIds: enter
   const oneTapEnter = useCallback(
     async (contest: Contest) => {
       if (!(await ensureAgeOk(contest))) return
+      const preferBrowser =
+        (await resolveFeedDisplayPrefs({ settings: profile?.settings })).openContestsIn ===
+        'browser'
+      if (!preferBrowser) {
+        // Native WebView Assassin is the least-friction fill surface
+        pendingAutoMarkRef.current = null
+        onOpenOverlay(contest)
+        setStatusToast('Opening contest — Auto-Fill, then Done marks entered')
+        return
+      }
       pendingAutoMarkRef.current = contest
       try {
         const url = await resolveContestUrl(
@@ -269,7 +279,7 @@ export default function Dashboard({ onOpenOverlay, onPressUrl, enteredIds: enter
         setStatusToast('Opened — marks entered when you return')
       }
     },
-    [onPressUrl, ensureAgeOk]
+    [onPressUrl, ensureAgeOk, onOpenOverlay, profile?.settings]
   )
   oneTapEnterRef.current = oneTapEnter
 
@@ -531,7 +541,7 @@ export default function Dashboard({ onOpenOverlay, onPressUrl, enteredIds: enter
                   {nextContest.title}
                 </Text>
                 <Text className="text-xs text-on-win/70 mt-1">
-                  Opens contest · marks entered when you return
+                  Open & Fill · Done marks entered
                   {autoAdvance ? ' · then auto-advances' : ''}
                 </Text>
               </TouchableOpacity>

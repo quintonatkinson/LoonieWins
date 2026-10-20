@@ -45,6 +45,7 @@ const AUTO_FILL_FIELDS: { key: keyof AutoFillData; label: string }[] = [
   { key: 'city', label: 'City' },
   { key: 'province', label: 'Province' },
   { key: 'postalCode', label: 'Postal Code' },
+  { key: 'dateOfBirth', label: 'Date of birth (YYYY-MM-DD)' },
 ]
 
 function getAutoFillValue(key: string, data: Partial<AutoFillData>): string {

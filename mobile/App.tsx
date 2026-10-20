@@ -68,6 +68,7 @@ function AppContent() {
       city: data.city,
       province: data.province,
       postalCode: data.postalCode,
+      dateOfBirth: data.dateOfBirth,
     }
   }, [profile])
 
