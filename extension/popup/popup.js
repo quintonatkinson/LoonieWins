@@ -65,8 +65,12 @@ document.getElementById('fill-btn').addEventListener('click', async () => {
     )
     return
   }
+  const walls = res.summary?.walls || []
+  const wallBit = walls.length
+    ? ` Needs your tap: ${walls.join(' / ')}.`
+    : ''
   setStatus(
-    `Matched ${n} field(s). Review before submit. ${h} skill-test field(s) highlighted.`,
+    `Review & submit — filled ${n} field(s).${h ? ` ${h} skill-test highlighted.` : ''}${wallBit}`,
     'ok',
   )
 })

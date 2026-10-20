@@ -19,8 +19,9 @@
     </header>
 
     <p class="honesty">
-      Best-effort match for name, email, address, phone. Review every field before
-      submit. Skill-tests are highlighted, not solved.
+      Aggressive best-effort fill for name, email, phone, address, postal, DOB.
+      Review every field, then submit yourself. Captcha / sign-in / purchase still
+      need your tap. Skill-tests are highlighted, not solved. Shortcut: Alt+Shift+L.
     </p>
 
     <p id="status" class="status" role="status"></p>
@@ -39,10 +40,11 @@
         <label>Province <input name="province" autocomplete="address-level1" /></label>
       </div>
       <label>Postal code <input name="postalCode" autocomplete="postal-code" /></label>
+      <label>Date of birth <input name="dateOfBirth" placeholder="YYYY-MM-DD" autocomplete="bday" /></label>
 
       <div class="actions">
         <button type="submit" class="primary">Save profile</button>
-        <button type="button" id="fill-btn" class="accent">Try fill this page</button>
+        <button type="button" id="fill-btn" class="accent">Fill active tab</button>
       </div>
       <div class="actions secondary">
         <button type="button" id="sync-tab-btn">Sync from LoonieWins tab</button>

@@ -22,159 +22,42 @@ chrome.runtime.onInstalled.addListener(() => {
 })
 
 /**
- * MAIN-world filler (inline — no module imports). Keep in sync with lib/fill.js.
- * @param {Record<string, string | undefined>} u
+ * In-page toast: “review & submit” after a successful fill (Alt+Shift+L / popup / menu).
+ * @param {number} tabId
+ * @param {string} message
  */
-function mainWorldFill(u) {
-  const summary = { filled: 0, highlighted: 0 }
+async function showPageToast(tabId, message) {
   try {
-    const HUMANIZE = (el) => {
-      if (!el || typeof el.dispatchEvent !== 'function') return
-      try {
-        el.dispatchEvent(new Event('focus', { bubbles: true }))
-      } catch (_) {}
-      try {
-        el.dispatchEvent(
-          new InputEvent('input', {
-            bubbles: true,
-            cancelable: true,
-            inputType: 'insertText',
-            data: el.value,
-          }),
-        )
-      } catch (_) {
+    await chrome.scripting.executeScript({
+      target: { tabId },
+      world: 'MAIN',
+      func: (msg) => {
         try {
-          el.dispatchEvent(new Event('input', { bubbles: true }))
+          const id = 'loonie-smartfill-toast'
+          const old = document.getElementById(id)
+          if (old) old.remove()
+          const el = document.createElement('div')
+          el.id = id
+          el.setAttribute('role', 'status')
+          el.textContent = msg
+          el.style.cssText =
+            'position:fixed;z-index:2147483647;left:50%;bottom:24px;transform:translateX(-50%);' +
+            'max-width:min(420px,92vw);padding:12px 16px;border-radius:12px;' +
+            'background:#0f172a;color:#ecfdf5;font:600 13px/1.35 system-ui,sans-serif;' +
+            'box-shadow:0 8px 28px rgba(0,0,0,.35);border:1px solid #2dd4bf;'
+          document.documentElement.appendChild(el)
+          setTimeout(() => {
+            try {
+              el.remove()
+            } catch (_) {}
+          }, 4500)
         } catch (_) {}
-      }
-      ;['change', 'blur'].forEach((ev) => {
-        try {
-          el.dispatchEvent(new Event(ev, { bubbles: true }))
-        } catch (_) {}
-      })
-    }
-    const setNativeValue = (el, val) => {
-      const proto =
-        el.tagName === 'TEXTAREA'
-          ? window.HTMLTextAreaElement.prototype
-          : window.HTMLInputElement.prototype
-      const desc = Object.getOwnPropertyDescriptor(proto, 'value')
-      if (desc && desc.set) desc.set.call(el, val)
-      else el.value = val
-    }
-    const fill = (el, val) => {
-      if (!val) return false
-      if (el.disabled || el.readOnly) return false
-      if (el.tagName === 'SELECT') {
-        const opts = Array.from(el.options || [])
-        const lower = String(val).toLowerCase()
-        const exact = opts.find(
-          (o) => (o.text || o.value || '').toLowerCase() === lower,
-        )
-        if (exact) {
-          el.value = exact.value
-          HUMANIZE(el)
-          return true
-        }
-        const partial = opts.find((o) =>
-          (o.value || o.text || '').toLowerCase().includes(lower),
-        )
-        if (partial) {
-          el.value = partial.value
-          HUMANIZE(el)
-          return true
-        }
-        return false
-      }
-      setNativeValue(el, val)
-      el.setAttribute('value', val)
-      HUMANIZE(el)
-      return true
-    }
-    const hay = (el) => {
-      const n = (el.name || '').toLowerCase()
-      const i = (el.id || '').toLowerCase()
-      const p = (el.placeholder || '').toLowerCase()
-      const a = ((el.getAttribute && el.getAttribute('aria-label')) || '').toLowerCase()
-      const auto = (el.autocomplete || '').toLowerCase()
-      let lbl = ''
-      try {
-        if (el.labels && el.labels[0]) lbl = (el.labels[0].textContent || '').toLowerCase()
-        else if (el.id) {
-          const by = document.querySelector(
-            'label[for="' + String(el.id).replace(/"/g, '') + '"]',
-          )
-          if (by) lbl = (by.textContent || '').toLowerCase()
-        }
-      } catch (_) {}
-      return [n, i, p, a, auto, lbl].join(' ')
-    }
-    const match = (el) => {
-      const s = hay(el)
-      const type = (el.type || '').toLowerCase()
-      if ((type === 'email' || /e-?mail/i.test(s)) && u.email) return fill(el, u.email)
-      if (/(first.*name|fname|given-name)/i.test(s) && u.first_name)
-        return fill(el, u.first_name)
-      if (/(last.*name|lname|family-name|surname)/i.test(s) && u.last_name)
-        return fill(el, u.last_name)
-      if (/(full.?name|your.?name|display.?name)/i.test(s) && u.name) return fill(el, u.name)
-      if (/(^|[\s_-])name([\s_-]|$)/i.test(s) && !/user.?name|company|org|file/i.test(s)) {
-        if (u.name) return fill(el, u.name)
-        if (u.first_name) return fill(el, u.first_name)
-      }
-      if (/(address|street|addr1|address-line1)/i.test(s) && u.address)
-        return fill(el, u.address)
-      if (/(city|town|locality)/i.test(s) && u.city) return fill(el, u.city)
-      if (/(province|state|region)/i.test(s) && u.province) return fill(el, u.province)
-      if (/(postal|zip|post.?code)/i.test(s) && u.postal_code) return fill(el, u.postal_code)
-      if (/(phone|mobile|tel)/i.test(s) && u.phone) return fill(el, u.phone)
-      return false
-    }
-    const runOnce = () => {
-      document.querySelectorAll('input,select,textarea').forEach((el) => {
-        const type = (el.type || '').toLowerCase()
-        if (
-          type === 'hidden' ||
-          type === 'submit' ||
-          type === 'button' ||
-          type === 'checkbox' ||
-          type === 'radio' ||
-          type === 'file' ||
-          type === 'password' ||
-          type === 'image'
-        ) {
-          return
-        }
-        if (match(el)) summary.filled += 1
-      })
-      const pink = '#FF10F0'
-      document.querySelectorAll('label').forEach((lbl) => {
-        const t = (lbl.textContent || '').toLowerCase()
-        if (
-          /\b(math|skill testing|equation|answer correctly)\b/i.test(t) ||
-          /\d+\s*[+\-*/]\s*\d+/.test(lbl.textContent || '')
-        ) {
-          const forId = lbl.getAttribute('for')
-          const target = forId
-            ? document.getElementById(forId)
-            : lbl.querySelector('input,select,textarea')
-          if (target && !target.dataset.loonieSkillHi) {
-            target.style.border = '2px solid ' + pink
-            target.style.boxShadow = '0 0 8px ' + pink
-            target.dataset.loonieSkillHi = '1'
-            summary.highlighted += 1
-          }
-        }
-      })
-    }
-    runOnce()
-    ;[600, 1800, 3500].forEach((ms) => {
-      try {
-        setTimeout(runOnce, ms)
-      } catch (_) {}
+      },
+      args: [message],
     })
-  } catch (_) {}
-  return summary
+  } catch {
+    /* restricted URL / no host permission yet */
+  }
 }
 
 /**
@@ -190,13 +73,14 @@ async function fillActiveTab(tabId) {
   }
 
   const payload = toFillPayload(settings.profile)
-  let summary = { filled: 0, highlighted: 0 }
+  let summary = { filled: 0, highlighted: 0, requiredEmpty: 0, walls: [] }
 
   try {
+    // Serialize fillFormWithProfile into MAIN world (React-controlled inputs).
     const mainResults = await chrome.scripting.executeScript({
       target: { tabId, allFrames: true },
       world: 'MAIN',
-      func: mainWorldFill,
+      func: fillFormWithProfile,
       args: [payload],
     })
     summary = aggregateFillResults(mainResults)
@@ -211,7 +95,6 @@ async function fillActiveTab(tabId) {
     }
   }
 
-  // Isolated fallback if MAIN found nothing (some frames block MAIN injection)
   if (!summary.filled) {
     try {
       const isoResults = await chrome.scripting.executeScript({
@@ -232,20 +115,27 @@ async function fillActiveTab(tabId) {
       empty: true,
       summary,
       reason:
-        'No matching fields on this page. Try again after the form loads, or paste from Open & Enter copy chips.',
+        'No matching fields on this page. Try again after the form loads, or paste from Open & Fill checklist chips.',
     }
   }
 
   return { ok: true, summary }
 }
 
+function wallHonesty(walls) {
+  if (!walls?.length) return ''
+  const map = { captcha: 'captcha', 'sign-in': 'sign-in', purchase: 'purchase' }
+  const parts = walls.map((w) => map[w] || w)
+  return ` Needs your tap: ${parts.join(' / ')}.`
+}
+
 async function notifyFillResult(tabId, res) {
   try {
     const n = res.summary?.filled ?? 0
-    const title = res.ok && !res.empty ? 'LoonieWins Smart-Fill' : 'LoonieWins Smart-Fill'
+    const walls = res.summary?.walls || []
     const message =
       res.ok && !res.empty
-        ? `Matched ${n} field(s). Review before submit.`
+        ? `Review & submit — filled ${n} field(s).${wallHonesty(walls)}`
         : res.reason || 'No matching fields.'
     await chrome.action.setBadgeText({ tabId, text: n > 0 ? String(n) : '!' })
     await chrome.action.setBadgeBackgroundColor({
@@ -255,8 +145,9 @@ async function notifyFillResult(tabId, res) {
     setTimeout(() => {
       void chrome.action.setBadgeText({ tabId, text: '' })
     }, 4000)
-    void title
-    void message
+    if (res.ok && !res.empty) {
+      await showPageToast(tabId, message)
+    }
   } catch {
     /* ignore */
   }
@@ -293,7 +184,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           sendResponse({ ok: false, reason: 'No active tab.' })
           return
         }
-        sendResponse(await fillActiveTab(tab.id))
+        const res = await fillActiveTab(tab.id)
+        await notifyFillResult(tab.id, res)
+        sendResponse(res)
         return
       }
 
@@ -330,6 +223,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           refreshToken: message.refreshToken || '',
         })
         sendResponse({ ok: true })
+        return
+      }
+
+      if (message?.type === 'PING_EXT') {
+        sendResponse({ ok: true, loonieExt: true })
         return
       }
 

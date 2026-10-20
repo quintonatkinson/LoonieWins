@@ -15,6 +15,7 @@ export const ENTERED_STORAGE_KEY = 'looniewins_entered'
  *   city?: string
  *   province?: string
  *   postalCode?: string
+ *   dateOfBirth?: string
  * }} AutoFillData */
 
 /** @type {AutoFillData} */
@@ -28,6 +29,7 @@ export const EMPTY_PROFILE = {
   city: '',
   province: '',
   postalCode: '',
+  dateOfBirth: '',
 }
 
 /**
@@ -57,6 +59,7 @@ export function normalizeProfile(raw) {
     city: String(data.city ?? '').trim(),
     province: String(data.province ?? '').trim(),
     postalCode: String(data.postalCode ?? '').trim(),
+    dateOfBirth: String(data.dateOfBirth ?? '').trim(),
   }
 }
 
@@ -93,5 +96,6 @@ export function toFillPayload(data) {
     province: p.province || undefined,
     postal_code: p.postalCode || undefined,
     phone: p.phone || undefined,
+    dob: p.dateOfBirth || undefined,
   }
 }

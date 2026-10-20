@@ -283,10 +283,11 @@ export default function Dashboard() {
       const queue = enterNextQueueRef.current
       const next = queue.find((c) => c.id !== contest.id)
       if (!next) return
+      // Immediate thumb path — minimize delay after mark entered
       window.setTimeout(() => {
-        setStatusToast('Next up — opening next contest')
+        setStatusToast('Next up')
         void oneTapEnterRef.current(next)
-      }, 600)
+      }, 180)
     },
     [persistEntered, social]
   )
@@ -364,11 +365,18 @@ export default function Dashboard() {
   }, [])
 
   /**
-   * One-tap Enter: open contest URL and auto-mark when the user returns.
-   * Must honor the same free weekly cap + prize-tier pts gate as ContestCard
-   * (Enter next previously bypassed the paywall).
+   * One-tap Enter: open best fill surface (ContestBrowser → Capgo / Open & Fill).
+   * System-browser preference still opens the raw URL + return auto-mark.
    */
   const openOneTapUrl = useCallback(async (contest: Contest) => {
+    const preferBrowser =
+      resolveFeedDisplayPrefs({ settings: profile?.settings }).openContestsIn === 'browser'
+    if (!preferBrowser) {
+      pendingAutoMarkRef.current = null
+      setOverlayContest(contest)
+      setStatusToast('Open & Fill — inject or paste, then I’m done')
+      return
+    }
     pendingAutoMarkRef.current = contest
     skipAutoMarkOnceRef.current = true
     try {
@@ -380,7 +388,7 @@ export default function Dashboard() {
       if (!win) {
         pendingAutoMarkRef.current = null
         setOverlayContest(contest)
-        setStatusToast('Popup blocked — use Open & Enter in the sheet')
+        setStatusToast('Popup blocked — use Open & Fill in the sheet')
         return
       }
       setStatusToast('Opened — will mark entered when you return')
@@ -389,7 +397,7 @@ export default function Dashboard() {
       window.open(contest.url, '_blank', 'noopener,noreferrer')
       setStatusToast('Opened — will mark entered when you return')
     }
-  }, [])
+  }, [profile?.settings])
 
   const oneTapEnter = useCallback(
     async (contest: Contest) => {
@@ -890,7 +898,7 @@ export default function Dashboard() {
                   ? 'Weekly free entries used — earn pts or upgrade to Pro'
                   : nextNeedsPts
                     ? 'Weekly free entries used — prize-tier pts unlock this enter'
-                    : `Opens contest · marks entered when you return${
+                    : `Open & Fill · I’m done marks entered${
                         autoAdvance ? ' · then auto-advances' : ''
                       }`}
               </span>

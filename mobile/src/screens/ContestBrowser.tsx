@@ -14,6 +14,7 @@ import {
   getInjectionScript,
   profileHasAutofill,
   type AutofillReport,
+  type AutofillWall,
 } from '../lib/autofill/assassin'
 import { useTheme } from '../contexts/ThemeContext'
 import type { AutoFillData } from '../types/profile'
@@ -29,6 +30,8 @@ interface ContestBrowserProps {
     status?: 'entered' | 'submitted'
   ) => void | Promise<unknown>
   onAutoFillUsed?: () => void
+  /** When true, Close auto-marks entered (Daily Routine thumb path). Default true when mark handler present. */
+  autoMarkOnClose?: boolean
 }
 
 const DEFAULT_AUTOFILL: AutoFillData = {}
@@ -46,7 +49,6 @@ function decodeTitle(title: string): string {
 
 async function copyText(value: string): Promise<boolean> {
   try {
-    // Prefer Share sheet (works without extra clipboard deps on Expo).
     await Share.share(
       Platform.OS === 'ios'
         ? { message: value }
@@ -56,6 +58,11 @@ async function copyText(value: string): Promise<boolean> {
   } catch {
     return false
   }
+}
+
+function wallLine(walls?: AutofillWall[]): string | null {
+  if (!walls?.length) return null
+  return `Needs your tap: ${walls.join(' / ')}`
 }
 
 function CheatSheetBar({ autoFillData }: { autoFillData: AutoFillData }) {
@@ -80,6 +87,7 @@ function CheatSheetBar({ autoFillData }: { autoFillData: AutoFillData }) {
       { label: 'City', value: autoFillData.city ?? '' },
       { label: 'Prov', value: autoFillData.province ?? '' },
       { label: 'Postal', value: autoFillData.postalCode ?? '' },
+      { label: 'DOB', value: autoFillData.dateOfBirth ?? '' },
     ].filter((c) => c.value.trim().length > 0)
   }, [autoFillData])
 
@@ -143,20 +151,26 @@ function statusCopy(report: AutofillReport | null, hasProfile: boolean): {
     }
   }
   if (!report) return null
+  const wall = wallLine(report.walls)
   switch (report.status) {
-    case 'filled':
+    case 'filled': {
+      const empty =
+        report.requiredEmpty && report.requiredEmpty > 0
+          ? ` ${report.requiredEmpty} required still empty (highlighted).`
+          : ''
       return {
-        text: `Autofill injected (${report.filled} field${report.filled === 1 ? '' : 's'}). Check values, finish any math questions, then mark entered.`,
+        text: `Autofill injected (${report.filled} field${report.filled === 1 ? '' : 's'}).${empty} Check values, finish math, then confirm submit.${wall ? ` ${wall}` : ''}`,
         tone: 'ok',
       }
+    }
     case 'no_fields':
       return {
-        text: 'No form fields found yet — wait for the page, tap Auto-Fill, or use copy chips.',
+        text: `No form fields found yet — wait for the page, tap Auto-Fill, or use copy chips.${wall ? ` ${wall}` : ''}`,
         tone: 'warn',
       }
     case 'no_match':
       return {
-        text: 'Form found but fields didn’t match your profile. Use copy chips to paste.',
+        text: `Form found but fields didn’t match your profile. Use copy chips to paste.${wall ? ` ${wall}` : ''}`,
         tone: 'warn',
       }
     case 'empty_profile':
@@ -181,6 +195,7 @@ export default function ContestBrowser({
   autoFillData = DEFAULT_AUTOFILL,
   onMarkEntered,
   onAutoFillUsed,
+  autoMarkOnClose = true,
 }: ContestBrowserProps) {
   const { accentColor } = useTheme()
   const webRef = useRef<WebView>(null)
@@ -195,6 +210,7 @@ export default function ContestBrowser({
   const hasProfile = profileHasAutofill(autoFillData)
   const script = useMemo(() => getInjectionScript(autoFillData), [autoFillData])
   const banner = statusCopy(report, hasProfile)
+  const honesty = wallLine(report?.walls)
 
   const reinject = useCallback(() => {
     if (!hasProfile) {
@@ -217,7 +233,8 @@ export default function ContestBrowser({
         const data = JSON.parse(event.nativeEvent.data) as AutofillReport
         if (data?.type !== 'loonie_autofill') return
         setReport(data)
-        if (data.status === 'filled' && !usedFillRef.current) {
+        // Never burn Smart-Fill unless fill likely succeeded
+        if (data.status === 'filled' && (data.filled ?? 0) > 0 && !usedFillRef.current) {
           usedFillRef.current = true
           onAutoFillUsed?.()
         }
@@ -237,19 +254,25 @@ export default function ContestBrowser({
       await onMarkEntered(contest, status)
       setPendingMark(false)
       setStatusMsg(status === 'submitted' ? 'Marked as submitted' : 'Marked as entered')
-      setTimeout(() => onClose(), 400)
+      setTimeout(() => onClose(), 300)
     },
     [contest, onMarkEntered, onClose]
   )
 
   const requestClose = useCallback(() => {
+    if (onMarkEntered && contest && autoMarkOnClose && !closing) {
+      // Thumb path: close ≈ done → auto-mark entered (with brief undo via cancel before timeout)
+      setClosing(true)
+      void confirmMark('entered')
+      return
+    }
     if (onMarkEntered && contest && !closing) {
       setClosing(true)
       setPendingMark(true)
       return
     }
     onClose()
-  }, [onMarkEntered, contest, closing, onClose])
+  }, [onMarkEntered, contest, closing, onClose, autoMarkOnClose, confirmMark])
 
   const dismissPendingAndClose = useCallback(() => {
     setPendingMark(false)
@@ -263,7 +286,7 @@ export default function ContestBrowser({
       <View className="flex-1 bg-gray-900">
         <View className="flex-row items-center justify-between px-3 py-3 border-b border-gray-700/50 bg-surface gap-2">
           <TouchableOpacity onPress={requestClose} className="px-3 py-2" activeOpacity={0.7}>
-            <Text className="text-win font-semibold">Close</Text>
+            <Text className="text-win font-semibold">Done</Text>
           </TouchableOpacity>
           <View className="flex-1 min-w-0">
             <Text className="text-gray-100 text-sm font-medium" numberOfLines={1}>
@@ -282,7 +305,7 @@ export default function ContestBrowser({
           </TouchableOpacity>
         </View>
 
-        {(banner || loadError) && (
+        {(banner || loadError || honesty) && (
           <View
             className={`px-3 py-2 border-b border-gray-700/40 ${
               (loadError ? 'err' : banner?.tone) === 'ok'
@@ -305,6 +328,9 @@ export default function ContestBrowser({
                 ? `Page failed to load. Open externally if needed, then mark entered.`
                 : banner?.text}
             </Text>
+            {honesty && !loadError && (
+              <Text className="text-xs text-amber-200 mt-1">{honesty}</Text>
+            )}
           </View>
         )}
 
@@ -325,7 +351,6 @@ export default function ContestBrowser({
             }}
             onLoadEnd={() => {
               setLoading(false)
-              // Re-run after load for SPA shells that mount forms late
               setTimeout(() => reinject(), 400)
             }}
             onError={(e) => {
@@ -357,23 +382,16 @@ export default function ContestBrowser({
         <View className="px-3 py-3 border-t border-gray-700/50 bg-surface gap-2">
           {pendingMark && onMarkEntered && contest && (
             <View className="rounded-xl bg-win/15 border border-win/40 p-3 gap-2">
-              <Text className="text-sm text-white font-medium">Did you finish entering?</Text>
-              <View className="flex-row gap-2">
-                <TouchableOpacity
-                  onPress={() => void confirmMark('entered')}
-                  className="flex-1 py-2.5 rounded-lg bg-win items-center"
-                  activeOpacity={0.85}
-                >
-                  <Text className="text-on-win font-semibold text-sm">Yes — Mark Entered</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  onPress={() => void confirmMark('submitted')}
-                  className="flex-1 py-2.5 rounded-lg border border-win/40 items-center"
-                  activeOpacity={0.85}
-                >
-                  <Text className="text-win font-medium text-sm">Submitted</Text>
-                </TouchableOpacity>
-              </View>
+              <Text className="text-sm text-white font-medium">Finished entering?</Text>
+              <TouchableOpacity
+                onPress={() => void confirmMark('entered')}
+                className="py-3 rounded-lg bg-win items-center"
+                activeOpacity={0.85}
+              >
+                <Text className="text-on-win font-semibold text-sm">
+                  I'm done — mark entered
+                </Text>
+              </TouchableOpacity>
               <TouchableOpacity onPress={dismissPendingAndClose} className="py-1 items-center">
                 <Text className="text-xs text-white/50">Not yet — close anyway</Text>
               </TouchableOpacity>
@@ -381,22 +399,16 @@ export default function ContestBrowser({
           )}
 
           {!pendingMark && onMarkEntered && contest && (
-            <View className="flex-row gap-2">
-              <TouchableOpacity
-                onPress={() => void confirmMark('entered')}
-                className="flex-1 py-2.5 rounded-lg bg-win items-center"
-                activeOpacity={0.85}
-              >
-                <Text className="text-on-win font-semibold text-sm">Mark Entered</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                onPress={() => void confirmMark('submitted')}
-                className="flex-1 py-2.5 rounded-lg border border-gray-600/50 items-center"
-                activeOpacity={0.85}
-              >
-                <Text className="text-win font-medium text-sm">Mark Submitted</Text>
-              </TouchableOpacity>
-            </View>
+            <TouchableOpacity
+              onPress={() => void confirmMark('entered')}
+              className="py-3 rounded-lg bg-win items-center"
+              activeOpacity={0.85}
+              testID="im-done-mark-entered"
+            >
+              <Text className="text-on-win font-semibold text-sm">
+                I'm done — mark entered
+              </Text>
+            </TouchableOpacity>
           )}
 
           {statusMsg && (
@@ -406,8 +418,8 @@ export default function ContestBrowser({
           )}
 
           <Text className="text-[10px] text-gray-500">
-            Native WebView fills the real contest page (not a blocked iframe). Math /
-            skill-test answers still need you.
+            Native WebView fills the real contest page. We never auto-submit or solve captchas —
+            you confirm the last tap.
           </Text>
         </View>
       </View>

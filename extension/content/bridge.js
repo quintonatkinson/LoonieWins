@@ -61,6 +61,15 @@
     }
   }
 
+  // Let the web app detect the extension and hand off Open & Fill.
+  try {
+    window.__LOONIEWINS_EXT__ = true
+    document.documentElement.dataset.loonieExt = '1'
+    window.dispatchEvent(new CustomEvent('loonie_ext_ready'))
+  } catch {
+    /* ignore */
+  }
+
   push()
   window.addEventListener('loonie_autofill_updated', push)
   window.addEventListener('storage', (ev) => {
