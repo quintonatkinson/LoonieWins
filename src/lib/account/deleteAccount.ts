@@ -17,6 +17,7 @@ export const WEB_LOCAL_DATA_KEYS = [
   'looniewins_geo_filter',
   'looniewins_quebec_safe',
   'looniewins_home_mode',
+  'looniewins_inbox_shield',
 ] as const
 
 export interface DeleteAccountResult {

@@ -8,6 +8,7 @@ import CountryToggle from '../components/CountryToggle'
 import RadarLoader from '../components/RadarLoader'
 import FeedWarmupSkeleton from '../components/FeedWarmupSkeleton'
 import SubscriptionModal from '../components/SubscriptionModal'
+import InboxShieldConsentModal from '../components/InboxShieldConsentModal'
 import { useContestPipeline } from '../hooks/useContestPipeline'
 import { useContestEntries } from '../hooks/useContestEntries'
 import { useUserLimits } from '../hooks/useUserLimits'
@@ -50,6 +51,13 @@ import {
   type CardDensity,
   type SortDefault,
 } from '../lib/utils/userSettings'
+import {
+  applyConsentChoice,
+  hasInboxShieldConsentDecision,
+  loadInboxShieldPrefs,
+  prefsToProfilePatch,
+  saveInboxShieldPrefs,
+} from '../lib/inboxShield/storage'
 
 type SortFilter = SortDefault
 
@@ -170,6 +178,8 @@ export default function Dashboard() {
   const [hiveResults, setHiveResults] = useState<Contest[]>([])
   const [hiveSearching, setHiveSearching] = useState(false)
   const [statusToast, setStatusToast] = useState<string | null>(null)
+  const [showInboxShieldConsent, setShowInboxShieldConsent] = useState(false)
+  const pendingInboxShieldEnterRef = useRef<Contest | null>(null)
   const pendingAutoMarkRef = useRef<Contest | null>(null)
   const skipAutoMarkOnceRef = useRef(false)
   const enterNextQueueRef = useRef<Contest[]>([])
@@ -364,6 +374,32 @@ export default function Dashboard() {
     saveHomeMode(mode)
   }, [])
 
+  const resolveEntryEmail = useCallback(() => {
+    const shield = loadInboxShieldPrefs()
+    return (
+      shield.entry_email_for_giveaways?.trim() ||
+      profile?.auto_fill_data?.email?.trim() ||
+      localAutoFill.email?.trim() ||
+      profile?.email?.trim() ||
+      ''
+    )
+  }, [profile, localAutoFill.email])
+
+  const handleInboxShieldConsent = useCallback(
+    async (choice: 'local' | 'skipped' | 'gmail_wishlist', email: string) => {
+      const next = applyConsentChoice(choice, email || resolveEntryEmail())
+      saveInboxShieldPrefs(next)
+      await updateProfile(prefsToProfilePatch(next) as Parameters<typeof updateProfile>[0])
+      setShowInboxShieldConsent(false)
+      const pending = pendingInboxShieldEnterRef.current
+      pendingInboxShieldEnterRef.current = null
+      if (pending) {
+        await oneTapEnterRef.current(pending)
+      }
+    },
+    [resolveEntryEmail, updateProfile]
+  )
+
   /**
    * One-tap Enter: open best fill surface (ContestBrowser → Capgo / Open & Fill).
    * System-browser preference still opens the raw URL + return auto-mark.
@@ -402,6 +438,12 @@ export default function Dashboard() {
   const oneTapEnter = useCallback(
     async (contest: Contest) => {
       if (contest.id === '__offline_alert__') return
+
+      if (!hasInboxShieldConsentDecision() && !resolveEntryEmail()) {
+        pendingInboxShieldEnterRef.current = contest
+        setShowInboxShieldConsent(true)
+        return
+      }
 
       if (hasUnlimitedEntries) {
         await openOneTapUrl(contest)
@@ -442,6 +484,7 @@ export default function Dashboard() {
       useFreeEntry,
       openOneTapUrl,
       navigate,
+      resolveEntryEmail,
     ]
   )
   oneTapEnterRef.current = oneTapEnter
@@ -1262,6 +1305,16 @@ export default function Dashboard() {
           setShowRailsPaywall(false)
         }}
         showComparison
+      />
+
+      <InboxShieldConsentModal
+        open={showInboxShieldConsent}
+        suggestedEmail={resolveEntryEmail()}
+        onClose={() => {
+          setShowInboxShieldConsent(false)
+          pendingInboxShieldEnterRef.current = null
+        }}
+        onChoose={(choice, email) => void handleInboxShieldConsent(choice, email)}
       />
     </div>
   )

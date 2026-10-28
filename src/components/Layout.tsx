@@ -12,6 +12,7 @@ import {
   PlusCircle,
   Link2,
   X,
+  ShieldCheck,
 } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { isSupabaseConfigured } from '../lib/supabase'
@@ -34,6 +35,12 @@ const HISTORY_DESTINATIONS = [
     label: 'Past contests',
     hint: 'FOMO vault — expired Hive Mind drops',
     icon: Package,
+  },
+  {
+    path: '/inbox-shield',
+    label: 'Inbox Shield',
+    hint: 'Wins & promos sorted — Gmail sync soon',
+    icon: ShieldCheck,
   },
 ] as const
 
@@ -86,7 +93,9 @@ export default function Layout({ children }: { children?: React.ReactNode }) {
   })()
 
   const onHistoryRoute =
-    location.pathname === '/winners' || location.pathname === '/past'
+    location.pathname === '/winners' ||
+    location.pathname === '/past' ||
+    location.pathname === '/inbox-shield'
   const onMoreRoute =
     location.pathname === '/submit' || location.pathname === '/referrals'
 
