@@ -64,7 +64,7 @@ export default function SubscriptionModal({
     <>
       <div className="fixed inset-0 bg-black/60 z-40 backdrop-blur-sm" onClick={onClose} aria-hidden />
       <div
-        className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-50 w-full max-w-sm max-h-[90vh] overflow-y-auto rounded-2xl glass border border-gray-600/50 p-6 shadow-xl"
+        className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-50 w-[min(100vw-1rem,24rem)] max-h-[min(90dvh,calc(100dvh-2rem))] overflow-y-auto rounded-2xl glass border border-gray-600/50 p-6 shadow-xl mx-2"
         role="dialog"
         aria-modal
         aria-labelledby="subscription-title"
@@ -74,7 +74,7 @@ export default function SubscriptionModal({
         </h2>
         <p className="text-sm text-gray-400 mt-2 mb-4">
           Free still browses and enters with weekly caps + points. Pro is a weekly or monthly
-          subscription — not a one-time buy. Cancel anytime in the store.
+          subscription on the web (when billing is enabled). Cancel anytime from Profile.
         </p>
 
         {/* Scannable list of everything locked behind Pro */}

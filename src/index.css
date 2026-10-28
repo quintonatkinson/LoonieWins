@@ -15,10 +15,30 @@
   --color-on-win: 17 24 39;
   --accent-earn: #FFD700;
   --color-earn: 255 215 0;
+  --app-safe-top: env(safe-area-inset-top, 0px);
+  --app-safe-right: env(safe-area-inset-right, 0px);
+  --app-safe-bottom: env(safe-area-inset-bottom, 0px);
+  --app-safe-left: env(safe-area-inset-left, 0px);
+}
+
+html {
+  overflow-x: hidden;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
 }
 
 body {
   @apply bg-gray-900 text-gray-50 antialiased font-sans;
+  min-height: 100dvh;
+  overflow-x: hidden;
+  padding-left: var(--app-safe-left);
+  padding-right: var(--app-safe-right);
+}
+
+/* Minimum touch target helper (44×44 CSS px — Apple HIG) */
+.touch-target {
+  min-height: 44px;
+  min-width: 44px;
 }
 
 /* Glass / card panel (gray-800 = #1f2937) */

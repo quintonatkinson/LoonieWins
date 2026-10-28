@@ -69,7 +69,7 @@ export default function NotificationPreferences() {
     setMsg(
       user
         ? 'Saved.'
-        : 'Saved on this device. Sign in to sync to your account; push delivery is on the Expo app.'
+        : 'Saved on this device. Sign in to sync prefs to your account.'
     )
   }
 
@@ -82,8 +82,8 @@ export default function NotificationPreferences() {
         </h2>
       </div>
       <p className="text-xs text-gray-500">
-        Alerts deliver on the Expo mobile app. Web saves preferences on this device
-        (and to your account when signed in). Browser Web Push is not enabled yet.
+        On the web, contest push alerts are not delivered yet — weekly digest email and saved prefs
+        still work here. Optional install-to-home-screen keeps everything in your browser.
         {!user && (
           <span className="block mt-1 text-amber-400/80">
             Guest mode: prefs stick on this device until you sign in.

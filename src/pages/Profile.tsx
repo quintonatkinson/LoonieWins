@@ -189,6 +189,19 @@ export default function Profile() {
         )}
       </div>
 
+      <section
+        className="rounded-xl border border-win/25 bg-win/5 px-4 py-3"
+        aria-label="About LoonieWins"
+        data-testid="web-first-about"
+      >
+        <p className="text-sm font-medium text-gray-100">Online in your browser</p>
+        <p className="text-xs text-gray-400 mt-1 leading-relaxed">
+          LoonieWins is built for the web first — open the site on your phone or computer, sign in
+          once, and enter contests from here. You can add it to your home screen for a full-screen
+          shortcut; a separate native app is optional and documented for contributors only.
+        </p>
+      </section>
+
       <section className="rounded-xl bg-gray-800/80 border border-gray-600/50 p-4">
         <div className="flex items-center justify-between gap-4">
           <div>
@@ -524,7 +537,7 @@ export default function Profile() {
               <FileText className="w-5 h-5 text-gray-400 shrink-0" />
               <div>
                 <p className="text-sm font-medium text-white">Deletion help page</p>
-                <p className="text-xs text-gray-500">Store listing / external URL</p>
+                <p className="text-xs text-gray-500">Account wipe instructions (legal URL)</p>
               </div>
             </Link>
           </li>
