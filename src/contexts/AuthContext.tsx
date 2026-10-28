@@ -39,6 +39,10 @@ export interface UserProfile {
   iap_product_id: string | null
   iap_expires_at: string | null
   feature_flags: FeatureFlags
+  inbox_shield_enabled: boolean
+  entry_email_for_giveaways: string | null
+  inbox_shield_consent_at: string | null
+  inbox_shield_mode: 'none' | 'local' | 'gmail'
 }
 
 interface AuthContextValue {
@@ -88,6 +92,15 @@ function mapProfile(row: Record<string, unknown>): UserProfile {
     iap_product_id: (row.iap_product_id as string | null) ?? null,
     iap_expires_at: (row.iap_expires_at as string | null) ?? null,
     feature_flags: (row.feature_flags as FeatureFlags) ?? {},
+    inbox_shield_enabled: Boolean(row.inbox_shield_enabled),
+    entry_email_for_giveaways: (row.entry_email_for_giveaways as string | null) ?? null,
+    inbox_shield_consent_at: (row.inbox_shield_consent_at as string | null) ?? null,
+    inbox_shield_mode:
+      row.inbox_shield_mode === 'local' ||
+      row.inbox_shield_mode === 'gmail' ||
+      row.inbox_shield_mode === 'none'
+        ? row.inbox_shield_mode
+        : 'none',
   }
 }
 
@@ -182,6 +195,10 @@ function guestProfile(): UserProfile {
     iap_product_id: local.iap_product_id ?? null,
     iap_expires_at: local.iap_expires_at ?? null,
     feature_flags: local.feature_flags ?? {},
+    inbox_shield_enabled: local.inbox_shield_enabled ?? false,
+    entry_email_for_giveaways: local.entry_email_for_giveaways ?? null,
+    inbox_shield_consent_at: local.inbox_shield_consent_at ?? null,
+    inbox_shield_mode: local.inbox_shield_mode ?? 'none',
   }
 }
 
@@ -383,6 +400,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (patch.iap_product_id !== undefined) payload.iap_product_id = patch.iap_product_id
       if (patch.iap_expires_at !== undefined) payload.iap_expires_at = patch.iap_expires_at
       if (patch.feature_flags !== undefined) payload.feature_flags = patch.feature_flags
+      if (patch.inbox_shield_enabled !== undefined)
+        payload.inbox_shield_enabled = patch.inbox_shield_enabled
+      if (patch.entry_email_for_giveaways !== undefined)
+        payload.entry_email_for_giveaways = patch.entry_email_for_giveaways
+      if (patch.inbox_shield_consent_at !== undefined)
+        payload.inbox_shield_consent_at = patch.inbox_shield_consent_at
+      if (patch.inbox_shield_mode !== undefined) payload.inbox_shield_mode = patch.inbox_shield_mode
 
       const { data, error } = await supabase
         .from('profiles')

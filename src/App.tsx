@@ -11,6 +11,7 @@ import Winners from './pages/Winners'
 import PastContests from './pages/PastContests'
 import MyGiveaways from './pages/MyGiveaways'
 import Profile from './pages/Profile'
+import InboxShield from './pages/InboxShield'
 import Privacy from './pages/Privacy'
 import Terms from './pages/Terms'
 import Support from './pages/Support'
@@ -34,6 +35,7 @@ function MainAppRoutes() {
             <Route path="/past" element={<PastContests />} />
             <Route path="/my-giveaways" element={<MyGiveaways />} />
             <Route path="/profile" element={<Profile />} />
+            <Route path="/inbox-shield" element={<InboxShield />} />
             {/* Settings live on Profile (Appearance / Notifications / Preferences). */}
             <Route path="/settings" element={<Navigate to="/profile" replace />} />
             <Route path="/submit" element={<SubmitContest />} />

@@ -18,6 +18,7 @@ import {
   History,
   Award,
   Package,
+  ShieldCheck,
 } from 'lucide-react'
 import { useUserEarn } from '../contexts/UserEarnContext'
 import { useAuth } from '../contexts/AuthContext'
@@ -341,6 +342,28 @@ export default function Profile() {
             {saveMsg && <p className="text-sm text-red-400">{saveMsg}</p>}
           </div>
         )}
+      </section>
+
+      <section>
+        <div className="flex items-center gap-2 mb-3">
+          <ShieldCheck className="w-5 h-5 text-win" />
+          <h2 className="text-sm font-semibold text-white uppercase tracking-wide">
+            Inbox Shield
+          </h2>
+        </div>
+        <Link
+          to="/inbox-shield"
+          className="flex items-center gap-3 rounded-xl border border-gray-600/50 bg-gray-800/60 px-4 py-3 hover:bg-gray-800 transition-colors"
+          data-testid="profile-inbox-shield-link"
+        >
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-medium text-white">Email permission &amp; sorted tabs</p>
+            <p className="text-xs text-gray-400 mt-0.5">
+              Wins &amp; confirmations · Promotions · Likely spam (preview until Gmail connects)
+            </p>
+          </div>
+          <ChevronRight className="w-5 h-5 text-win shrink-0" />
+        </Link>
       </section>
 
       {/* History — also in bottom-nav History sheet */}
