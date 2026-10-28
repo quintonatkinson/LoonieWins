@@ -19,7 +19,7 @@ export default function PageShell({
   return (
     <div
       data-testid={testId}
-      className={`w-full mx-auto px-4 pt-4 pb-28 ${
+      className={`w-full mx-auto px-4 pt-4 pb-[calc(7rem+var(--app-safe-bottom))] overflow-x-hidden ${
         wide ? 'max-w-3xl' : 'max-w-2xl'
       } ${className}`}
     >

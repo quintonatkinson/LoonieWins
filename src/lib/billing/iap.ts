@@ -56,12 +56,12 @@ export function allowIapStub(): boolean {
 
 export function billingStatusNotice(): string {
   if (isIapConfigured()) {
-    return 'Native builds charge via App Store / Play (RevenueCat). Web uses the same product IDs for restore UX.'
+    return 'Pro billing on the web uses the same product IDs as optional native builds (RevenueCat when enabled).'
   }
   if (allowIapStub()) {
-    return 'Dev stub: Pro unlocks locally. Ship the Expo app with RevenueCat public SDK keys to charge for real.'
+    return 'Dev stub: Pro unlocks locally in this browser session. Production web billing ships separately from optional native apps.'
   }
-  return 'In-app purchase requires the iOS/Android app with RevenueCat configured.'
+  return 'Use LoonieWins in your browser. Pro upgrades will bill on the web when enabled — no app store required.'
 }
 
 /** @deprecated use billingStatusNotice */

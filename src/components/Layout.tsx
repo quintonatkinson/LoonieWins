@@ -111,13 +111,17 @@ export default function Layout({ children }: { children?: React.ReactNode }) {
   }
 
   const navBtnClass = (active: boolean) =>
-    `flex flex-col items-center justify-center gap-0.5 py-1.5 px-1 min-w-0 flex-1 max-w-[5.5rem] rounded-lg text-[11px] font-medium transition-colors ${
+    `touch-target flex flex-col items-center justify-center gap-0.5 py-1 px-1 min-w-0 flex-1 max-w-[5.5rem] rounded-lg text-[11px] font-medium transition-colors ${
       active ? 'text-win bg-gray-700/50' : 'text-gray-400 hover:text-gray-50'
     }`
 
   return (
-    <div className={`min-h-screen flex flex-col bg-gray-900 ${showAppChrome ? 'pb-20' : ''}`}>
-      <header className="sticky top-0 z-30 bg-gray-900/95 border-b border-gray-700/50 backdrop-blur-md">
+    <div
+      className={`min-h-[100dvh] flex flex-col bg-gray-900 overflow-x-hidden ${
+        showAppChrome ? 'pb-[calc(5rem+var(--app-safe-bottom))]' : ''
+      }`}
+    >
+      <header className="sticky top-0 z-30 bg-gray-900/95 border-b border-gray-700/50 backdrop-blur-md pt-[var(--app-safe-top)]">
         <div className="mx-auto w-full max-w-3xl px-4 py-3 flex items-center justify-between gap-3">
         <div className="min-w-0">
           {showAppChrome ? (
@@ -128,16 +132,20 @@ export default function Layout({ children }: { children?: React.ReactNode }) {
               <h1 className="text-lg sm:text-xl font-bold text-gray-50 truncate">
                 {greeting}, <span className="text-win">{displayName}</span>
               </h1>
-              <p className="text-xs sm:text-sm text-gray-400 flex items-center gap-1.5 mt-0.5">
+              <p className="text-xs sm:text-sm text-gray-400 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 mt-0.5">
                 Win More, Work Less
                 <span className="text-sm" aria-hidden>
                   🍁
                 </span>
                 {!session && !isSupabaseConfigured && (
-                  <span className="ml-1 text-[10px] uppercase tracking-wide text-amber-400/90">
+                  <span className="text-[10px] uppercase tracking-wide text-amber-400/90">
                     Guest
                   </span>
                 )}
+              </p>
+              <p className="text-[11px] text-gray-500 mt-1 leading-snug max-w-md" data-testid="web-first-tagline">
+                Use LoonieWins in your browser — phone or desktop. Add to Home Screen for an app-like
+                shortcut; no app store required.
               </p>
             </>
           ) : (
@@ -164,7 +172,7 @@ export default function Layout({ children }: { children?: React.ReactNode }) {
                 <button
                   type="button"
                   onClick={() => void signOut()}
-                  className="p-2 rounded-lg text-gray-400 hover:text-win hover:bg-gray-800"
+                  className="touch-target p-2 rounded-lg text-gray-400 hover:text-win hover:bg-gray-800 inline-flex items-center justify-center"
                   title="Log out"
                   aria-label="Log out"
                 >
@@ -230,7 +238,7 @@ export default function Layout({ children }: { children?: React.ReactNode }) {
                 role="dialog"
                 aria-modal
                 aria-labelledby={sheetTitleId}
-                className="fixed bottom-0 left-0 right-0 z-50 mx-auto max-w-lg rounded-t-2xl border border-gray-600/50 bg-gray-900 shadow-2xl animate-sheet-up pb-[max(1rem,env(safe-area-inset-bottom))]"
+                className="fixed bottom-0 left-0 right-0 z-50 w-full sm:max-w-lg sm:mx-auto rounded-t-2xl sm:rounded-t-2xl border border-gray-600/50 bg-gray-900 shadow-2xl animate-sheet-up pb-[max(1rem,env(safe-area-inset-bottom))]"
               >
                 <div className="flex justify-center pt-2 pb-1">
                   <span className="h-1 w-10 rounded-full bg-gray-600" aria-hidden />
@@ -247,7 +255,7 @@ export default function Layout({ children }: { children?: React.ReactNode }) {
                   <button
                     type="button"
                     onClick={() => setHistoryOpen(false)}
-                    className="p-2 rounded-lg text-gray-400 hover:text-white hover:bg-gray-800"
+                    className="touch-target p-2 rounded-lg text-gray-400 hover:text-white hover:bg-gray-800 inline-flex items-center justify-center shrink-0"
                     aria-label="Close"
                   >
                     <X className="w-4 h-4" />
