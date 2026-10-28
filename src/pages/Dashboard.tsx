@@ -778,7 +778,7 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="flex flex-col bg-gray-900 w-full max-w-3xl mx-auto">
+    <div className="flex flex-col bg-gray-900 w-full max-w-3xl mx-auto overflow-x-hidden">
       {offlineMode && (
         <div className="mx-4 mt-2 mb-0 px-3 py-1.5 rounded-lg bg-yellow-500/20 text-yellow-400 text-sm font-medium inline-flex w-fit">
           Offline Mode

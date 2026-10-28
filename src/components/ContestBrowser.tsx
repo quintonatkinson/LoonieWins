@@ -122,7 +122,7 @@ function StickyChecklist({
 
   return (
     <div
-      className="fixed z-[60] right-3 bottom-24 sm:bottom-28 w-[min(320px,calc(100vw-1.5rem))] rounded-2xl border border-win/40 bg-surface/95 backdrop-blur-md shadow-2xl p-3 space-y-2"
+      className="fixed z-[60] left-3 right-3 sm:left-auto sm:right-3 bottom-[calc(5.75rem+env(safe-area-inset-bottom,0px))] sm:bottom-28 sm:w-[min(320px,calc(100vw-1.5rem))] rounded-2xl border border-win/40 bg-surface/95 backdrop-blur-md shadow-2xl p-3 space-y-2"
       role="complementary"
       aria-label="Paste checklist"
       data-testid="enter-checklist"
@@ -589,8 +589,7 @@ export default function ContestBrowser({
         aria-hidden
       />
       <div
-        className="fixed left-0 right-0 bottom-0 z-50 glass rounded-t-2xl flex flex-col"
-        style={{ height: '90vh' }}
+        className="fixed inset-x-0 bottom-0 z-50 glass rounded-t-2xl flex flex-col w-full max-h-[min(92dvh,calc(100dvh-3.5rem))] pb-[max(0.75rem,env(safe-area-inset-bottom,0px))] sm:max-w-3xl sm:mx-auto"
         role="dialog"
         aria-modal
         aria-label="Contest entry – Smart Fill"
@@ -629,7 +628,7 @@ export default function ContestBrowser({
           <button
             type="button"
             onClick={onClose}
-            className="p-2 rounded-lg hover:bg-white/10 text-white/80 shrink-0"
+            className="touch-target p-2 rounded-lg hover:bg-white/10 text-white/80 shrink-0 inline-flex items-center justify-center"
             aria-label="Close"
           >
             ✕

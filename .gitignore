@@ -6,3 +6,6 @@ mobile/google-services.json
 mobile/GoogleService-Info.plist
 
 node_modules/
+test-results/
+test-results/
+playwright-report/
