@@ -1,0 +1,30 @@
+# Recheck contest URLs → updates link_status + last_verified via Edge Function.
+# Repo secrets (Settings → Secrets and variables → Actions):
+#   SUPABASE_URL              = https://<project-ref>.supabase.co
+#   SUPABASE_SERVICE_ROLE_KEY = service_role JWT from Supabase → Settings → API
+# Deploy first: npx supabase functions deploy verify-contest-links
+name: Verify contest links
+
+on:
+  schedule:
+    - cron: '15 */2 * * *'
+  workflow_dispatch:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger verify-contest-links
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_SERVICE_ROLE_KEY" ]; then
+            echo "Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY secrets — skip."
+            exit 0
+          fi
+          curl -sS -X POST "${SUPABASE_URL}/functions/v1/verify-contest-links" \
+            -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
+            -H "Content-Type: application/json" \
+            -d '{"limit":40,"olderThanHours":24}' | tee /tmp/verify.json
+          python3 -c "import json; d=json.load(open('/tmp/verify.json')); print('scanned', d.get('scanned'), 'updated', d.get('updated'), 'dead', d.get('dead'), 'ok', d.get('ok')); raise SystemExit(0 if d.get('ok') else 1)"

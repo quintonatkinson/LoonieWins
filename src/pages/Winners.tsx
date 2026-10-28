@@ -1,6 +1,8 @@
-import { useState, useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Trophy, ExternalLink, ChevronDown, ChevronUp } from 'lucide-react'
+import { Trophy, ExternalLink, ChevronDown, ChevronUp, Package } from 'lucide-react'
+import { giveaways, isSupabaseConfigured } from '../lib/supabase'
+import PageShell from '../components/PageShell'
 
 interface WinnerCard {
   id: string
@@ -14,65 +16,6 @@ interface WinnerCard {
   entryMethod?: string
   winnerRegion?: string
 }
-
-const MOCK_WINNERS: WinnerCard[] = [
-  {
-    id: '1',
-    contestName: 'Summer Giveaway',
-    winnerDisplay: 'Anonymous',
-    prize: '$500 Gift Card',
-    wonAt: '2025-02-20',
-    prizeValueEstimate: 500,
-    contestSource: 'RedFlagDeals',
-    contestUrl: '#',
-    entryMethod: 'Single entry',
-    winnerRegion: 'ON',
-  },
-  {
-    id: '2',
-    contestName: 'Tech Bundle',
-    winnerDisplay: 'Sarah M.',
-    prize: 'Laptop',
-    wonAt: '2025-02-18',
-    prizeValueEstimate: 1500,
-    contestSource: 'ContestScoop',
-    contestUrl: '#',
-    entryMethod: 'Daily entry',
-    winnerRegion: 'BC',
-  },
-  {
-    id: '3',
-    contestName: 'Coffee for a Year',
-    winnerDisplay: 'Anonymous',
-    prize: 'Coffee subscription',
-    wonAt: '2025-02-15',
-    prizeValueEstimate: 600,
-    contestSource: 'CanadianFreeStuff',
-    winnerRegion: 'AB',
-  },
-  {
-    id: '4',
-    contestName: 'Tropical Getaway',
-    winnerDisplay: 'Mike T.',
-    prize: '7-night vacation',
-    wonAt: '2025-02-10',
-    prizeValueEstimate: 3500,
-    contestSource: 'RedFlagDeals',
-    contestUrl: '#',
-    entryMethod: 'Single entry',
-    winnerRegion: 'QC',
-  },
-  {
-    id: '5',
-    contestName: 'Grocery Gift Card',
-    winnerDisplay: 'Anonymous',
-    prize: '$100 Gift Card',
-    wonAt: '2025-02-08',
-    prizeValueEstimate: 100,
-    contestSource: 'SmartCanucks',
-    winnerRegion: 'ON',
-  },
-]
 
 const BIG_WIN_THRESHOLD = 1000
 
@@ -93,151 +36,197 @@ function filterByTime(winners: WinnerCard[], filter: TimeFilter): WinnerCard[] {
 export default function Winners() {
   const [timeFilter, setTimeFilter] = useState<TimeFilter>('month')
   const [showHowChosen, setShowHowChosen] = useState(false)
+  const [winners, setWinners] = useState<WinnerCard[]>([])
+  const [loading, setLoading] = useState(true)
 
-  const filtered = useMemo(
-    () => filterByTime(MOCK_WINNERS, timeFilter),
-    [timeFilter]
-  )
-
-  const stats = useMemo(() => {
-    const totalValue = MOCK_WINNERS.reduce((s, w) => s + (w.prizeValueEstimate ?? 0), 0)
-    const thisMonth = filterByTime(MOCK_WINNERS, 'month').length
-    return { totalValue, thisMonth }
+  useEffect(() => {
+    let mounted = true
+    ;(async () => {
+      setLoading(true)
+      if (!isSupabaseConfigured) {
+        if (mounted) {
+          setWinners([])
+          setLoading(false)
+        }
+        return
+      }
+      try {
+        const { data, error } = await giveaways()
+          .from('user_wins')
+          .select('*')
+          .order('won_at', { ascending: false })
+          .limit(100)
+        if (!mounted) return
+        if (error) {
+          console.warn('[Winners]', error.message)
+          setWinners([])
+        } else {
+          setWinners(
+            (data ?? []).map((row: Record<string, unknown>) => ({
+              id: String(row.id),
+              contestName: String(row.contest_name || row.prize_description || 'Contest win'),
+              winnerDisplay: String(row.winner_display || 'Anonymous'),
+              prize: String(row.prize_description || 'Prize'),
+              wonAt: String(row.won_at || '').slice(0, 10),
+              prizeValueEstimate: row.prize_value_estimate as number | undefined,
+              contestSource: row.contest_source as string | undefined,
+              contestUrl: row.contest_url as string | undefined,
+              entryMethod: row.entry_method as string | undefined,
+              winnerRegion: row.winner_region as string | undefined,
+            }))
+          )
+        }
+      } catch (e) {
+        console.warn('[Winners]', e)
+        if (mounted) setWinners([])
+      } finally {
+        if (mounted) setLoading(false)
+      }
+    })()
+    return () => {
+      mounted = false
+    }
   }, [])
 
+  const filtered = useMemo(() => filterByTime(winners, timeFilter), [winners, timeFilter])
+
+  const stats = useMemo(() => {
+    const totalValue = winners.reduce((s, w) => s + (w.prizeValueEstimate ?? 0), 0)
+    const thisMonth = filterByTime(winners, 'month').length
+    return { totalValue, thisMonth, count: winners.length }
+  }, [winners])
+
   return (
-    <div className="p-4 space-y-6 pb-24">
-      <div>
-        <h1 className="text-xl font-semibold flex items-center gap-2">
-          <Trophy className="w-6 h-6 text-win" />
-          Winners Corner
-        </h1>
-        <p className="text-white/70 text-sm mt-1">Recent wins. You could be next.</p>
+    <PageShell className="space-y-6" testId="winners">
+      <div className="flex items-center gap-3">
+        <div className="flex items-center justify-center w-10 h-10 rounded-full bg-win/20 border border-win/40 shrink-0">
+          <Trophy className="w-5 h-5 text-win" strokeWidth={2.5} />
+        </div>
+        <div className="min-w-0">
+          <h1 className="text-xl font-semibold text-white">Winners</h1>
+          <p className="text-sm text-gray-400 mt-0.5">Recent wins. You could be next.</p>
+        </div>
       </div>
 
-      {/* Stats strip */}
-      <div className="rounded-xl glass border border-gray-600/50 px-4 py-3 flex flex-wrap items-center gap-4">
-        <span className="text-sm text-gray-300">
+      <div className="glass rounded-xl p-4 flex flex-wrap gap-4 text-sm">
+        <p>
           <span className="text-win font-semibold">{stats.thisMonth}</span> wins this month
-        </span>
-        <span className="text-sm text-gray-300">
-          <span className="text-win font-semibold">${(stats.totalValue / 1000).toFixed(0)}K+</span> in prizes
-        </span>
+        </p>
+        <p>
+          <span className="text-win font-semibold">{stats.count}</span> total shared
+        </p>
+        <p>
+          ~$
+          <span className="text-win font-semibold">{stats.totalValue.toLocaleString()}</span> prize
+          value
+        </p>
       </div>
 
-      {/* Time filter */}
-      <div className="flex gap-2 flex-wrap">
-        {(
-          [
-            ['week', 'This week'],
-            ['month', 'This month'],
-            ['all', 'All time'],
-          ] as const
-        ).map(([key, label]) => (
+      <div className="flex flex-wrap gap-2" role="tablist" aria-label="Winner time filter">
+        {(['week', 'month', 'all'] as TimeFilter[]).map((f) => (
           <button
-            key={key}
+            key={f}
             type="button"
-            onClick={() => setTimeFilter(key)}
-            className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
-              timeFilter === key
-                ? 'bg-win text-gray-900'
-                : 'bg-gray-800 border border-gray-600/50 text-gray-300 hover:text-white'
+            role="tab"
+            aria-selected={timeFilter === f}
+            onClick={() => setTimeFilter(f)}
+            className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${
+              timeFilter === f
+                ? 'bg-win text-on-win border-win'
+                : 'bg-surface border-gray-600/50 text-gray-400 hover:text-gray-200'
             }`}
           >
-            {label}
+            {f === 'week' ? 'This week' : f === 'month' ? 'This month' : 'All time'}
           </button>
         ))}
       </div>
 
-      {/* You could be next CTA */}
-      <Link
-        to="/"
-        className="block w-full py-3 rounded-xl bg-win text-gray-900 font-semibold text-center text-sm hover:opacity-90 transition-opacity"
-      >
-        Find contests to enter
-      </Link>
-
-      {/* Winner cards grid */}
-      <div className="grid gap-4 sm:grid-cols-2">
-        {filtered.length === 0 ? (
-          <p className="col-span-2 text-gray-500 text-sm py-6 text-center">No wins in this period yet.</p>
-        ) : (
-          filtered.map((w) => {
-            const isBigWin = (w.prizeValueEstimate ?? 0) >= BIG_WIN_THRESHOLD
+      {loading ? (
+        <p className="text-gray-500 text-sm py-6 text-center">Loading wins…</p>
+      ) : filtered.length === 0 ? (
+        <div className="empty-panel space-y-3">
+          <p className="text-white font-medium">
+            {!isSupabaseConfigured
+              ? 'Winner feed needs cloud sync'
+              : 'No wins in this period yet'}
+          </p>
+          <p className="text-sm text-gray-400 max-w-sm mx-auto">
+            {!isSupabaseConfigured
+              ? 'Guest mode shows the layout. Shared community wins appear here once Supabase is live.'
+              : 'Wins appear when users share them to the community feed. Keep entering from Home.'}
+          </p>
+          <div className="flex flex-wrap items-center justify-center gap-2">
+            <Link
+              to="/"
+              className="inline-flex items-center justify-center px-4 py-2.5 rounded-lg bg-win text-on-win font-semibold text-sm"
+            >
+              Enter from Home
+            </Link>
+            <Link
+              to="/past"
+              className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-lg border border-gray-600/50 text-sm text-gray-300 hover:text-white"
+            >
+              <Package className="w-3.5 h-3.5" />
+              Past contests
+            </Link>
+          </div>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          {filtered.map((w) => {
+            const big = (w.prizeValueEstimate ?? 0) >= BIG_WIN_THRESHOLD
             return (
               <article
                 key={w.id}
-                className={`rounded-xl p-5 flex flex-col gap-3 border ${
-                  isBigWin
-                    ? 'glass border-win/40 bg-win/5'
-                    : 'glass border-gray-600/50'
+                className={`rounded-xl glass p-4 border ${
+                  big ? 'border-win/40' : 'border-gray-600/40'
                 }`}
               >
-                {isBigWin && (
-                  <span className="text-xs font-semibold text-win uppercase tracking-wide">
-                    Big win
-                  </span>
-                )}
-                <h2 className="font-semibold text-white line-clamp-2">{w.contestName}</h2>
-                <p className="text-white/70 text-sm">
-                  {w.winnerDisplay}
-                  {w.winnerRegion && (
-                    <span className="text-white/50"> · {w.winnerRegion}</span>
-                  )}{' '}
-                  won {w.prize}
-                </p>
-                {w.prizeValueEstimate != null && (
-                  <p className="text-win text-sm font-medium">~${w.prizeValueEstimate.toLocaleString()} CAD</p>
-                )}
-                {w.contestSource && (
-                  <p className="text-white/50 text-xs">via {w.contestSource}</p>
-                )}
-                {w.entryMethod && (
-                  <p className="text-white/50 text-xs">{w.entryMethod}</p>
-                )}
-                <div className="flex items-center justify-between mt-auto pt-1">
-                  <p className="text-white/50 text-xs">{new Date(w.wonAt).toLocaleDateString()}</p>
+                <div className="flex items-start justify-between gap-2">
+                  <h3 className="font-semibold text-sm text-white line-clamp-2">{w.contestName}</h3>
                   {w.contestUrl && (
                     <a
                       href={w.contestUrl}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="text-win hover:opacity-80 flex items-center gap-1 text-xs font-medium"
+                      className="text-win shrink-0"
                     >
-                      View <ExternalLink className="w-3 h-3" />
+                      <ExternalLink className="w-4 h-4" />
                     </a>
                   )}
                 </div>
+                <p className="text-win font-medium text-sm mt-2">{w.prize}</p>
+                <p className="text-xs text-gray-400 mt-1">
+                  {w.winnerDisplay}
+                  {w.winnerRegion ? ` · ${w.winnerRegion}` : ''} · {w.wonAt}
+                </p>
+                {w.contestSource && (
+                  <p className="text-xs text-gray-500 mt-1">{w.contestSource}</p>
+                )}
               </article>
             )
-          })
-        )}
-      </div>
+          })}
+        </div>
+      )}
 
-      {/* How winners are chosen */}
-      <section className="rounded-xl glass border border-gray-600/50 overflow-hidden">
-        <button
-          type="button"
-          onClick={() => setShowHowChosen(!showHowChosen)}
-          className="w-full px-4 py-3 flex items-center justify-between text-left text-sm font-medium text-white hover:bg-white/5"
-        >
-          How winners are chosen
-          {showHowChosen ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-        </button>
-        {showHowChosen && (
-          <div className="px-4 pb-3 pt-0 text-sm text-gray-400 border-t border-gray-600/50">
-            Winners are drawn by the contest sponsor. We only display wins shared with us or from public winner lists.
-          </div>
-        )}
-      </section>
-
-      {/* Submit your win */}
-      <a
-        href="#"
-        className="block w-full py-3 rounded-xl border border-dashed border-gray-500 text-gray-400 text-center text-sm font-medium hover:border-win/50 hover:text-win transition-colors"
+      <button
+        type="button"
+        onClick={() => setShowHowChosen((v) => !v)}
+        className="flex items-center gap-2 text-sm text-gray-400"
       >
-        Did you win? Tell us
-      </a>
-    </div>
+        How are winners chosen?
+        {showHowChosen ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+      </button>
+      {showHowChosen && (
+        <p className="text-sm text-gray-500">
+          Winners are drawn by the contest sponsor. We only display wins shared with us or from
+          public winner lists. See our{' '}
+          <Link to="/terms" className="text-win">
+            Terms
+          </Link>
+          .
+        </p>
+      )}
+    </PageShell>
   )
 }

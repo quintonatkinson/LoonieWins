@@ -9,8 +9,9 @@ module.exports = {
   theme: {
     extend: {
       colors: {
-        win: '#39FF14',
-        earn: '#FFD700',
+        win: 'rgb(var(--color-win) / <alpha-value>)',
+        'on-win': 'rgb(var(--color-on-win) / <alpha-value>)',
+        earn: 'rgb(var(--color-earn) / <alpha-value>)',
         surface: {
           DEFAULT: '#1F2937',
           light: '#374151',
