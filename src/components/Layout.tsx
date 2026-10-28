@@ -16,6 +16,7 @@ import {
 } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { isSupabaseConfigured } from '../lib/supabase'
+import PwaInstallHint from './PwaInstallHint'
 
 const PRIMARY_ROUTES = [
   { path: '/', label: 'Home', kind: 'home' as const },
@@ -185,6 +186,8 @@ export default function Layout({ children }: { children?: React.ReactNode }) {
         </div>
         </div>
       </header>
+
+      {showAppChrome && <PwaInstallHint />}
 
       <main className="flex-1 w-full">{children}</main>
 

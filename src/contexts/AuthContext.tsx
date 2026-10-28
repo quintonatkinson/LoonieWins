@@ -350,7 +350,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (supabase) await supabase.auth.signOut()
     setSession(null)
     setUser(null)
-    setProfile(null)
+    // Guest demo mode keeps a local profile when cloud auth is off
+    setProfile(isSupabaseConfigured ? null : guestProfile())
   }, [])
 
   const updateProfile = useCallback(
