@@ -1,0 +1,22 @@
+# Supabase project config for LoonieWins scheduled ingest + push alerts + digest.
+# After `supabase functions deploy …`, enable cron (Dashboard schedules or pg_cron).
+# Auth for cron-facing functions: Bearer service_role (or optional CRON_SECRET) inside the handler.
+# Webhooks (adgem / revenuecat) use their own shared secrets — JWT verify stays off.
+
+[functions.ingest-giveaways]
+verify_jwt = false
+
+[functions.verify-contest-links]
+verify_jwt = false
+
+[functions.send-push-alerts]
+verify_jwt = false
+
+[functions.send-weekly-digest]
+verify_jwt = false
+
+[functions.adgem-postback]
+verify_jwt = false
+
+[functions.revenuecat-webhook]
+verify_jwt = false

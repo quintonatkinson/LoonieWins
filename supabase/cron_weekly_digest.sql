@@ -1,0 +1,23 @@
+-- Schedule weekly digest Edge Function (Sundays).
+-- Requires: extensions pg_cron, pg_net; Edge Function `send-weekly-digest` deployed;
+-- secrets RESEND_API_KEY (+ RESEND_FROM_EMAIL).
+-- Replace PROJECT_REF and SERVICE_ROLE_KEY before running.
+
+-- CREATE EXTENSION IF NOT EXISTS pg_cron;
+-- CREATE EXTENSION IF NOT EXISTS pg_net;
+
+-- Sunday 14:00 UTC ≈ 10 AM EDT / 9 AM EST
+-- SELECT cron.schedule(
+--   'looniewins-weekly-digest',
+--   '0 14 * * 0',
+--   $$
+--   SELECT net.http_post(
+--     url := 'https://PROJECT_REF.supabase.co/functions/v1/send-weekly-digest',
+--     headers := jsonb_build_object(
+--       'Content-Type', 'application/json',
+--       'Authorization', 'Bearer SERVICE_ROLE_OR_ANON_KEY'
+--     ),
+--     body := '{}'::jsonb
+--   );
+--   $$
+-- );

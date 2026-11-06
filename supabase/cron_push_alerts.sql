@@ -1,0 +1,42 @@
+-- Schedule push alert Edge Function.
+-- Requires: extensions pg_cron, pg_net; Edge Function `send-push-alerts` deployed.
+-- Replace PROJECT_REF and SERVICE_ROLE_KEY (or vault secrets) before running.
+--
+-- Recommended cadence:
+--   - Every 30–60 minutes for "new CA/US contests"
+--   - Late afternoon America/Toronto for "ending tonight" (function handles both)
+
+-- CREATE EXTENSION IF NOT EXISTS pg_cron;
+-- CREATE EXTENSION IF NOT EXISTS pg_net;
+
+-- New contests + ending-tonight sweep every hour
+-- SELECT cron.schedule(
+--   'looniewins-send-push-alerts',
+--   '15 * * * *',
+--   $$
+--   SELECT net.http_post(
+--     url := 'https://PROJECT_REF.supabase.co/functions/v1/send-push-alerts',
+--     headers := jsonb_build_object(
+--       'Content-Type', 'application/json',
+--       'Authorization', 'Bearer SERVICE_ROLE_OR_ANON_KEY'
+--     ),
+--     body := jsonb_build_object('modes', jsonb_build_array('new_contests', 'ending_tonight'))
+--   );
+--   $$
+-- );
+
+-- Optional: dedicated early-evening "ending tonight" pass (6 PM America/Toronto ≈ 22:00 UTC winter / 21:00 UTC summer)
+-- SELECT cron.schedule(
+--   'looniewins-ending-tonight',
+--   '0 22 * * *',
+--   $$
+--   SELECT net.http_post(
+--     url := 'https://PROJECT_REF.supabase.co/functions/v1/send-push-alerts',
+--     headers := jsonb_build_object(
+--       'Content-Type', 'application/json',
+--       'Authorization', 'Bearer SERVICE_ROLE_OR_ANON_KEY'
+--     ),
+--     body := jsonb_build_object('modes', jsonb_build_array('ending_tonight'))
+--   );
+--   $$
+-- );

@@ -1,0 +1,20 @@
+{
+  "name": "LoonieWins",
+  "short_name": "LoonieWins",
+  "description": "Canadian sweepstakes in your browser — win more, work less.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#111827",
+  "theme_color": "#111827",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/vite.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ],
+  "categories": ["entertainment", "lifestyle"]
+}

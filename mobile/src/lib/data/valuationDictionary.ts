@@ -4,6 +4,7 @@
 
 const DICT: { pattern: RegExp; value: number }[] = [
   { pattern: /\b(?:tesla|model\s*[3sy])\b/i, value: 60000 },
+  { pattern: /\b(?:car|truck|vehicle|suv|pickup|f-?150|silverado|ram\b)\b/i, value: 45000 },
   { pattern: /\b(?:peloton)\b/i, value: 2000 },
   { pattern: /\b(?:macbook)\b/i, value: 1800 },
   { pattern: /\b(?:iphone)\b/i, value: 1200 },
@@ -15,6 +16,7 @@ const DICT: { pattern: RegExp; value: number }[] = [
   { pattern: /\b(?:switch|nintendo)\b/i, value: 450 },
   { pattern: /\b(?:concert|tickets)\b/i, value: 300 },
   { pattern: /\b(?:gift\s*card)\b/i, value: 100 },
+  { pattern: /\b(?:tim\s*hortons|tims\b|roll\s*up|coffee|latte)\b/i, value: 25 },
 ]
 
 export function estimatePrizeValue(title: string, description?: string): number | undefined {

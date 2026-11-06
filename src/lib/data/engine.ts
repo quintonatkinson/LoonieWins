@@ -5,7 +5,7 @@
  */
 
 import { toExpiryEndOfDay } from '../utils/expiryDate'
-import { MASTER_SOURCES } from './sources'
+import { getActiveSources, itemMatchesSourceFilter, type Source } from './sources'
 import type { Contest, RawFeedItem, Rss2JsonItem } from './normalizer'
 import { normalizeJsonItem, normalizeXmlItem } from './normalizer'
 import { deepScrape } from './linkResolver'
@@ -13,6 +13,7 @@ import { estimatePrizeValue } from './valuationDictionary'
 
 const RSS2JSON_URL = 'https://api.rss2json.com/v1/api.json'
 const CORSPROXY_URL = 'https://corsproxy.io/?'
+const FETCH_TIMEOUT_MS = 14_000
 
 type FetchResult =
   | { strategy: 'A'; data: { status: string; items: Rss2JsonItem[] } }
@@ -21,11 +22,52 @@ type FetchResult =
 
 const RSS2JSON_COUNT = import.meta.env.VITE_RSS2JSON_API_KEY ? 100 : 50
 
+async function fetchText(url: string): Promise<string | null> {
+  const ctrl = new AbortController()
+  const timer = setTimeout(() => ctrl.abort(), FETCH_TIMEOUT_MS)
+  try {
+    const res = await fetch(url, { signal: ctrl.signal })
+    if (!res.ok && res.status >= 500) return null
+    return await res.text()
+  } catch {
+    return null
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
+/** Reject WAF/HTML error pages so we fall through to the next strategy. */
+function looksLikeFeedXml(raw: string): boolean {
+  if (!raw || raw.length < 40) return false
+  const head = raw.slice(0, 800).toLowerCase()
+  if (/<!doctype html|<html[\s>]/.test(head)) return false
+  if (/just a moment|attention required|access to this site has been limited|cf-browser-verification/.test(head))
+    return false
+  return /<(rss|feed|rdf:rdf)\b/.test(head) || /<\?xml/.test(head)
+}
+
+/**
+ * Soft-repair common feed quirks before DOMParser (BOM, naked `&` in attributes/text).
+ */
+function sanitizeFeedXml(raw: string): string {
+  let xml = raw.replace(/^\uFEFF/, '').trim()
+  // Strip leading junk before the XML declaration / root
+  const start = xml.search(/<\?xml|<rss[\s>]|<feed[\s>]|<rdf:RDF/i)
+  if (start > 0) xml = xml.slice(start)
+  // Escape bare ampersands that are not already entities (common in WP titles)
+  xml = xml.replace(/&(?!(?:[a-zA-Z][a-zA-Z0-9]*|#\d+|#x[\da-fA-F]+);)/g, '&amp;')
+  return xml
+}
+
 /**
  * Try Strategy B (corsproxy XML) first for full feeds, then A (rss2json), then C (no data).
- * rss2json returns only 10 items by default; corsproxy fetches raw XML with all items.
+ * For `rss2json_first` sources (Cloudflare-sensitive hosts), reverse the order.
+ * Free rss2json ≈10 items; with `VITE_RSS2JSON_API_KEY` count rises to 50–100.
  */
-async function fetchWithFallback(feedUrl: string): Promise<FetchResult> {
+async function fetchWithFallback(
+  feedUrl: string,
+  strategy: 'direct_first' | 'rss2json_first' = 'direct_first'
+): Promise<FetchResult> {
   const encodedUrl = encodeURIComponent(feedUrl)
   const cacheBust = '&t=' + Date.now()
   const apiKey = import.meta.env.VITE_RSS2JSON_API_KEY
@@ -33,57 +75,103 @@ async function fetchWithFallback(feedUrl: string): Promise<FetchResult> {
     ? `rss_url=${encodedUrl}&api_key=${apiKey}&count=${RSS2JSON_COUNT}${cacheBust}`
     : `rss_url=${encodedUrl}${cacheBust}`
 
-  try {
-    const resB = await fetch(CORSPROXY_URL + encodedUrl)
-    const xml = await resB.text()
-    const rawItems = parseFeedXml(xml)
-    if (rawItems.length >= 5) {
-      console.log('Strategy B (corsproxy)', rawItems.length, 'items')
-      return { strategy: 'B', data: xml }
+  const tryRss2Json = async (): Promise<FetchResult | null> => {
+    try {
+      const ctrl = new AbortController()
+      const timer = setTimeout(() => ctrl.abort(), FETCH_TIMEOUT_MS)
+      let json: { status?: string; items?: Rss2JsonItem[] }
+      try {
+        const resA = await fetch(`${RSS2JSON_URL}?${rss2jsonParams}`, { signal: ctrl.signal })
+        json = (await resA.json()) as { status?: string; items?: Rss2JsonItem[] }
+      } finally {
+        clearTimeout(timer)
+      }
+      if (json.status === 'ok' && Array.isArray(json.items) && json.items.length > 0) {
+        console.log('Success using Strategy A (rss2json)', json.items.length, 'items')
+        return { strategy: 'A', data: json as { status: string; items: Rss2JsonItem[] } }
+      }
+    } catch (_) {
+      /* fall through */
     }
-  } catch (_) {
-    /* fall through */
+    return null
   }
 
-  try {
-    const resA = await fetch(`${RSS2JSON_URL}?${rss2jsonParams}`)
-    const json = (await resA.json()) as { status?: string; items?: Rss2JsonItem[] }
-    if (json.status === 'ok' && Array.isArray(json.items) && json.items.length > 0) {
-      console.log('Success using Strategy A')
-      return { strategy: 'A', data: json as { status: string; items: Rss2JsonItem[] } }
+  const tryCorsProxy = async (): Promise<FetchResult | null> => {
+    try {
+      const xml = await fetchText(CORSPROXY_URL + encodedUrl)
+      if (!xml || !looksLikeFeedXml(xml)) return null
+      const rawItems = parseFeedXml(xml)
+      if (rawItems.length >= 1) {
+        console.log('Strategy B (corsproxy)', rawItems.length, 'items')
+        return { strategy: 'B', data: xml }
+      }
+    } catch (_) {
+      /* fall through */
     }
-  } catch (_) {
-    /* fall through */
+    return null
   }
 
-  return { strategy: 'C' }
+  if (strategy === 'rss2json_first') {
+    return (await tryRss2Json()) ?? (await tryCorsProxy()) ?? { strategy: 'C' }
+  }
+  return (await tryCorsProxy()) ?? (await tryRss2Json()) ?? { strategy: 'C' }
 }
 
 function parseFeedXml(xml: string): RawFeedItem[] {
+  if (typeof DOMParser === 'undefined') return []
+  if (!looksLikeFeedXml(xml)) return []
+
   const parser = new DOMParser()
-  const doc = parser.parseFromString(xml, 'text/xml')
-  const itemNodes = doc.querySelectorAll('item')
-  const atomNodes = doc.querySelectorAll('entry')
+  const doc = parser.parseFromString(sanitizeFeedXml(xml), 'text/xml')
+  if (doc.querySelector('parsererror')) {
+    // Retry once without ampersand sanitize in case we double-escaped rare entities
+    const retry = parser.parseFromString(xml.replace(/^\uFEFF/, '').trim(), 'text/xml')
+    if (retry.querySelector('parsererror')) return []
+    return extractItemsFromDoc(retry)
+  }
+  return extractItemsFromDoc(doc)
+}
+
+function extractItemsFromDoc(doc: Document): RawFeedItem[] {
+  let itemNodes = doc.querySelectorAll('item')
+  let atomNodes = doc.querySelectorAll('entry')
+  // Namespaced feeds sometimes miss CSS querySelector; fall back to getElementsByTagName
+  if (!itemNodes.length && !atomNodes.length) {
+    itemNodes = doc.getElementsByTagName('item') as unknown as NodeListOf<Element>
+    atomNodes = doc.getElementsByTagName('entry') as unknown as NodeListOf<Element>
+  }
   const nodes = itemNodes.length ? itemNodes : atomNodes
   const entries: RawFeedItem[] = []
 
-  const feedLinkPattern = /\/(feed|rss)(\/|$)|atom\.xml$/i
+  const feedLinkPattern = /\/(feed|rss)(\/|$)|atom\.xml$|\/\.rss$/i
 
-  nodes.forEach((item) => {
+  Array.from(nodes).forEach((item) => {
     const title = item.querySelector('title')?.textContent?.trim() ?? ''
     const linkEls = item.querySelectorAll('link')
     let link = ''
-    for (const el of linkEls) {
+    for (const el of Array.from(linkEls)) {
       if (el.getAttribute('rel') === 'self') continue
       const href = (el.getAttribute('href') ?? el.textContent?.trim() ?? '').trim()
       if (!href) continue
       if (feedLinkPattern.test(href)) continue
-      link = href
-      break
+      // Prefer alternate / html links in Atom
+      const rel = (el.getAttribute('rel') ?? 'alternate').toLowerCase()
+      if (rel === 'alternate' || rel === 'enclosure' || !el.getAttribute('rel')) {
+        link = href
+        if (rel === 'alternate') break
+      }
     }
     if (!link && linkEls.length > 0) {
       const first = linkEls[0]
       link = (first?.getAttribute('href') ?? first?.textContent?.trim() ?? '').trim()
+    }
+    if (!link) {
+      const guid = item.querySelector('guid')?.textContent?.trim()
+      if (guid && /^https?:\/\//i.test(guid)) link = guid
+    }
+    if (!link) {
+      const id = item.querySelector('id')?.textContent?.trim()
+      if (id && /^https?:\/\//i.test(id)) link = id
     }
     const description =
       item.querySelector('description')?.textContent?.trim() ??
@@ -96,9 +184,12 @@ function parseFeedXml(xml: string): RawFeedItem[] {
     const enclosure = enc?.getAttribute('url') ?? undefined
     const mediaContent =
       item.querySelector('media\\:content')?.getAttribute('url') ??
+      item.getElementsByTagName('media:content')[0]?.getAttribute('url') ??
       item.querySelector('content')?.getAttribute('url') ??
       undefined
-    const contentEncoded = item.querySelector('content\\:encoded')?.textContent?.trim()
+    const contentEncoded =
+      item.querySelector('content\\:encoded')?.textContent?.trim() ??
+      item.getElementsByTagName('content:encoded')[0]?.textContent?.trim()
     let content = item.querySelector('content')?.textContent?.trim()
     if (!content && item.getElementsByTagName('content').length > 0) {
       content = item.getElementsByTagName('content')[0]?.textContent?.trim() ?? undefined
@@ -156,20 +247,21 @@ const SAFETY_NET_CONTEST: Contest = {
 /**
  * Fetch one source via fetchWithFallback and push normalized contests into results.
  */
-async function fetchOneSource(
-  source: (typeof MASTER_SOURCES)[0],
-  results: Contest[]
-): Promise<void> {
-  console.log('Fetching source:', source.name)
+async function fetchOneSource(source: Source, results: Contest[]): Promise<void> {
+  console.log('Fetching source:', source.name, `(${source.country})`)
   try {
-    const result = await fetchWithFallback(source.url)
+    const result = await fetchWithFallback(source.url, source.fetchStrategy ?? 'direct_first')
     if (result.strategy === 'A') {
       result.data.items.forEach((item, i) => {
+        const body = [item.description ?? '', item.content ?? ''].join(' ')
+        if (!itemMatchesSourceFilter(source, item.title, body)) return
         results.push(normalizeJsonItem(item, source, i))
       })
     } else if (result.strategy === 'B') {
       const rawItems = parseFeedXml(result.data)
       rawItems.forEach((item, i) => {
+        const body = [item.description ?? '', item.contentEncoded ?? '', item.content ?? ''].join(' ')
+        if (!itemMatchesSourceFilter(source, item.title, body)) return
         results.push(normalizeXmlItem(item, source, i))
       })
     }
@@ -188,9 +280,10 @@ export async function fetchAllContests(): Promise<{
   offlineMode: boolean
 }> {
   const results: Contest[] = []
+  const sources = getActiveSources()
 
   const settled = await Promise.allSettled(
-    MASTER_SOURCES.map(async (source) => {
+    sources.map(async (source) => {
       await fetchOneSource(source, results)
     })
   )
@@ -202,7 +295,8 @@ export async function fetchAllContests(): Promise<{
 
   if (failedIndices.length > 0) {
     for (const i of failedIndices) {
-      const source = MASTER_SOURCES[i]
+      const source = sources[i]
+      if (!source) continue
       try {
         await fetchOneSource(source, results)
       } catch (error) {
@@ -256,9 +350,10 @@ export async function fetchRawContests(): Promise<{
   offlineMode: boolean
 }> {
   const results: Contest[] = []
+  const sources = getActiveSources()
 
   const settled = await Promise.allSettled(
-    MASTER_SOURCES.map(async (source) => {
+    sources.map(async (source) => {
       await fetchOneSource(source, results)
     })
   )
@@ -270,7 +365,8 @@ export async function fetchRawContests(): Promise<{
 
   if (failedIndices.length > 0) {
     for (const i of failedIndices) {
-      const source = MASTER_SOURCES[i]
+      const source = sources[i]
+      if (!source) continue
       try {
         await fetchOneSource(source, results)
       } catch (error) {
@@ -350,7 +446,17 @@ export async function enrichContest(contest: Contest): Promise<Contest> {
     requirements,
     tags,
     restrictions,
-    ...(result.status != null && (result.status < 200 || result.status >= 300) && { linkStatus: result.status }),
+    ...(result.status != null &&
+      (result.status < 200 || result.status >= 300) && {
+        linkStatus: result.status,
+        linkCheckedAt: new Date().toISOString(),
+      }),
+    ...(result.status != null &&
+      result.status >= 200 &&
+      result.status < 300 && {
+        linkStatus: result.status,
+        linkCheckedAt: new Date().toISOString(),
+      }),
     ...(result.isLocked === true && { isLocked: true }),
   }
 }
