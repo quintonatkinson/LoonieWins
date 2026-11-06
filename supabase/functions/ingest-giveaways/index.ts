@@ -101,7 +101,7 @@ const DISABLED_SOURCE_IDS: string[] = [
   'brand-official-api',
 ]
 
-/** Keep in sync with getActiveSources() in src/lib/data/sources.ts */
+/** Keep in sync with getActiveSources() in src/lib/data/sources.ts (24 enabled as of 2026-11-06). */
 const ACTIVE_SOURCES: Source[] = [
   { id: 'redflagdeals', name: 'RedFlagDeals (Contests)', url: 'https://forums.redflagdeals.com/feed/forum/34', country: 'CA', enabled: true },
   { id: 'contestcanada-net', name: 'Contest Canada (.net)', url: 'https://www.contestcanada.net/feed/', country: 'CA', enabled: true },
