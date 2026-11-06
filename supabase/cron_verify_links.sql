@@ -1,5 +1,5 @@
 -- LoonieWins: schedule contest URL recheck every 2 hours (pg_cron + pg_net).
--- Project ref placeholder: oftunznsumfidavvbqz (replace if Quinton creates a new project)
+-- Project ref placeholder: ofutnznsyumfidavvbqz (replace if Quinton creates a new project)
 --
 -- Prerequisites:
 --   1) Migration 20261019_link_health_and_platform_count.sql applied (last_verified)
@@ -25,7 +25,7 @@ SELECT cron.schedule(
   '15 */2 * * *',
   $$
   SELECT net.http_post(
-    url := 'https://oftunznsumfidavvbqz.supabase.co/functions/v1/verify-contest-links',
+    url := 'https://ofutnznsyumfidavvbqz.supabase.co/functions/v1/verify-contest-links',
     headers := jsonb_build_object(
       'Content-Type', 'application/json',
       'Authorization', 'Bearer SERVICE_ROLE_KEY_REPLACE_ME'

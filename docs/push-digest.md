@@ -2,7 +2,7 @@
 
 Finish the path from prefs + `send-push-alerts` so **real devices** get FCM/APNs delivery, Pro gets **priority ending-tonight**, and opted-in users get a **weekly digest email**.
 
-Project: Expo `looniewins` (`dadf1677-cf3d-4425-a302-dc8d9378d952`) · Supabase `oftunznsumfidavvbqz`
+Project: Expo `looniewins` (`dadf1677-cf3d-4425-a302-dc8d9378d952`) · Supabase `ofutnznsyumfidavvbqz`
 
 ---
 
@@ -37,7 +37,7 @@ Project: Expo `looniewins` (`dadf1677-cf3d-4425-a302-dc8d9378d952`) · Supabase 
 2. [ ] Set Edge secret:
 
 ```bash
-npx supabase secrets set EXPO_ACCESS_TOKEN=your_expo_token --project-ref oftunznsumfidavvbqz
+npx supabase secrets set EXPO_ACCESS_TOKEN=your_expo_token --project-ref ofutnznsyumfidavvbqz
 ```
 
 ### B4. Native rebuild
@@ -52,7 +52,7 @@ npx supabase secrets set EXPO_ACCESS_TOKEN=your_expo_token --project-ref oftunzn
 ## C. Deploy push Edge Function + schedule
 
 ```bash
-npx supabase functions deploy send-push-alerts --project-ref oftunznsumfidavvbqz
+npx supabase functions deploy send-push-alerts --project-ref ofutnznsyumfidavvbqz
 ```
 
 **Schedule** (Dashboard → Edge Functions → `send-push-alerts` → Schedules, or `supabase/cron_push_alerts.sql`):
@@ -66,7 +66,7 @@ Manual test:
 
 ```bash
 curl -sS -X POST \
-  'https://oftunznsumfidavvbqz.supabase.co/functions/v1/send-push-alerts' \
+  'https://ofutnznsyumfidavvbqz.supabase.co/functions/v1/send-push-alerts' \
   -H "Authorization: Bearer SERVICE_ROLE_KEY" \
   -H 'Content-Type: application/json' \
   -d '{"modes":["new_contests","ending_tonight"]}'
@@ -98,7 +98,7 @@ npx supabase secrets set \
   RESEND_API_KEY=re_xxxx \
   RESEND_FROM_EMAIL='LoonieWins <digest@your-verified-domain.com>' \
   DIGEST_APP_URL='https://YOUR_HTTPS_ORIGIN' \
-  --project-ref oftunznsumfidavvbqz
+  --project-ref ofutnznsyumfidavvbqz
 ```
 
 | Secret | Required | Notes |
@@ -113,7 +113,7 @@ npx supabase secrets set \
 ### D2. Deploy + schedule
 
 ```bash
-npx supabase functions deploy send-weekly-digest --project-ref oftunznsumfidavvbqz
+npx supabase functions deploy send-weekly-digest --project-ref ofutnznsyumfidavvbqz
 ```
 
 Schedule Sundays ~14:00 UTC (see `supabase/cron_weekly_digest.sql`), or Dashboard schedule with body `{}`.
@@ -122,7 +122,7 @@ Dry-run test:
 
 ```bash
 curl -sS -X POST \
-  'https://oftunznsumfidavvbqz.supabase.co/functions/v1/send-weekly-digest' \
+  'https://ofutnznsyumfidavvbqz.supabase.co/functions/v1/send-weekly-digest' \
   -H "Authorization: Bearer SERVICE_ROLE_KEY" \
   -H 'Content-Type: application/json' \
   -d '{"dryRun":true}'
