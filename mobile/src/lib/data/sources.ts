@@ -197,7 +197,7 @@ export const MASTER_SOURCES: Source[] = [
     trustScore: 5,
     enabled: false,
     notes:
-      'Disabled 2026-10-19: feed still serves only stale 2020 archive posts (no live contests). Prefer contestcanada-net.',
+      'Disabled 2026-10-19: no live contests (stale archive). 2026-11-06 cloud probe: HTTP 500 Wordfence/HTML — not RSS. Prefer contestcanada-net.',
   },
   {
     id: 'reddit-contestsofcanada',
@@ -542,7 +542,7 @@ export const MASTER_SOURCES: Source[] = [
     type: 'rss_standard',
     country: 'US',
     trustScore: 8,
-    enabled: false, // TLS / host down
+    enabled: false, // Cloudflare challenge + unstable TLS (2026-11-06 datacenter probe)
   },
   {
     id: 'save-a-loonie',
