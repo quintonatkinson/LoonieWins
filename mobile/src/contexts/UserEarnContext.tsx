@@ -29,7 +29,7 @@ interface UserEarnContextValue {
   setLastDailyEntryAt: (iso: string | null) => void
   setSubscriptionTier: (tier: SubscriptionTier) => void
   addPoints: (amount: number, meta?: { type?: string; description?: string }) => void
-  useFreeEntry: () => Promise<boolean>
+  consumeFreeEntry: () => Promise<boolean>
   spendPointsForEntry: (cost: number) => boolean
   upgradeToPro: (planId: BillingPlanId) => Promise<void>
 }
@@ -125,7 +125,7 @@ export function UserEarnProvider({ children }: { children: ReactNode }) {
     [user, profile, updateProfile]
   )
 
-  const useFreeEntry = useCallback(async (): Promise<boolean> => {
+  const consumeFreeEntry = useCallback(async (): Promise<boolean> => {
     if (!profile) return false
     if (isProTier(profile.subscription_tier, profile.is_premium)) {
       void updateProfile({ last_daily_entry_at: new Date().toISOString() })
@@ -182,7 +182,7 @@ export function UserEarnProvider({ children }: { children: ReactNode }) {
         setLastDailyEntryAt,
         setSubscriptionTier,
         addPoints,
-        useFreeEntry,
+        consumeFreeEntry,
         spendPointsForEntry,
         upgradeToPro,
       }}

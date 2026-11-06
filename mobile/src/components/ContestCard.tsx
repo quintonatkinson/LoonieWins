@@ -47,7 +47,7 @@ export default function ContestCard({
     balance,
     getEntryCost,
     spendPointsForEntry,
-    useFreeEntry,
+    consumeFreeEntry,
     weeklyEntriesUsed,
     weeklyEntryCap,
   } = useUserLimits()
@@ -106,9 +106,9 @@ export default function ContestCard({
     }
     if (canEnterFree) {
       openEntry()
-      try {
-        void useFreeEntry()
-      } catch (_) {}
+      void consumeFreeEntry().catch(() => {
+        /* guest bookkeeping best-effort */
+      })
       return
     }
     if (weeklyLimitReached && userIsFree) {
@@ -134,7 +134,7 @@ export default function ContestCard({
     canAffordEntry,
     entryCostPts,
     spendPointsForEntry,
-    useFreeEntry,
+    consumeFreeEntry,
     openEntry,
     onPressUrl,
     onNeedEarn,
