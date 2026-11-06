@@ -1,6 +1,6 @@
 # Continuously refresh the giveaway Hive Mind via the ingest Edge Function.
 # Repo secrets (Settings → Secrets and variables → Actions):
-#   SUPABASE_URL              = https://oftunznsumfidavvbqz.supabase.co
+#   SUPABASE_URL              = https://ofutnznsyumfidavvbqz.supabase.co
 #   SUPABASE_SERVICE_ROLE_KEY = service_role JWT from Supabase → Settings → API
 # Optional Edge secret (supabase secrets set):
 #   RSS2JSON_API_KEY          = paid rss2json key for fatter pages (count=100)

@@ -1,4 +1,4 @@
-# Deploy server ingest (Hive Mind) — project `oftunznsumfidavvbqz`
+# Deploy server ingest (Hive Mind) — project `ofutnznsyumfidavvbqz`
 
 Keeps `public.contests` filled every 30 minutes **even when nobody has the app open**.
 
@@ -7,8 +7,8 @@ Keeps `public.contests` filled every 30 minutes **even when nobody has the app o
 ```bash
 # From repo root (requires Supabase CLI + login)
 npx supabase login
-npx supabase link --project-ref oftunznsumfidavvbqz
-npx supabase functions deploy ingest-giveaways --project-ref oftunznsumfidavvbqz
+npx supabase link --project-ref ofutnznsyumfidavvbqz
+npx supabase functions deploy ingest-giveaways --project-ref ofutnznsyumfidavvbqz
 ```
 
 `supabase/config.toml` sets `verify_jwt = false` so GitHub Action / pg_cron can POST with the service role bearer token.
@@ -19,12 +19,12 @@ Dashboard → **Project Settings → Edge Functions → Secrets** (or CLI):
 
 | Secret | Required | Notes |
 |--------|----------|-------|
-| `SUPABASE_URL` | auto | `https://oftunznsumfidavvbqz.supabase.co` |
+| `SUPABASE_URL` | auto | `https://ofutnznsyumfidavvbqz.supabase.co` |
 | `SUPABASE_SERVICE_ROLE_KEY` | auto | Injected for functions |
 | `RSS2JSON_API_KEY` | optional | Paid [rss2json](https://rss2json.com/) key → `count=100` (fatter pages). Free tier ≈10 items. |
 
 ```bash
-npx supabase secrets set RSS2JSON_API_KEY=your_key --project-ref oftunznsumfidavvbqz
+npx supabase secrets set RSS2JSON_API_KEY=your_key --project-ref ofutnznsyumfidavvbqz
 ```
 
 ## 3. Pick ONE scheduler (or both)
@@ -35,7 +35,7 @@ Repo → **Settings → Secrets and variables → Actions**:
 
 | Secret | Value |
 |--------|-------|
-| `SUPABASE_URL` | `https://oftunznsumfidavvbqz.supabase.co` |
+| `SUPABASE_URL` | `https://ofutnznsyumfidavvbqz.supabase.co` |
 | `SUPABASE_SERVICE_ROLE_KEY` | Settings → API → `service_role` (secret) |
 
 Workflow: `.github/workflows/ingest-giveaways.yml` — cron `*/30 * * * *` + manual **Run workflow**.
@@ -53,7 +53,7 @@ Same SQL lives as additive migration: `supabase/migrations/20260920_cron_ingest_
 
 ```bash
 curl -sS -X POST \
-  'https://oftunznsumfidavvbqz.supabase.co/functions/v1/ingest-giveaways' \
+  'https://ofutnznsyumfidavvbqz.supabase.co/functions/v1/ingest-giveaways' \
   -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" \
   -H 'Content-Type: application/json' \
   -d '{}' | jq .
@@ -72,6 +72,6 @@ VITE_RSS2JSON_API_KEY=your_key          # web
 
 ## Notes
 
-- This agent’s Supabase MCP is linked to other projects, **not** `oftunznsumfidavvbqz` — Quinton must deploy from his CLI/dashboard.
+- This agent’s Supabase MCP is linked to other projects, **not** `ofutnznsyumfidavvbqz` — Quinton must deploy from his CLI/dashboard.
 - SmartCanucks contests category remains blocked (Cloudflare); FreeStuffFinder giveaways uses `rss2json_first`.
 - No ToS-violating scrapers; Gleam/retailer hubs are scaffolds until partner APIs exist.

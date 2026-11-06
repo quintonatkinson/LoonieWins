@@ -1,5 +1,5 @@
 -- LoonieWins: schedule Hive Mind ingest every 30 minutes (pg_cron + pg_net).
--- Project ref: oftunznsumfidavvbqz
+-- Project ref: ofutnznsyumfidavvbqz
 --
 -- Prerequisites:
 --   1) Edge Function `ingest-giveaways` deployed
@@ -25,7 +25,7 @@ SELECT cron.schedule(
   '*/30 * * * *',
   $$
   SELECT net.http_post(
-    url := 'https://oftunznsumfidavvbqz.supabase.co/functions/v1/ingest-giveaways',
+    url := 'https://ofutnznsyumfidavvbqz.supabase.co/functions/v1/ingest-giveaways',
     headers := jsonb_build_object(
       'Content-Type', 'application/json',
       'Authorization', 'Bearer SERVICE_ROLE_KEY_REPLACE_ME'

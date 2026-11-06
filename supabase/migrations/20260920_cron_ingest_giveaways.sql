@@ -1,4 +1,4 @@
--- ADDITIVE: schedule server ingest for Hive Mind contests (project oftunznsumfidavvbqz).
+-- ADDITIVE: schedule server ingest for Hive Mind contests (project ofutnznsyumfidavvbqz).
 -- Does not modify contests schema or bootstrap tables owned by other tracks.
 -- After deploy of Edge Function ingest-giveaways, replace SERVICE_ROLE_KEY_REPLACE_ME
 -- and run this in SQL Editor (or rely on supabase/cron_ingest.sql).
@@ -20,7 +20,7 @@ SELECT cron.schedule(
   '*/30 * * * *',
   $$
   SELECT net.http_post(
-    url := 'https://oftunznsumfidavvbqz.supabase.co/functions/v1/ingest-giveaways',
+    url := 'https://ofutnznsyumfidavvbqz.supabase.co/functions/v1/ingest-giveaways',
     headers := jsonb_build_object(
       'Content-Type', 'application/json',
       'Authorization', 'Bearer SERVICE_ROLE_KEY_REPLACE_ME'

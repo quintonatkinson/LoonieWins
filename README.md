@@ -14,7 +14,7 @@ Canadian + American contest aggregator & offerwall — Win More, Work Less.
 
 1. `npm install`
 2. Copy `.env.example` → `.env`:
-   - `VITE_SUPABASE_URL=https://oftunznsumfidavvbqz.supabase.co`
+   - `VITE_SUPABASE_URL=https://ofutnznsyumfidavvbqz.supabase.co`
    - `VITE_SUPABASE_ANON_KEY=…`
    - Optional: `VITE_RSS2JSON_API_KEY` for fatter RSS pages (50–100 vs ~10 free)
 3. Run **`supabase/schema.sql`** in the SQL Editor (full bootstrap). Expose schemas `public`, `tracking`, `giveaways`. Enable Email auth (Confirm email off for local testing).
