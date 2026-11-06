@@ -30,7 +30,7 @@ interface UserEarnContextValue {
   setSubscriptionTier: (tier: SubscriptionTier) => void
   addPoints: (amount: number, meta?: { type?: string; description?: string }) => void
   /** Consume one free weekly slot (RPC when signed in). Returns false if paywalled. */
-  useFreeEntry: () => Promise<boolean>
+  consumeFreeEntry: () => Promise<boolean>
   spendPointsForEntry: (cost: number) => boolean
   /** StoreKit/Play via RevenueCat (or QA stub) → flips subscription_tier / is_premium */
   upgradeToPro: (planId: BillingPlanId) => Promise<void>
@@ -135,7 +135,7 @@ export function UserEarnProvider({ children }: { children: ReactNode }) {
     [user, profile, updateProfile]
   )
 
-  const useFreeEntry = useCallback(async (): Promise<boolean> => {
+  const consumeFreeEntry = useCallback(async (): Promise<boolean> => {
     if (!profile) return false
     if (isProTier(profile.subscription_tier, profile.is_premium)) {
       void updateProfile({ last_daily_entry_at: new Date().toISOString() })
@@ -200,7 +200,7 @@ export function UserEarnProvider({ children }: { children: ReactNode }) {
     setLastDailyEntryAt,
     setSubscriptionTier,
     addPoints,
-    useFreeEntry,
+    consumeFreeEntry,
     spendPointsForEntry,
     upgradeToPro,
   }

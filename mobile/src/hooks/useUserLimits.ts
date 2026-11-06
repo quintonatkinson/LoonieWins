@@ -24,7 +24,7 @@ export function useUserLimits() {
     weeklyEntriesUsed,
     weeklyEntryCapValue,
     spendPointsForEntry,
-    useFreeEntry,
+    consumeFreeEntry,
   } = useUserEarn()
   const { profile } = useAuth()
 
@@ -96,7 +96,7 @@ export function useUserLimits() {
     entryCostPts: ENTRY_COST_PTS,
     getEntryCost,
     spendPointsForEntry: spendForEntry,
-    useFreeEntry,
+    consumeFreeEntry,
     hasUnlimitedEntries: unlimited,
     smartFillsRemaining,
     smartFillsUnlimited,

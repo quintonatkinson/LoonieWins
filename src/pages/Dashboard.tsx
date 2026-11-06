@@ -139,7 +139,7 @@ export default function Dashboard() {
     balance,
     getEntryCost,
     spendPointsForEntry,
-    useFreeEntry,
+    consumeFreeEntry,
   } = useUserLimits()
   const [showSmartFillPaywall, setShowSmartFillPaywall] = useState(false)
   const [showRailsPaywall, setShowRailsPaywall] = useState(false)
@@ -452,11 +452,9 @@ export default function Dashboard() {
 
       if (canEnterFree) {
         await openOneTapUrl(contest)
-        try {
-          void useFreeEntry()
-        } catch (_) {
+        void consumeFreeEntry().catch(() => {
           /* guest bookkeeping best-effort */
-        }
+        })
         return
       }
 
@@ -481,7 +479,7 @@ export default function Dashboard() {
       getEntryCost,
       balance,
       spendPointsForEntry,
-      useFreeEntry,
+      consumeFreeEntry,
       openOneTapUrl,
       navigate,
       resolveEntryEmail,
