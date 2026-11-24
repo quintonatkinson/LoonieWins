@@ -64,11 +64,7 @@ grant execute on function public.platform_live_contest_count() to anon, authenti
 -- ---------------------------------------------------------------------------
 -- RLS sanity notes (no policy change in this migration)
 -- ---------------------------------------------------------------------------
--- Contests: bootstrap keeps anon/authenticated INSERT+UPDATE so the web app
--- can sync Hive Mind before server ingest is live. Once ingest-giveaways +
--- verify-contest-links run with service_role, operators MAY tighten writes to
--- service_role only (see migration 20261019_rls_contests_write_lockdown.sql
--- — commented / opt-in). Do not enable lockdown until Priority 3 ingest works.
+-- Contests: writes are service_role only (see 20261019_rls_contests_write_lockdown.sql).
 --
 -- tracking.contest_entries: own-row RLS already correct (select/insert/update/delete).
 -- expires_at column: see 20261019_contest_entries_expires_at.sql

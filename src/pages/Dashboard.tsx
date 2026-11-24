@@ -59,6 +59,7 @@ import {
   prefsToProfilePatch,
   saveInboxShieldPrefs,
 } from '../lib/inboxShield/storage'
+import { openExternalUrl } from '../lib/utils/sanitizeContestUrl'
 
 type SortFilter = SortDefault
 
@@ -413,7 +414,7 @@ export default function Dashboard() {
         contest.url,
         contest.contentSnippet ?? contest.description
       )
-      const win = window.open(url, '_blank', 'noopener,noreferrer')
+      const win = openExternalUrl(url)
       if (!win) {
         pendingAutoMarkRef.current = null
         setOverlayContest(contest)
@@ -423,7 +424,7 @@ export default function Dashboard() {
       setStatusToast('Opened — will mark entered when you return')
     } catch {
       pendingAutoMarkRef.current = contest
-      window.open(contest.url, '_blank', 'noopener,noreferrer')
+      openExternalUrl(contest.url)
       setStatusToast('Opened — will mark entered when you return')
     }
   }, [profile?.settings])

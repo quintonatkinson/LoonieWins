@@ -10,6 +10,8 @@
 --
 -- After running: Dashboard → Settings → API → Exposed schemas
 --   add: tracking, giveaways  (public is already exposed)
+-- Then run migrations/20261123_security_hardening.sql (profile entitlement guard,
+-- RPC EXECUTE grants). Re-run it after any later migration that adds functions.
 -- =============================================================================
 
 create extension if not exists "pgcrypto";
@@ -252,7 +254,7 @@ create policy "Users can insert own profile"
   on public.profiles for insert
   with check (auth.uid() = id);
 
--- ---- contests (Hive Mind: anon + authenticated read live + upsert) ----
+-- ---- contests (Hive Mind: anon + authenticated read live; writes service_role only) ----
 drop policy if exists "Allow public read live contests" on public.contests;
 drop policy if exists "Contests are readable by all" on public.contests;
 create policy "Allow public read live contests"
@@ -261,17 +263,8 @@ create policy "Allow public read live contests"
   using (expiry_date > now() or expiry_date is null);
 
 drop policy if exists "Allow public insert contests" on public.contests;
-create policy "Allow public insert contests"
-  on public.contests for insert
-  to anon, authenticated
-  with check (true);
-
 drop policy if exists "Allow public update contests" on public.contests;
-create policy "Allow public update contests"
-  on public.contests for update
-  to anon, authenticated
-  using (true)
-  with check (true);
+revoke insert, update, delete, truncate on public.contests from anon, authenticated;
 
 -- ---- tracking.contest_entries (own data only) ----
 drop policy if exists "Users read own entries" on tracking.contest_entries;
@@ -310,7 +303,7 @@ create policy "Users insert own transactions"
 drop policy if exists "Referral pool readable by all" on giveaways.referral_pool;
 create policy "Referral pool readable by all"
   on giveaways.referral_pool for select
-  to anon, authenticated
+  to authenticated
   using (true);
 
 drop policy if exists "Users insert own referral" on giveaways.referral_pool;
@@ -333,7 +326,7 @@ create policy "Users delete own referral"
 drop policy if exists "User wins readable by all" on giveaways.user_wins;
 create policy "User wins readable by all"
   on giveaways.user_wins for select
-  to anon, authenticated
+  to authenticated
   using (true);
 
 drop policy if exists "Users insert own win" on giveaways.user_wins;
@@ -492,6 +485,9 @@ declare
   row public.profiles;
   week_start timestamptz := date_trunc('week', timezone('utc', now()));
 begin
+  if auth.role() in ('anon', 'authenticated') and p_uid is distinct from auth.uid() then
+    raise exception 'Not allowed';
+  end if;
   select * into row from public.profiles where id = p_uid for update;
   if not found then
     raise exception 'Profile not found';
@@ -508,6 +504,8 @@ begin
   return row;
 end;
 $$;
+revoke all on function public.ensure_week_reset(uuid) from public, anon, authenticated;
+
 
 create or replace function public.level_for_xp(p_xp int)
 returns int
@@ -530,7 +528,7 @@ as $$
 declare
   uid uuid := auth.uid();
   row public.profiles;
-  cap int := greatest(coalesce(p_weekly_cap, 7), 0);
+  cap int := least(greatest(coalesce(p_weekly_cap, 7), 0), 7);
   flags jsonb;
   effective_cap int;
 begin

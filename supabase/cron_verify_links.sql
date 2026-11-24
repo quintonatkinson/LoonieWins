@@ -1,12 +1,10 @@
--- LoonieWins: schedule contest URL recheck every 2 hours (pg_cron + pg_net).
--- Project ref placeholder: ofutnznsyumfidavvbqz (replace if Quinton creates a new project)
+-- LoonieWins: schedule contest URL recheck every hour (pg_cron + pg_net).
+-- Project ref: ofutnznsyumfidavvbqz
 --
 -- Prerequisites:
 --   1) Migration 20261019_link_health_and_platform_count.sql applied (last_verified)
 --   2) Edge Function `verify-contest-links` deployed
---   3) Extensions: pg_cron, pg_net
---   4) Replace SERVICE_ROLE_KEY_REPLACE_ME (Settings → API → service_role)
---      Prefer Vault: https://supabase.com/docs/guides/database/vault
+--   3) Vault secret `looniewins_cron_secret` (see supabase/cron_ingest.sql)
 --
 -- ADDITIVE — does not drop tables.
 
@@ -22,15 +20,19 @@ END $$;
 
 SELECT cron.schedule(
   'looniewins-verify-contest-links',
-  '15 */2 * * *',
+  '5 * * * *',
   $$
   SELECT net.http_post(
     url := 'https://ofutnznsyumfidavvbqz.supabase.co/functions/v1/verify-contest-links',
     headers := jsonb_build_object(
       'Content-Type', 'application/json',
-      'Authorization', 'Bearer SERVICE_ROLE_KEY_REPLACE_ME'
+      'Authorization', 'Bearer ' || (
+        SELECT decrypted_secret FROM vault.decrypted_secrets
+        WHERE name = 'looniewins_cron_secret'
+      )
     ),
-    body := '{"limit":40,"olderThanHours":24}'::jsonb
+    body := '{"limit":120,"olderThanHours":12}'::jsonb,
+    timeout_milliseconds := 120000
   );
   $$
 );

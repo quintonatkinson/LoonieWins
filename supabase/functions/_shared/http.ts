@@ -45,6 +45,90 @@ export function requireServiceBearer(req: Request): Response | null {
   return null
 }
 
+function isPrivateIPv4(ip: string): boolean {
+  const p = ip.split('.').map(Number)
+  if (p.length !== 4 || p.some((n) => !Number.isInteger(n) || n < 0 || n > 255)) return true
+  const [a, b] = p
+  return (
+    a === 0 ||
+    a === 10 ||
+    a === 127 ||
+    (a === 100 && b >= 64 && b <= 127) ||
+    (a === 169 && b === 254) ||
+    (a === 172 && b >= 16 && b <= 31) ||
+    (a === 192 && b === 168) ||
+    (a === 192 && b === 0) ||
+    (a === 198 && (b === 18 || b === 19)) ||
+    a >= 224
+  )
+}
+
+function isPrivateIPv6(ip: string): boolean {
+  const v = ip.toLowerCase().replace(/^\[|\]$/g, '')
+  if (v === '::' || v === '::1') return true
+  const mapped = v.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/)
+  if (mapped) return isPrivateIPv4(mapped[1])
+  if (v.startsWith('::ffff:')) return true
+  return /^(fc|fd|fe[89ab])/.test(v)
+}
+
+/**
+ * Only public http(s) destinations: blocks loopback, private, link-local and
+ * metadata addresses, both as literals and as the host's resolved DNS records.
+ */
+export async function isPublicHttpUrl(raw: string): Promise<boolean> {
+  let u: URL
+  try {
+    u = new URL(raw)
+  } catch {
+    return false
+  }
+  if (u.protocol !== 'http:' && u.protocol !== 'https:') return false
+  if (u.username || u.password) return false
+  if (u.port && u.port !== '80' && u.port !== '443') return false
+  const host = u.hostname.toLowerCase().replace(/\.$/, '')
+  if (!host || host === 'localhost' || /\.(localhost|local|internal|lan|home|corp)$/.test(host)) {
+    return false
+  }
+  if (/^\d+\.\d+\.\d+\.\d+$/.test(host)) return !isPrivateIPv4(host)
+  if (host.includes(':') || host.startsWith('[')) return !isPrivateIPv6(host)
+  if (!host.includes('.')) return false
+
+  const addrs: string[] = []
+  for (const type of ['A', 'AAAA'] as const) {
+    try {
+      addrs.push(...(await Deno.resolveDns(host, type)))
+    } catch {
+      /* no records of this type */
+    }
+  }
+  if (addrs.length === 0) return false
+  return addrs.every((a) => (a.includes(':') ? !isPrivateIPv6(a) : !isPrivateIPv4(a)))
+}
+
+/** fetchWithTimeout that refuses non-public destinations, re-checking every redirect hop. */
+export async function fetchPublicUrl(
+  url: string,
+  init: RequestInit & { timeoutMs?: number } = {},
+  maxRedirects = 5
+): Promise<Response> {
+  let current = url
+  for (let hop = 0; hop <= maxRedirects; hop++) {
+    if (!(await isPublicHttpUrl(current))) {
+      throw new Error('blocked_destination')
+    }
+    const res = await fetchWithTimeout(current, { ...init, redirect: 'manual' })
+    const location = res.headers.get('location')
+    if (res.status >= 300 && res.status < 400 && location) {
+      await res.body?.cancel()
+      current = new URL(location, current).toString()
+      continue
+    }
+    return res
+  }
+  throw new Error('too_many_redirects')
+}
+
 /** Abortable fetch with a hard timeout (ms). */
 export async function fetchWithTimeout(
   input: string | URL,

@@ -16,6 +16,7 @@ import {
 } from '../lib/monetization/progression'
 import ReferralInviteCard from '../components/ReferralInviteCard'
 import PageShell from '../components/PageShell'
+import { openExternalUrl } from '../lib/utils/sanitizeContestUrl'
 
 interface ReferralLink {
   id: string
@@ -80,7 +81,7 @@ export default function Referrals() {
   }, [user, profile?.referral_code])
 
   const handleClick = async (link: ReferralLink) => {
-    window.open(link.url, '_blank', 'noopener,noreferrer')
+    openExternalUrl(link.url)
     setStatusMsg(null)
 
     if (!user || !isSupabaseConfigured) {

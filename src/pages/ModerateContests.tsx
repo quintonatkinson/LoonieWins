@@ -8,6 +8,7 @@ import {
   listPendingSubmissions,
   moderateSubmission,
 } from '../lib/contestSubmissions'
+import { safeHttpUrl } from '../lib/utils/sanitizeContestUrl'
 
 export default function ModerateContests() {
   const { session, loading, signIn } = useAuthSession()
@@ -153,7 +154,7 @@ export default function ModerateContests() {
               <div>
                 <p className="text-white font-medium">{s.title}</p>
                 <a
-                  href={s.url}
+                  href={safeHttpUrl(s.url)}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="text-xs text-win break-all hover:underline"

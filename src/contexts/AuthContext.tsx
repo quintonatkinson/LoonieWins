@@ -373,6 +373,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         })
         return { error: null }
       }
+      // Tier, entitlements, referral links and the weekly reset are server-owned (webhooks / RPCs);
+      // the database ignores client writes to them and to point or fill-credit increases.
       const payload: Record<string, unknown> = {}
       if (patch.display_name !== undefined) payload.display_name = patch.display_name
       if (patch.points_balance !== undefined) payload.points_balance = patch.points_balance
@@ -385,23 +387,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         payload.smart_fills_remaining = patch.smart_fills_remaining
       if (patch.last_daily_entry_at !== undefined)
         payload.last_daily_entry_at = patch.last_daily_entry_at
-      if (patch.subscription_tier !== undefined) payload.subscription_tier = patch.subscription_tier
-      if (patch.is_premium !== undefined) payload.is_premium = patch.is_premium
       if (patch.email !== undefined) payload.email = patch.email
-      if (patch.referral_code !== undefined) payload.referral_code = patch.referral_code
-      if (patch.referred_by !== undefined) payload.referred_by = patch.referred_by
       if (patch.weekly_entries_used !== undefined)
         payload.weekly_entries_used = patch.weekly_entries_used
-      if (patch.weekly_entries_reset_at !== undefined)
-        payload.weekly_entries_reset_at = patch.weekly_entries_reset_at
       if (patch.last_streak_at !== undefined) payload.last_streak_at = patch.last_streak_at
       if (patch.streak_grace_available !== undefined)
         payload.streak_grace_available = patch.streak_grace_available
       if (patch.last_comeback_bonus_at !== undefined)
         payload.last_comeback_bonus_at = patch.last_comeback_bonus_at
-      if (patch.iap_product_id !== undefined) payload.iap_product_id = patch.iap_product_id
-      if (patch.iap_expires_at !== undefined) payload.iap_expires_at = patch.iap_expires_at
-      if (patch.feature_flags !== undefined) payload.feature_flags = patch.feature_flags
       if (patch.inbox_shield_enabled !== undefined)
         payload.inbox_shield_enabled = patch.inbox_shield_enabled
       if (patch.entry_email_for_giveaways !== undefined)

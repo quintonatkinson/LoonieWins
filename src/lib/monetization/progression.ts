@@ -308,6 +308,17 @@ export async function rpcEnsureReferralCode(): Promise<string | null> {
   return typeof data === 'string' ? data : null
 }
 
+/** One-time welcome points, granted server-side. Returns false once already claimed. */
+export async function rpcClaimWelcomeBonus(): Promise<boolean> {
+  if (!isSupabaseConfigured || !supabase) return false
+  const { data, error } = await supabase.rpc('claim_welcome_bonus')
+  if (error) {
+    console.warn('[Earn] welcome bonus:', error.message)
+    return false
+  }
+  return Boolean((data as { ok?: boolean } | null)?.ok)
+}
+
 export function localConsumeWeeklyEntry(
   used: number,
   resetAt: string | null | undefined,

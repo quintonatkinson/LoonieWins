@@ -30,6 +30,7 @@ import {
 import { formatEntriesToday } from '../hooks/useContestSocialProof'
 import { resolveFeedDisplayPrefs } from '../lib/utils/userSettings'
 import { useAuth } from '../contexts/AuthContext'
+import { openExternalUrl } from '../lib/utils/sanitizeContestUrl'
 
 interface ContestBrowserProps {
   contest: Contest | null
@@ -439,7 +440,7 @@ export default function ContestBrowser({
     setHonestyLine('Needs your tap: captcha / sign-in / purchase (when the sponsor asks)')
     openNativeWebView(resolvedUrl).then((opened) => {
       if (!opened) {
-        window.open(resolvedUrl, '_blank', 'noopener,noreferrer')
+        openExternalUrl(resolvedUrl)
         if (extInstalled) {
           setAutoFillMsg(
             'Opened sponsor tab — press Alt+Shift+L (or extension Fill) for in-page Smart-Fill, then review & submit.'
@@ -478,7 +479,7 @@ export default function ContestBrowser({
       setChecklistOpen(true)
       void openNativeWebView(resolvedUrl).then((opened) => {
         if (!opened) {
-          window.open(resolvedUrl, '_blank', 'noopener,noreferrer')
+          openExternalUrl(resolvedUrl)
           if (autoMarkOnReturn && onMarkEntered) {
             setAwaitingReturn(true)
             setStatusMsg('Opened — marking entered when you return')
