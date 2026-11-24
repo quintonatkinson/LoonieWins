@@ -10,7 +10,7 @@
  *
  * Cron: supabase/cron_verify_links.sql or GitHub Action
  * Body (POST JSON):
- *   { "limit": 120, "olderThanHours": 12, "dryRun": false }
+ *   { "limit": 120, "olderThanHours": 12, "dryRun": false, "resolveUrls": true }
  *
  * Auth: Authorization: Bearer <service_role or CRON_SECRET>
  */
@@ -23,6 +23,11 @@ import {
   requireServiceBearer,
 } from '../_shared/http.ts'
 import { extractEndDate, extractTitleEndDate, htmlToText } from '../_shared/endDate.ts'
+import {
+  needsEntryResolution,
+  resolveContestEntryUrl,
+  sanitizeContestUrl,
+} from '../_shared/linkResolver.ts'
 
 const DEAD = new Set([403, 404, 410, 500, 502, 503, 520, 521, 522, 523, 524])
 const CONCURRENCY = 8
@@ -149,6 +154,8 @@ Deno.serve(async (req) => {
   const limit = Math.min(Math.max(Number(body.limit ?? 120), 1), 300)
   const olderThanHours = Math.min(Math.max(Number(body.olderThanHours ?? 12), 1), 168)
   const dryRun = body.dryRun === true
+  /** When true (default), resolve listing pages to direct entry URLs and backfill contests.url */
+  const resolveUrls = body.resolveUrls !== false
   const cutoff = new Date(Date.now() - olderThanHours * 60 * 60 * 1000).toISOString()
 
   const admin = createClient(supabaseUrl, serviceKey, {
@@ -174,17 +181,39 @@ Deno.serve(async (req) => {
   const started = Date.now()
 
   const results = await mapPool(contests, CONCURRENCY, async (c) => {
+    const storedUrl = c.url.trim()
     const needsDate = !c.expiry_date
     const titleDate = needsDate && c.title ? extractTitleEndDate(c.title) : null
-    const probe = dryRun
-      ? { status: c.link_status, challenged: false, html: null }
-      : await probeUrl(c.url.trim(), needsDate && !titleDate)
-    const foundDate = titleDate ?? (probe.html ? extractEndDate(htmlToText(probe.html)) : null)
+    const needsHtmlForDate = needsDate && !titleDate
+    let listingHtml: string | null = null
+    let entryUrl = storedUrl
+    let urlResolved = false
+
+    if (!dryRun && resolveUrls && needsEntryResolution(storedUrl)) {
+      const resolution = await resolveContestEntryUrl(storedUrl, { timeoutMs: PROBE_TIMEOUT_MS })
+      listingHtml = resolution.html ?? null
+      if (resolution.resolved && resolution.url !== storedUrl) {
+        entryUrl = sanitizeContestUrl(resolution.url)
+        urlResolved = true
+      }
+    }
+
+    let probe = dryRun
+      ? { status: c.link_status, challenged: false, html: null as string | null }
+      : await probeUrl(entryUrl, needsHtmlForDate && !listingHtml)
+    if (listingHtml && !probe.html) {
+      probe = { ...probe, html: listingHtml }
+    }
+
+    const foundDate =
+      titleDate ??
+      (probe.html ? extractEndDate(htmlToText(probe.html)) : null)
     const isDead = probe.status != null && DEAD.has(probe.status)
 
     if (!dryRun) {
       const now = new Date().toISOString()
       const patch: Record<string, unknown> = { last_verified: now, updated_at: now }
+      if (urlResolved && entryUrl !== storedUrl) patch.url = entryUrl
       if (probe.status != null) patch.link_status = probe.status
       // A bot wall is not evidence the contest is gone; drop any stale "dead" verdict.
       else if (probe.challenged && c.link_status != null && DEAD.has(c.link_status)) patch.link_status = null
@@ -194,17 +223,40 @@ Deno.serve(async (req) => {
       }
       const { error: upErr } = await admin.from('contests').update(patch).eq('id', c.id)
       if (upErr) console.error('[verify-contest-links] update', c.id, upErr.message)
-      return { id: c.id, status: probe.status, was: c.link_status, dead: isDead, challenged: probe.challenged, expiry: foundDate, ok: !upErr }
+      return {
+        id: c.id,
+        status: probe.status,
+        was: c.link_status,
+        dead: isDead,
+        challenged: probe.challenged,
+        expiry: foundDate,
+        urlResolved,
+        entryUrl: urlResolved ? entryUrl : undefined,
+        ok: !upErr,
+      }
     }
-    return { id: c.id, status: probe.status, was: c.link_status, dead: isDead, challenged: probe.challenged, expiry: foundDate, ok: true }
+    return {
+      id: c.id,
+      status: probe.status,
+      was: c.link_status,
+      dead: isDead,
+      challenged: probe.challenged,
+      expiry: foundDate,
+      urlResolved,
+      entryUrl: urlResolved ? entryUrl : undefined,
+      ok: true,
+    }
   })
 
   const dated = results.filter((r) => r.expiry)
+  const urlResolvedCount = results.filter((r) => r.urlResolved).length
   return json(200, {
     ok: true,
     dryRun,
+    resolveUrls,
     scanned: contests.length,
     updated: dryRun ? 0 : results.filter((r) => r.ok).length,
+    urlsResolved: urlResolvedCount,
     dead: results.filter((r) => r.dead).length,
     challenged: results.filter((r) => r.challenged).length,
     unknown: results.filter((r) => r.status == null).length,
