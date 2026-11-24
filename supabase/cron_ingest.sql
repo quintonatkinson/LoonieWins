@@ -3,9 +3,10 @@
 --
 -- Prerequisites:
 --   1) Edge Function `ingest-giveaways` deployed
---   2) Extensions: pg_cron, pg_net (Database → Extensions)
---   3) Replace SERVICE_ROLE_KEY below (Project Settings → API → service_role)
---      Prefer Vault: https://supabase.com/docs/guides/database/vault
+--   2) Edge secret CRON_SECRET set (the handler accepts it as Bearer)
+--   3) Vault secret `looniewins_cron_secret` holding the same value — create once
+--      in SQL Editor (never commit the value):
+--        select vault.create_secret('<CRON_SECRET value>', 'looniewins_cron_secret');
 --
 -- This file is ADDITIVE — it does not drop tables or wipe bootstrap schema.
 
@@ -20,6 +21,7 @@ EXCEPTION
   WHEN OTHERS THEN NULL;
 END $$;
 
+-- pg_net defaults to a 5s timeout; ingest takes ~20-30s.
 SELECT cron.schedule(
   'looniewins-ingest-giveaways',
   '*/30 * * * *',
@@ -28,9 +30,13 @@ SELECT cron.schedule(
     url := 'https://ofutnznsyumfidavvbqz.supabase.co/functions/v1/ingest-giveaways',
     headers := jsonb_build_object(
       'Content-Type', 'application/json',
-      'Authorization', 'Bearer SERVICE_ROLE_KEY_REPLACE_ME'
+      'Authorization', 'Bearer ' || (
+        SELECT decrypted_secret FROM vault.decrypted_secrets
+        WHERE name = 'looniewins_cron_secret'
+      )
     ),
-    body := '{}'::jsonb
+    body := '{}'::jsonb,
+    timeout_milliseconds := 120000
   );
   $$
 );

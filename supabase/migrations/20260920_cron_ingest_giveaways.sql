@@ -1,7 +1,7 @@
 -- ADDITIVE: schedule server ingest for Hive Mind contests (project ofutnznsyumfidavvbqz).
 -- Does not modify contests schema or bootstrap tables owned by other tracks.
--- After deploy of Edge Function ingest-giveaways, replace SERVICE_ROLE_KEY_REPLACE_ME
--- and run this in SQL Editor (or rely on supabase/cron_ingest.sql).
+-- Requires Vault secret `looniewins_cron_secret` (see supabase/cron_ingest.sql);
+-- until it exists the job runs but the Edge Function returns 401.
 -- Companion: supabase/cron_verify_links.sql (link_status + last_verified recheck).
 
 CREATE EXTENSION IF NOT EXISTS pg_cron;
@@ -14,7 +14,6 @@ EXCEPTION
   WHEN OTHERS THEN NULL;
 END $$;
 
--- NOTE: Operator must substitute the real service_role JWT before this job can auth.
 SELECT cron.schedule(
   'looniewins-ingest-giveaways',
   '*/30 * * * *',
@@ -23,9 +22,13 @@ SELECT cron.schedule(
     url := 'https://ofutnznsyumfidavvbqz.supabase.co/functions/v1/ingest-giveaways',
     headers := jsonb_build_object(
       'Content-Type', 'application/json',
-      'Authorization', 'Bearer SERVICE_ROLE_KEY_REPLACE_ME'
+      'Authorization', 'Bearer ' || (
+        SELECT decrypted_secret FROM vault.decrypted_secrets
+        WHERE name = 'looniewins_cron_secret'
+      )
     ),
-    body := '{}'::jsonb
+    body := '{}'::jsonb,
+    timeout_milliseconds := 120000
   );
   $$
 );
