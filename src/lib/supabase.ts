@@ -1,7 +1,11 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL?.trim()
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY?.trim()
+// Public client config for project ofutnznsyumfidavvbqz; the publishable key is safe to ship (RLS enforces access).
+const PUBLIC_SUPABASE_URL = 'https://ofutnznsyumfidavvbqz.supabase.co'
+const PUBLIC_SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_2TY7kGZvKbDHgUeR264Itw_TOGHPYDl'
+
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL?.trim() || PUBLIC_SUPABASE_URL
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY?.trim() || PUBLIC_SUPABASE_PUBLISHABLE_KEY
 
 const isConfigured = Boolean(
   supabaseUrl &&
