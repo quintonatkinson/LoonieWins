@@ -211,9 +211,10 @@ export const MASTER_SOURCES: Source[] = [
     type: 'rss_standard',
     country: 'CA',
     trustScore: 7,
-    enabled: true,
+    enabled: false,
     includeKeywords: CONTEST_KEYWORDS,
-    notes: 'Main site RSS with keyword filter (category/contests feed empty 2026-11-24).',
+    notes:
+      'Disabled 2026-11-24: main site RSS is grocery/deals-only (0 contest keyword matches); category feed empty.',
   },
   {
     id: 'contestscoop',

@@ -65,6 +65,7 @@ const DISABLED_SOURCE_IDS: string[] = [
   'cbc-contests',
   'win-prizes-online',
   'true-sweepstakes',
+  'save-a-loonie',
   // Overnight sources quality 2026-10-19 — persistently dead / empty / proxy-blocked
   'contestscoop',
   'contest-canada',
@@ -119,14 +120,6 @@ const ACTIVE_SOURCES: Source[] = [
     country: 'CA',
     enabled: true,
     feedType: 'wp_json',
-    includeKeywords: CONTEST_KEYWORDS,
-  },
-  {
-    id: 'save-a-loonie',
-    name: 'SaveALoonie (Contests)',
-    url: 'https://www.savealoonie.com/feed/',
-    country: 'CA',
-    enabled: true,
     includeKeywords: CONTEST_KEYWORDS,
   },
   { id: 'sweeties-sweeps', name: 'Sweeties Sweeps', url: 'https://sweetiessweeps.com/feed/', country: 'US', enabled: true },
