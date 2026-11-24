@@ -90,7 +90,7 @@ export function useContestEntries() {
       if (!firstEnter && !firstSubmit) return
       if (user) {
         const res = await rpcAwardEntryProgress(contestId, status)
-        if (res.ok && !res.local) {
+        if (!res.local) {
           await refreshProfile()
           return
         }
