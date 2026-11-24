@@ -20,7 +20,10 @@ function computeQualityScore(c: Contest, defaultEligibility: 'CA' | 'US' = DEFAU
   if ((c.prizeValue ?? 0) >= 500) score += 10
   if (reqs.includes('Purchase Required')) score -= 20
   if (reqs.includes('Creative Submission')) score -= 30
-  if (c.eligibility === defaultEligibility) score += 10
+  if (c.eligibility === defaultEligibility) score += 15
+  if (c.eligibility === 'NA' && defaultEligibility === 'CA') score += 8
+  if (c.eligibility === 'US' && defaultEligibility === 'CA') score -= 50
+  if (c.eligibility === 'Unknown') score -= 35
   return score
 }
 

@@ -86,10 +86,16 @@ export function autoCategorize(title: string, body: string): TagResult {
   return { tags, restrictions }
 }
 
-// Eligibility: NA first (multi-country), then US (strict), then CA
-const ELIG_NA = /\b(us and canada|north america|us\/ca|us\s*&\s*canada)\b/i
-const ELIG_US = /\b(50 us|us only|united states only|residents of the us|us residents only)\b/i
-const ELIG_CA = /\b(residents of canada|canada only|canadian residents)\b/i
+// Eligibility: NA (both countries in text), US-only signals, Canadian signals
+const ELIG_NA =
+  /\b(us and canada|u\.s\. and canada|usa and canada|united states and canada|canada and (the )?(u\.s\.|us|united states)|north america|us\/ca|ca\/us|us\s*&\s*canada|canada\s*&\s*(us|u\.s\.|united states)|(?:open|available|legal) to (?:legal )?residents of (?:the )?(?:u\.s\.|us|united states)(?:,| and) canada|residents of canada(?:,| and) (?:the )?(?:u\.s\.|us|united states))\b/i
+const ELIG_US =
+  /\b(50 united states|50 u\.s\.(?:\s+states)?|contiguous united states|u\.s\. only|us only|united states only|residents of the (?:u\.s\.|us|united states) only|(?:open|available) to (?:legal )?residents of the (?:u\.s\.|us|united states)(?!\s*(?:,| and) canada)|excluding canada|not (?:open|available) (?:in|to) canada|void (?:in|where )?canada|(?:u\.s\.|us) residents only)\b/i
+const ELIG_CA =
+  /\b(residents of canada|legal residents of canada|canadian residents|canada only|open to canada|open to canadians|(?:across|throughout) canada|must be (?:a )?(?:legal )?canadian|canada\/canadian|prizes? (?:shipped |delivered )?to canada)\b/i
+const ELIG_CA_PROVINCE =
+  /\b(?:resident of |legal resident of )?(ontario|quebec|qu[eé]bec|british columbia|alberta|manitoba|saskatchewan|nova scotia|new brunswick|newfoundland|prince edward island|yukon|northwest territories|nunavut)\b/i
+const ELIG_CA_HOST = /\.(ca)(?:\/|$|\?)/i
 
 export interface MetadataResult {
   eligibility: 'CA' | 'US' | 'NA' | 'Unknown'
@@ -98,19 +104,30 @@ export interface MetadataResult {
 }
 
 /**
- * Scan title and body for country eligibility and entry requirements.
- * USA detection is strict to avoid false positives for Canadian users.
+ * Scan title, body, and optional link URL for country eligibility and entry requirements.
+ * NA only when both-country language is present. Unknown when no Canadian proof in text.
  */
-export function scanForMetadata(title: string, body: string): MetadataResult {
-  const text = `${title} ${body}`.toLowerCase()
+export function scanForMetadata(title: string, body: string, link?: string): MetadataResult {
+  const text = `${title} ${body} ${link ?? ''}`.toLowerCase()
   let eligibility: 'CA' | 'US' | 'NA' | 'Unknown' = 'Unknown'
-  let eligibilityUnverified = false
+  let eligibilityUnverified = true
   const requirements: string[] = []
 
-  if (ELIG_NA.test(text)) eligibility = 'NA'
-  else if (ELIG_US.test(text)) eligibility = 'US'
-  else if (ELIG_CA.test(text)) eligibility = 'CA'
-  else {
+  const hasNA = ELIG_NA.test(text)
+  const hasUS = ELIG_US.test(text) && !hasNA
+  const hasCA =
+    ELIG_CA.test(text) || ELIG_CA_PROVINCE.test(text) || (link ? ELIG_CA_HOST.test(link) : false)
+
+  if (hasNA) {
+    eligibility = 'NA'
+    eligibilityUnverified = false
+  } else if (hasUS) {
+    eligibility = 'US'
+    eligibilityUnverified = false
+  } else if (hasCA) {
+    eligibility = 'CA'
+    eligibilityUnverified = false
+  } else {
     eligibility = 'Unknown'
     eligibilityUnverified = true
   }

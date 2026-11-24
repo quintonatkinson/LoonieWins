@@ -8,6 +8,7 @@ import {
   getRequirementBadges,
   hasCostlyRequirement,
 } from '../lib/utils/requirementBadges'
+import { eligibilityBadge } from '../lib/utils/eligibilityGeo'
 
 interface ContestCardProps {
   contest: Contest
@@ -149,10 +150,7 @@ export default function ContestCard({
     : `UNLOCK (${entryCostPts} Pts)`
 
   const isLocked = contest.isLocked === true
-  const elig = contest.eligibility ?? 'Unknown'
-  const eligDisplay =
-    elig === 'CA' ? '🍁' : elig === 'US' ? '🇺🇸' : elig === 'NA' ? '🌎' : '🍁'
-  const eligUnverified = contest.eligibilityUnverified ?? false
+  const eligBadge = eligibilityBadge(contest)
 
   if (contest.id === '__offline_alert__') {
     if (variant === 'routine') return null
@@ -259,21 +257,28 @@ export default function ContestCard({
             <Text className="text-gray-400 text-xs">🕐 {daysLeft}d left</Text>
           ) : null}
           <View
-            className={`rounded-full px-2 py-0.5 ${
-              elig === 'US'
-                ? 'bg-red-500/20 border border-red-500/40'
-                : eligUnverified
-                  ? 'bg-amber-500/20 border border-amber-500/40'
-                  : 'bg-gray-600/50'
+            className={`rounded-full px-2 py-0.5 border ${
+              eligBadge.tone === 'us'
+                ? 'bg-red-500/20 border-red-500/40'
+                : eligBadge.tone === 'na'
+                  ? 'bg-sky-500/20 border-sky-500/40'
+                  : eligBadge.tone === 'unknown'
+                    ? 'bg-amber-500/20 border-amber-500/40'
+                    : 'bg-emerald-500/15 border-emerald-500/35'
             }`}
           >
             <Text
               className={`text-xs font-medium ${
-                elig === 'US' ? 'text-red-400' : eligUnverified ? 'text-amber-400' : 'text-gray-400'
+                eligBadge.tone === 'us'
+                  ? 'text-red-400'
+                  : eligBadge.tone === 'na'
+                    ? 'text-sky-300'
+                    : eligBadge.tone === 'unknown'
+                      ? 'text-amber-400'
+                      : 'text-emerald-300'
               }`}
             >
-              {eligDisplay}
-              {eligUnverified ? ' ?' : ''}
+              {eligBadge.label}
             </Text>
           </View>
         </View>

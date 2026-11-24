@@ -53,6 +53,7 @@ import {
   type CardDensity,
   type SortDefault,
 } from '../lib/utils/userSettings'
+import { passesGeoFilter } from '../lib/utils/eligibilityGeo'
 
 type SortFilter = SortDefault
 
@@ -86,17 +87,6 @@ const TAG_REQ_FILTERS: { key: string; label: string; match: (c: Contest) => bool
   { key: 'weekly', label: 'Weekly', match: (c) => (c.tags ?? []).includes('Weekly') },
 ]
 
-function passesGeo(c: Contest, geoFilter: GeoFilterValue): boolean {
-  if (geoFilter === 'CA') {
-    const elig = c.eligibility ?? 'Unknown'
-    if (elig === 'US') return false
-  }
-  if (geoFilter === 'US') {
-    const elig = c.eligibility ?? 'Unknown'
-    if (elig === 'CA') return false
-  }
-  return true
-}
 
 interface DashboardProps {
   onOpenOverlay: (contest: Contest) => void
@@ -324,7 +314,7 @@ export default function Dashboard({ onOpenOverlay, onPressUrl, enteredIds: enter
         !enteredIds.has(c.id) &&
         c.id !== '__offline_alert__' &&
         !isDeadLink(c) &&
-        passesGeo(c, geoFilter) &&
+        passesGeoFilter(c, geoFilter) &&
         !(quebecSafe && c.restrictions?.includes('no_quebec'))
     )
     return [...base].sort((a, b) => compareExpiryAscending(a.expiryDate, b.expiryDate)).slice(0, 25)
@@ -342,7 +332,7 @@ export default function Dashboard({ onOpenOverlay, onPressUrl, enteredIds: enter
         (c) =>
           c.id !== '__offline_alert__' &&
           !isDeadLink(c) &&
-          passesGeo(c, geoFilter) &&
+          passesGeoFilter(c, geoFilter) &&
           !(quebecSafe && c.restrictions?.includes('no_quebec'))
       ),
     [liveContests, geoFilter, quebecSafe]
@@ -378,7 +368,7 @@ export default function Dashboard({ onOpenOverlay, onPressUrl, enteredIds: enter
     if (quebecSafe && c.restrictions?.includes('no_quebec')) return false
     if (hidePurchaseRequired && isPurchaseRequiredContest(c)) return false
     if (hideAdult && isAdultContest(c)) return false
-    if (!passesGeo(c, geoFilter)) return false
+    if (!passesGeoFilter(c, geoFilter)) return false
     if (search.trim()) {
       const q = search.toLowerCase()
       if (!c.title.toLowerCase().includes(q)) return false

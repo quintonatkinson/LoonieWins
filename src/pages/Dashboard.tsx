@@ -42,6 +42,7 @@ import {
 import { searchHiveMind, getVaultContestCount } from '../hooks/useContestVault'
 import { shareContest } from '../lib/utils/shareContest'
 import type { GeoFilterValue } from '../components/CountryToggle'
+import { passesGeoFilter } from '../lib/utils/eligibilityGeo'
 import {
   resolveFeedDisplayPrefs,
   saveFeedDisplayPrefsLocal,
@@ -99,18 +100,6 @@ const TAG_REQ_FILTERS: { key: string; label: string; match: (c: Contest) => bool
   { key: 'single', label: 'Single Entry', match: (c) => (c.tags ?? []).includes('1 Single Entry') },
   { key: 'weekly', label: 'Weekly', match: (c) => (c.tags ?? []).includes('Weekly') },
 ]
-
-function passesGeo(c: Contest, geoFilter: GeoFilterValue): boolean {
-  if (geoFilter === 'CA') {
-    const elig = c.eligibility ?? 'Unknown'
-    if (elig === 'US') return false
-  }
-  if (geoFilter === 'US') {
-    const elig = c.eligibility ?? 'Unknown'
-    if (elig === 'CA') return false
-  }
-  return true
-}
 
 export default function Dashboard() {
   const navigate = useNavigate()
@@ -203,6 +192,10 @@ export default function Dashboard() {
       } catch {
         /* ignore */
       }
+      saveGeoFilter(fromProfile)
+      void updateProfile({
+        settings: { ...(profile.settings ?? {}), geoFilter: fromProfile },
+      })
       return fromProfile
     })
     const qc = resolveInitialQuebecSafe({
@@ -589,7 +582,7 @@ export default function Dashboard() {
       if (quebecSafe && c.restrictions?.includes('no_quebec')) return false
       if (hidePurchaseRequired && isPurchaseRequiredContest(c)) return false
       if (hideAdult && isAdultContest(c)) return false
-      if (!passesGeo(c, geoFilter)) return false
+      if (!passesGeoFilter(c, geoFilter)) return false
       if (search.trim()) {
         const q = search.toLowerCase()
         if (!c.title.toLowerCase().includes(q) && !(c.source ?? '').toLowerCase().includes(q)) {
@@ -642,7 +635,7 @@ export default function Dashboard() {
         !enteredIds.has(c.id) &&
         c.id !== '__offline_alert__' &&
         !isDeadLink(c) &&
-        passesGeo(c, geoFilter) &&
+        passesGeoFilter(c, geoFilter) &&
         !(quebecSafe && c.restrictions?.includes('no_quebec'))
     )
     return [...base].sort((a, b) => compareExpiryAscending(a.expiryDate, b.expiryDate)).slice(0, 25)
@@ -659,7 +652,7 @@ export default function Dashboard() {
       (c) =>
         c.id !== '__offline_alert__' &&
         !isDeadLink(c) &&
-        passesGeo(c, geoFilter) &&
+        passesGeoFilter(c, geoFilter) &&
         !(quebecSafe && c.restrictions?.includes('no_quebec'))
     )
   }, [liveContests, geoFilter, quebecSafe])

@@ -20,6 +20,7 @@ import {
 import { formatEntriesToday } from '../hooks/useContestSocialProof'
 import { linkHealthHint, isDeadLink } from '../lib/utils/linkHealth'
 import { findVaultContestByUrl } from '../hooks/useContestVault'
+import { eligibilityBadge } from '../lib/utils/eligibilityGeo'
 
 interface ContestCardProps {
   contest: Contest
@@ -330,14 +331,7 @@ export default function ContestCard({
   const overlayPortal = (el: ReactNode) =>
     typeof document !== 'undefined' && el ? createPortal(el, document.body) : null
 
-  const elig = contest.eligibility ?? 'Unknown'
-  // Use maple leaf for CA/Unknown — 🇨🇦 often renders as "CA" on Windows
-  const eligDisplay =
-    elig === 'CA' ? '🍁' :
-    elig === 'US' ? '🇺🇸' :
-    elig === 'NA' ? '🌎' :
-    '🍁' // Unknown = assume Canadian suppliers
-  const eligUnverified = contest.eligibilityUnverified ?? false
+  const eligBadge = eligibilityBadge(contest)
   const reqBadges = getRequirementBadges(contest)
 
   if (variant === 'routine') {
@@ -471,21 +465,18 @@ export default function ContestCard({
               </span>
             )}
             <span
-              className={`rounded-full px-2 py-0.5 text-xs font-medium shrink-0 ${
-                elig === 'US' ? 'bg-red-500/20 text-red-400 border border-red-500/40' :
-                eligUnverified ? 'bg-amber-500/20 text-amber-400 border border-amber-500/40' :
-                'bg-gray-600/50 text-gray-400'
+              className={`rounded-full px-2 py-0.5 text-xs font-medium shrink-0 border ${
+                eligBadge.tone === 'us'
+                  ? 'bg-red-500/20 text-red-400 border-red-500/40'
+                  : eligBadge.tone === 'na'
+                    ? 'bg-sky-500/20 text-sky-300 border-sky-500/40'
+                    : eligBadge.tone === 'unknown'
+                      ? 'bg-amber-500/20 text-amber-400 border-amber-500/40'
+                      : 'bg-emerald-500/15 text-emerald-300 border-emerald-500/35'
               }`}
-              title={
-                eligUnverified ? 'Eligibility unverified' :
-                elig === 'CA' ? 'Canada' : elig === 'US' ? 'United States' : elig === 'NA' ? 'North America' :
-                'Canada (default – Canadian suppliers)'
-              }
-              aria-label={
-                elig === 'CA' ? 'Canada' : elig === 'US' ? 'United States' : elig === 'NA' ? 'North America' : 'Canada (default)'
-              }
+              title={eligBadge.title}
             >
-              {eligDisplay}{eligUnverified ? ' ?' : ''}
+              {eligBadge.label}
             </span>
             {contest.source && (
               <span>{contest.source.replace(/\s*\([^)]*\)/g, '')}</span>

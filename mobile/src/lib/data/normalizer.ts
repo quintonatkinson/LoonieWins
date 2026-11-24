@@ -284,7 +284,6 @@ function extractImageFromJsonItem(item: Rss2JsonItem, body: string): string | un
 /**
  * Normalize an item from rss2json (Strategy A) into a Contest.
  */
-/** Prefer text-scanned eligibility; fall back to the feed's declared country. */
 function resolveEligibility(
   scanned: ReturnType<typeof scanForMetadata>,
   source: Source
@@ -295,8 +294,11 @@ function resolveEligibility(
       eligibilityUnverified: scanned.eligibilityUnverified,
     }
   }
-  if (source.country === 'CA' || source.country === 'US') {
-    return { eligibility: source.country, eligibilityUnverified: true }
+  if (source.country === 'CA') {
+    return { eligibility: 'CA', eligibilityUnverified: true }
+  }
+  if (source.country === 'US') {
+    return { eligibility: 'US', eligibilityUnverified: true }
   }
   return { eligibility: 'Unknown', eligibilityUnverified: true }
 }
@@ -325,7 +327,7 @@ export function normalizeJsonItem(item: Rss2JsonItem, source: Source, index: num
   const title = cleanTitle(item.title)
   const body = [item.description ?? '', item.content ?? ''].join(' ')
   const categorized = autoCategorize(item.title, body)
-  const scanned = scanForMetadata(item.title, body)
+  const scanned = scanForMetadata(item.title, body, item.link)
   const { eligibility, eligibilityUnverified } = resolveEligibility(scanned, source)
   const { tags, requirements } = applySourceDefaults(
     categorized.tags,
@@ -371,7 +373,7 @@ export function normalizeXmlItem(item: RawFeedItem, source: Source, index: numbe
   const title = cleanTitle(item.title)
   const body = [item.description ?? '', item.contentEncoded ?? '', item.content ?? ''].join(' ')
   const categorized = autoCategorize(item.title, body)
-  const scanned = scanForMetadata(item.title, body)
+  const scanned = scanForMetadata(item.title, body, item.link)
   const { eligibility, eligibilityUnverified } = resolveEligibility(scanned, source)
   const { tags, requirements } = applySourceDefaults(
     categorized.tags,

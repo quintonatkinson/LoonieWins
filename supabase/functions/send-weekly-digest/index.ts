@@ -155,7 +155,7 @@ Deno.serve(async (req) => {
       .from('contests')
       .select('id', { count: 'exact', head: true })
       .gte('created_at', sinceWeek)
-      .or('eligibility.eq.CA,eligibility.eq.Unknown,eligibility.eq.NA,eligibility.is.null')
+      .or('eligibility.eq.CA,eligibility.eq.NA,eligibility.is.null')
     if (caErr) throw caErr
 
     const { count: endingCount, error: endErr } = await admin

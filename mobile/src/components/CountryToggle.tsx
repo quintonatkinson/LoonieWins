@@ -8,9 +8,9 @@ interface CountryToggleProps {
 }
 
 const OPTIONS: { value: GeoFilterValue; label: string; emoji: string }[] = [
-  { value: 'CA', label: 'CA', emoji: '🇨🇦' },
+  { value: 'CA', label: 'Canada', emoji: '🇨🇦' },
   { value: 'US', label: 'US', emoji: '🇺🇸' },
-  { value: 'ANY', label: 'ANY', emoji: '🌐' },
+  { value: 'ANY', label: 'All', emoji: '🌐' },
 ]
 
 export default function CountryToggle({ value, onChange }: CountryToggleProps) {

@@ -18,6 +18,7 @@ import {
   json,
   requireServiceBearer,
 } from '../_shared/http.ts'
+import { resolveIngestEligibility, scanEligibility } from '../_shared/eligibility.ts'
 
 type SourceCountry = 'CA' | 'US' | 'BOTH'
 type FetchStrategy = 'direct_first' | 'rss2json_first'
@@ -104,10 +105,38 @@ const DISABLED_SOURCE_IDS: string[] = [
 /** Keep in sync with getActiveSources() in src/lib/data/sources.ts */
 const ACTIVE_SOURCES: Source[] = [
   { id: 'redflagdeals', name: 'RedFlagDeals (Contests)', url: 'https://forums.redflagdeals.com/feed/forum/34', country: 'CA', enabled: true },
-  { id: 'contestcanada-net', name: 'Contest Canada (.net)', url: 'https://www.contestcanada.net/feed/', country: 'CA', enabled: true },
-  { id: 'cfs-contests', name: 'Canadian Free Stuff (Contests)', url: 'https://www.canadianfreestuff.com/canadian-contests/feed/', country: 'CA', enabled: true },
-  { id: 'cfs-daily', name: 'Canadian Free Stuff (Daily)', url: 'https://www.canadianfreestuff.com/canadian-contests/enter-daily/feed/', country: 'CA', enabled: true },
-  { id: 'cfs-canadian-contests', name: 'Canadian Free Stuff (Category)', url: 'https://www.canadianfreestuff.com/category/canadian-contests/feed/', country: 'CA', enabled: true },
+  {
+    id: 'contestcanada-net',
+    name: 'Contest Canada (.net)',
+    url: 'https://www.contestcanada.net/feed/',
+    country: 'CA',
+    enabled: true,
+    fetchStrategy: 'rss2json_first',
+  },
+  {
+    id: 'cfs-contests',
+    name: 'Canadian Free Stuff (Contests)',
+    url: 'https://www.canadianfreestuff.com/canadian-contests/feed/',
+    country: 'CA',
+    enabled: true,
+    fetchStrategy: 'rss2json_first',
+  },
+  {
+    id: 'cfs-daily',
+    name: 'Canadian Free Stuff (Daily)',
+    url: 'https://www.canadianfreestuff.com/canadian-contests/enter-daily/feed/',
+    country: 'CA',
+    enabled: true,
+    fetchStrategy: 'rss2json_first',
+  },
+  {
+    id: 'cfs-canadian-contests',
+    name: 'Canadian Free Stuff (Category)',
+    url: 'https://www.canadianfreestuff.com/category/canadian-contests/feed/',
+    country: 'CA',
+    enabled: true,
+    fetchStrategy: 'rss2json_first',
+  },
   { id: 'sweeties-sweeps', name: 'Sweeties Sweeps', url: 'https://sweetiessweeps.com/feed/', country: 'US', enabled: true },
   { id: 'sweepstakes-bible', name: 'Sweepstakes Bible', url: 'https://www.sweepstakesbible.com/feed/', country: 'US', enabled: true },
   { id: 'sweepstakes-bible-daily', name: 'Sweepstakes Bible (Daily Entry)', url: 'https://www.sweepstakesbible.com/category/daily-entry/feed/', country: 'US', enabled: true },
@@ -402,13 +431,15 @@ Deno.serve(async (req) => {
           requirements = mergeUnique(requirements, ['Purchase Required'])
         }
         if (/\b(daily|\[daily\])\b/i.test(text)) tags = mergeUnique(tags, ['Daily'])
+        const scanned = scanEligibility(item.title, itemBody, item.link)
+        const { eligibility } = resolveIngestEligibility(scanned, source.country)
         const id = `${source.id}-${index}-${item.link.slice(-50).replace(/\W/g, '')}`
         rows.push({
           id,
           title: item.title.slice(0, 500),
           url: item.link,
           source: source.name,
-          eligibility: source.country === 'BOTH' ? 'NA' : source.country,
+          eligibility,
           tags,
           requirements,
           is_estimated_expiry: true,

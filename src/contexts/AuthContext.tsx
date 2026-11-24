@@ -228,6 +228,7 @@ async function ensureProfile(user: User): Promise<UserProfile | null> {
         id: user.id,
         email: user.email,
         display_name: display,
+        settings: { geoFilter: 'CA', welcome_granted: true },
       },
       { onConflict: 'id' }
     )
