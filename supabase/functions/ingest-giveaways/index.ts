@@ -20,6 +20,7 @@ import {
 } from '../_shared/http.ts'
 import { resolveIngestEligibility, scanEligibility } from '../_shared/eligibility.ts'
 import { contestRowId } from '../_shared/contestRowId.ts'
+import { SEASONAL_INGEST_ROWS } from '../_shared/seasonalPromos.ts'
 
 type SourceCountry = 'CA' | 'US' | 'BOTH'
 type FetchStrategy = 'direct_first' | 'rss2json_first'
@@ -36,6 +37,7 @@ interface Source {
   fetchStrategy?: FetchStrategy
   defaultRequirements?: string[]
   defaultTags?: string[]
+  wpJsonPages?: number
 }
 
 const SOURCE_TIMEOUT_MS = 12_000
@@ -120,6 +122,56 @@ const ACTIVE_SOURCES: Source[] = [
     country: 'CA',
     enabled: true,
     feedType: 'wp_json',
+    includeKeywords: CONTEST_KEYWORDS,
+  },
+  {
+    id: 'contestcanada-wp',
+    name: 'Contest Canada (WP JSON)',
+    url: 'https://www.contestcanada.net/wp-json/wp/v2/posts?per_page=100',
+    country: 'CA',
+    enabled: true,
+    feedType: 'wp_json',
+    wpJsonPages: 5,
+    includeKeywords: CONTEST_KEYWORDS,
+  },
+  {
+    id: 'postmedia-torontosun-contests',
+    name: 'Toronto Sun (Contests)',
+    url: 'https://torontosun.com/category/contests/feed/',
+    country: 'CA',
+    enabled: true,
+    includeKeywords: CONTEST_KEYWORDS,
+  },
+  {
+    id: 'postmedia-calgaryherald-contests',
+    name: 'Calgary Herald (Contests)',
+    url: 'https://calgaryherald.com/category/contests/feed/',
+    country: 'CA',
+    enabled: true,
+    includeKeywords: CONTEST_KEYWORDS,
+  },
+  {
+    id: 'postmedia-vancouversun-contests',
+    name: 'Vancouver Sun (Contests)',
+    url: 'https://vancouversun.com/category/contests/feed/',
+    country: 'CA',
+    enabled: true,
+    includeKeywords: CONTEST_KEYWORDS,
+  },
+  {
+    id: 'postmedia-theprovince-contests',
+    name: 'The Province (Contests)',
+    url: 'https://theprovince.com/category/contests/feed/',
+    country: 'CA',
+    enabled: true,
+    includeKeywords: CONTEST_KEYWORDS,
+  },
+  {
+    id: 'postmedia-ottawacitizen-contests',
+    name: 'Ottawa Citizen (Contests)',
+    url: 'https://ottawacitizen.com/category/contests/feed/',
+    country: 'CA',
+    enabled: true,
     includeKeywords: CONTEST_KEYWORDS,
   },
   { id: 'sweeties-sweeps', name: 'Sweeties Sweeps', url: 'https://sweetiessweeps.com/feed/', country: 'US', enabled: true },
@@ -338,6 +390,37 @@ async function fetchRss2Json(
   }
 }
 
+function wpJsonPageUrl(baseUrl: string, page: number): string {
+  const u = new URL(baseUrl)
+  u.searchParams.set('page', String(page))
+  return u.toString()
+}
+
+async function fetchWpJsonPage(
+  url: string,
+  headers: Record<string, string>
+): Promise<{ items: FeedItem[]; httpStatus?: number; error?: string }> {
+  const res = await fetchWithTimeout(url, { headers, timeoutMs: SOURCE_TIMEOUT_MS })
+  const httpStatus = res.status
+  if (!res.ok) {
+    return { items: [], httpStatus, error: `wp_json_http_${res.status}` }
+  }
+  const posts = await res.json()
+  if (!Array.isArray(posts)) {
+    return { items: [], httpStatus, error: 'wp_json_not_array' }
+  }
+  const items: FeedItem[] = []
+  for (const post of posts) {
+    const title = stripTags(String(post.title?.rendered ?? post.title ?? ''))
+    const link = String(post.link ?? '').trim()
+    const description = stripTags(
+      String(post.excerpt?.rendered ?? post.content?.rendered ?? post.excerpt ?? '')
+    )
+    if (title && link) items.push({ title, link, description })
+  }
+  return { items, httpStatus }
+}
+
 async function fetchWpJson(
   source: Source
 ): Promise<{ items: FeedItem[]; httpStatus?: number; error?: string }> {
@@ -345,26 +428,14 @@ async function fetchWpJson(
     'User-Agent': 'LoonieWinsIngest/1.1 (+https://github.com/quintonatkinson/LoonieWins)',
     Accept: 'application/json',
   }
+  const pages = Math.min(Math.max(source.wpJsonPages ?? 1, 1), 10)
   try {
-    const res = await fetchWithTimeout(source.url, { headers, timeoutMs: SOURCE_TIMEOUT_MS })
-    const httpStatus = res.status
-    if (!res.ok) {
-      return { items: [], httpStatus, error: `wp_json_http_${res.status}` }
-    }
-    const posts = await res.json()
-    if (!Array.isArray(posts)) {
-      return { items: [], httpStatus, error: 'wp_json_not_array' }
-    }
-    const items: FeedItem[] = []
-    for (const post of posts) {
-      const title = stripTags(String(post.title?.rendered ?? post.title ?? ''))
-      const link = String(post.link ?? '').trim()
-      const description = stripTags(
-        String(post.excerpt?.rendered ?? post.content?.rendered ?? post.excerpt ?? '')
-      )
-      if (title && link) items.push({ title, link, description })
-    }
-    return { items, httpStatus }
+    const pageUrls = Array.from({ length: pages }, (_, i) => wpJsonPageUrl(source.url, i + 1))
+    const results = await Promise.all(pageUrls.map((url) => fetchWpJsonPage(url, headers)))
+    const items = results.flatMap((r) => r.items)
+    const httpStatus = results.find((r) => r.httpStatus)?.httpStatus
+    const error = items.length === 0 ? results.map((r) => r.error).find(Boolean) : undefined
+    return { items, httpStatus, error }
   } catch (err) {
     return {
       items: [],
@@ -542,6 +613,31 @@ Deno.serve(async (req) => {
       }
       console.error(`[ingest-giveaways] ${source.id} failed`, msg)
     }
+  }
+
+  const seasonalT0 = Date.now()
+  let seasonalKept = 0
+  for (const promo of SEASONAL_INGEST_ROWS) {
+    seasonalKept += 1
+    rows.push({
+      id: `seasonal-${promo.id}`,
+      title: promo.title.slice(0, 500),
+      url: promo.url,
+      source: 'Seasonal Promos',
+      eligibility: promo.eligibility,
+      tags: promo.tags,
+      requirements: promo.requirements,
+      prize_value: promo.prizeValue ?? null,
+      expiry_date: promo.expiryDate ?? null,
+      is_estimated_expiry: true,
+      updated_at: new Date().toISOString(),
+    })
+  }
+  perSource['seasonal-promos'] = {
+    country: 'CA',
+    count: seasonalKept,
+    fetched: SEASONAL_INGEST_ROWS.length,
+    ms: Date.now() - seasonalT0,
   }
 
   const byUrl = new Map<string, (typeof rows)[0]>()

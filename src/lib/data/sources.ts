@@ -37,6 +37,8 @@ export interface Source {
   defaultRequirements?: string[]
   /** Extra tags always applied for this source (merged after text scan). */
   defaultTags?: string[]
+  /** WordPress REST: number of `?page=` slices to merge (ingest only). */
+  wpJsonPages?: number
 }
 
 /** Fallback image URLs per source (when no image in item) */
@@ -63,6 +65,12 @@ export const SOURCE_FALLBACK_IMAGES: Record<string, string> = {
   'cfs-canadian-contests': 'https://www.canadianfreestuff.com/favicon.ico',
   'globalnews-contests': 'https://globalnews.ca/favicon.ico',
   'contestscoop-wp': 'https://www.contestscoop.com/favicon.ico',
+  'contestcanada-wp': 'https://www.contestcanada.net/favicon.ico',
+  'postmedia-torontosun-contests': 'https://torontosun.com/favicon.ico',
+  'postmedia-calgaryherald-contests': 'https://calgaryherald.com/favicon.ico',
+  'postmedia-vancouversun-contests': 'https://vancouversun.com/favicon.ico',
+  'postmedia-theprovince-contests': 'https://theprovince.com/favicon.ico',
+  'postmedia-ottawacitizen-contests': 'https://ottawacitizen.com/favicon.ico',
   'hip2save-sweeps': 'https://www.hip2save.com/favicon.ico',
   'online-sweepstakes': 'https://www.online-sweepstakes.com/favicon.ico',
   contestbee: 'https://www.contestbee.com/favicon.ico',
@@ -203,6 +211,70 @@ export const MASTER_SOURCES: Source[] = [
     enabled: true,
     includeKeywords: CONTEST_KEYWORDS,
     notes: 'WordPress REST — full CA directory; RSS sibling only exposes site intro item.',
+  },
+  {
+    id: 'contestcanada-wp',
+    name: 'Contest Canada (WP JSON)',
+    url: 'https://www.contestcanada.net/wp-json/wp/v2/posts?per_page=100',
+    type: 'wp_json',
+    country: 'CA',
+    trustScore: 9,
+    enabled: true,
+    wpJsonPages: 5,
+    includeKeywords: CONTEST_KEYWORDS,
+    notes:
+      'WordPress REST (86k+ archive). Ingest merges pages 1–5 (500 newest) — primary volume driver toward 500+ CA rows.',
+  },
+  {
+    id: 'postmedia-torontosun-contests',
+    name: 'Toronto Sun (Contests)',
+    url: 'https://torontosun.com/category/contests/feed/',
+    type: 'rss_standard',
+    country: 'CA',
+    trustScore: 7,
+    enabled: true,
+    includeKeywords: CONTEST_KEYWORDS,
+    notes: 'Postmedia contest category RSS (2026-11-24 probe).',
+  },
+  {
+    id: 'postmedia-calgaryherald-contests',
+    name: 'Calgary Herald (Contests)',
+    url: 'https://calgaryherald.com/category/contests/feed/',
+    type: 'rss_standard',
+    country: 'CA',
+    trustScore: 7,
+    enabled: true,
+    includeKeywords: CONTEST_KEYWORDS,
+  },
+  {
+    id: 'postmedia-vancouversun-contests',
+    name: 'Vancouver Sun (Contests)',
+    url: 'https://vancouversun.com/category/contests/feed/',
+    type: 'rss_standard',
+    country: 'CA',
+    trustScore: 7,
+    enabled: true,
+    includeKeywords: CONTEST_KEYWORDS,
+  },
+  {
+    id: 'postmedia-theprovince-contests',
+    name: 'The Province (Contests)',
+    url: 'https://theprovince.com/category/contests/feed/',
+    type: 'rss_standard',
+    country: 'CA',
+    trustScore: 7,
+    enabled: true,
+    includeKeywords: CONTEST_KEYWORDS,
+  },
+  {
+    id: 'postmedia-ottawacitizen-contests',
+    name: 'Ottawa Citizen (Contests)',
+    url: 'https://ottawacitizen.com/category/contests/feed/',
+    type: 'rss_standard',
+    country: 'CA',
+    trustScore: 7,
+    enabled: true,
+    includeKeywords: CONTEST_KEYWORDS,
   },
   {
     id: 'save-a-loonie',
