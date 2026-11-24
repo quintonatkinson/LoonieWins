@@ -21,9 +21,9 @@ comment on column public.contests.link_status is
 create index if not exists idx_contests_last_verified
   on public.contests (last_verified nulls first);
 
+-- No partial predicate: Postgres rejects now() in index WHERE (not IMMUTABLE).
 create index if not exists idx_contests_link_recheck
-  on public.contests (last_verified asc nulls first)
-  where (expiry_date is null or expiry_date > now());
+  on public.contests (last_verified asc nulls first, expiry_date);
 
 -- ---------------------------------------------------------------------------
 -- Platform all-time Hive Mind inventory (anon-safe scalar for Home counter)

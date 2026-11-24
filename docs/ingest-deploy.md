@@ -20,7 +20,8 @@ Dashboard → **Project Settings → Edge Functions → Secrets** (or CLI):
 | Secret | Required | Notes |
 |--------|----------|-------|
 | `SUPABASE_URL` | auto | `https://ofutnznsyumfidavvbqz.supabase.co` |
-| `SUPABASE_SERVICE_ROLE_KEY` | auto | Injected for functions |
+| `SUPABASE_SERVICE_ROLE_KEY` | auto | Injected for functions — on this project it is the new `sb_secret_…` key, **not** the legacy `service_role` JWT |
+| `CRON_SECRET` | required here | Set to the legacy `service_role` JWT (the value GitHub / pg_cron send). Without it the handlers return `unauthorized`. |
 | `RSS2JSON_API_KEY` | optional | Paid [rss2json](https://rss2json.com/) key → `count=100` (fatter pages). Free tier ≈10 items. |
 
 ```bash
