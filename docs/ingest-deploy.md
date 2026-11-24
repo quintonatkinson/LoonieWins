@@ -44,9 +44,12 @@ Workflow: `.github/workflows/ingest-giveaways.yml` — cron `*/30 * * * *` + man
 ### B) pg_cron inside Supabase
 
 1. Database → Extensions → enable **pg_cron** and **pg_net**
-2. SQL Editor → paste `supabase/cron_ingest.sql`
-3. Replace `SERVICE_ROLE_KEY_REPLACE_ME` with the real `service_role` JWT
-4. Confirm: `SELECT * FROM cron.job WHERE jobname = 'looniewins-ingest-giveaways';`
+2. SQL Editor → once, store the bearer in Vault (same value as the `CRON_SECRET` edge secret; never commit it):
+   `select vault.create_secret('<CRON_SECRET value>', 'looniewins_cron_secret');`
+3. SQL Editor → paste `supabase/cron_ingest.sql` and `supabase/cron_verify_links.sql` as-is (they read the bearer from Vault)
+4. Confirm: `SELECT * FROM cron.job;` then after a run, `SELECT * FROM cron.job_run_details ORDER BY start_time DESC LIMIT 5;` and `SELECT status_code, left(content, 200) FROM net._http_response ORDER BY created DESC LIMIT 5;`
+
+GitHub Actions workflows stay as a backup; both schedulers can run (ingest upserts on `id`).
 
 Same SQL lives as additive migration: `supabase/migrations/20260920_cron_ingest_giveaways.sql`.
 
