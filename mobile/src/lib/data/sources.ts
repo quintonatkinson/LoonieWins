@@ -149,6 +149,7 @@ export const MASTER_SOURCES: Source[] = [
     country: 'CA',
     trustScore: 9,
     enabled: true,
+    fetchStrategy: 'rss2json_first',
   },
   {
     id: 'cfs-contests',
@@ -158,6 +159,7 @@ export const MASTER_SOURCES: Source[] = [
     country: 'CA',
     trustScore: 9,
     enabled: true,
+    fetchStrategy: 'rss2json_first',
   },
   {
     id: 'cfs-daily',
@@ -167,6 +169,7 @@ export const MASTER_SOURCES: Source[] = [
     country: 'CA',
     trustScore: 9,
     enabled: true,
+    fetchStrategy: 'rss2json_first',
   },
   {
     id: 'cfs-canadian-contests',
@@ -176,6 +179,7 @@ export const MASTER_SOURCES: Source[] = [
     country: 'CA',
     trustScore: 8,
     enabled: true,
+    fetchStrategy: 'rss2json_first',
   },
   {
     id: 'contestscoop',
