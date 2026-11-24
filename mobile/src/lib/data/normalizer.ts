@@ -336,7 +336,7 @@ export function normalizeJsonItem(item: Rss2JsonItem, source: Source, index: num
   const imageUrl =
     extractImageFromJsonItem(item, body) ?? SOURCE_FALLBACK_IMAGES[source.id]
 
-  const id = `${source.id}-${index}-${item.link.slice(-50).replace(/\W/g, '')}`
+  const id = `${source.id}-${item.link.slice(-50).replace(/\W/g, '')}`
 
   const postedAtIso = parseDate(item.pubDate)
   const { expiryDate, is_estimated_expiry } = extractExpiryDate(body, postedAtIso)
@@ -382,7 +382,7 @@ export function normalizeXmlItem(item: RawFeedItem, source: Source, index: numbe
   const imageUrl =
     extractImage(item) ?? SOURCE_FALLBACK_IMAGES[source.id]
 
-  const id = `${source.id}-${index}-${item.link.slice(-50).replace(/\W/g, '')}`
+  const id = `${source.id}-${item.link.slice(-50).replace(/\W/g, '')}`
 
   const postedAtIso = parseDate(item.pubDate)
   const { expiryDate, is_estimated_expiry } = extractExpiryDate(body, postedAtIso)

@@ -1,4 +1,4 @@
--- LoonieWins: schedule contest URL recheck every 2 hours (pg_cron + pg_net).
+-- LoonieWins: schedule contest URL recheck every hour (pg_cron + pg_net).
 -- Project ref: ofutnznsyumfidavvbqz
 --
 -- Prerequisites:
@@ -20,7 +20,7 @@ END $$;
 
 SELECT cron.schedule(
   'looniewins-verify-contest-links',
-  '15 */2 * * *',
+  '5 * * * *',
   $$
   SELECT net.http_post(
     url := 'https://ofutnznsyumfidavvbqz.supabase.co/functions/v1/verify-contest-links',
@@ -31,7 +31,7 @@ SELECT cron.schedule(
         WHERE name = 'looniewins_cron_secret'
       )
     ),
-    body := '{"limit":40,"olderThanHours":24}'::jsonb,
+    body := '{"limit":120,"olderThanHours":12}'::jsonb,
     timeout_milliseconds := 120000
   );
   $$
