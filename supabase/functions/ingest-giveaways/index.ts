@@ -21,6 +21,7 @@ import {
 import { resolveIngestEligibility, scanEligibility } from '../_shared/eligibility.ts'
 import { contestRowId } from '../_shared/contestRowId.ts'
 import { SEASONAL_INGEST_ROWS } from '../_shared/seasonalPromos.ts'
+import { resolveContestEntryUrlFast } from '../_shared/linkResolver.ts'
 
 type SourceCountry = 'CA' | 'US' | 'BOTH'
 type FetchStrategy = 'direct_first' | 'rss2json_first'
@@ -569,10 +570,11 @@ Deno.serve(async (req) => {
           requirements = mergeUnique(requirements, ['Purchase Required'])
         }
         if (/\b(daily|\[daily\])\b/i.test(text)) tags = mergeUnique(tags, ['Daily'])
-        const url = item.link.trim()
-        const scanned = scanEligibility(item.title, itemBody, item.link)
+        const listingUrl = item.link.trim()
+        const url = resolveContestEntryUrlFast(listingUrl, itemBody)
+        const scanned = scanEligibility(item.title, itemBody, listingUrl)
         const { eligibility } = resolveIngestEligibility(scanned, source.country)
-        const id = contestRowId(source.id, url)
+        const id = contestRowId(source.id, listingUrl)
         rows.push({
           id,
           title: item.title.slice(0, 500),
