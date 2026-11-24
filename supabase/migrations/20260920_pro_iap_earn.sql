@@ -93,6 +93,9 @@ begin
   if p_external_id is null or length(trim(p_external_id)) = 0 then
     return jsonb_build_object('ok', false, 'reason', 'missing_external_id');
   end if;
+  if auth.role() in ('anon', 'authenticated') then
+    raise exception 'service_role only';
+  end if;
   if p_player_id is null then
     return jsonb_build_object('ok', false, 'reason', 'missing_player_id');
   end if;
@@ -138,8 +141,7 @@ begin
 end;
 $$;
 
-revoke all on function public.credit_offerwall_completion(text, text, uuid, int, numeric, text, jsonb) from public;
--- Invoked by Edge Function with service role (bypasses grant) or explicitly:
+revoke all on function public.credit_offerwall_completion(text, text, uuid, int, numeric, text, jsonb) from public, anon, authenticated;
 grant execute on function public.credit_offerwall_completion(text, text, uuid, int, numeric, text, jsonb) to service_role;
 
 -- ---------------------------------------------------------------------------
@@ -160,6 +162,9 @@ as $$
 declare
   tier text := lower(coalesce(p_tier, 'free'));
 begin
+  if auth.role() in ('anon', 'authenticated') then
+    raise exception 'service_role only';
+  end if;
   if p_user_id is null then
     return jsonb_build_object('ok', false, 'reason', 'missing_user');
   end if;
@@ -206,7 +211,7 @@ begin
 end;
 $$;
 
-revoke all on function public.apply_iap_entitlement(uuid, text, text, timestamptz, boolean) from public;
+revoke all on function public.apply_iap_entitlement(uuid, text, text, timestamptz, boolean) from public, anon, authenticated;
 grant execute on function public.apply_iap_entitlement(uuid, text, text, timestamptz, boolean) to service_role;
 
 -- ---------------------------------------------------------------------------

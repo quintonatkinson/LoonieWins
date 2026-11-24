@@ -1,6 +1,7 @@
 /**
  * Local Vault + Supabase Hive Mind.
- * Persist contests in localStorage and sync with centralized Supabase DB.
+ * Persist contests in localStorage and pull from the centralized Supabase DB
+ * (written only by the server-side ingest).
  * Cloud data wins on merge. getLiveContests() serves from local for snappy UI.
  */
 
@@ -94,23 +95,6 @@ function rowToContest(row: ContestRow): Contest {
   }
 }
 
-function contestToRow(c: Contest): Omit<ContestRow, 'created_at' | 'updated_at'> {
-  return {
-    id: c.id,
-    title: c.title,
-    url: c.url,
-    source: c.source,
-    expiry_date: c.expiryDate ?? null,
-    is_estimated_expiry: c.is_estimated_expiry ?? false,
-    prize_value: c.prizeValue ?? null,
-    eligibility: c.eligibility ?? null,
-    tags: c.tags ?? [],
-    requirements: c.requirements ?? [],
-    link_status: c.linkStatus ?? null,
-    is_locked: c.isLocked ?? false,
-  }
-}
-
 function loadVault(): Contest[] {
   try {
     const raw = localStorage.getItem(VAULT_KEY)
@@ -166,28 +150,6 @@ export async function fetchFromCloud(): Promise<number> {
   } catch (err) {
     console.warn('[Vault] fetchFromCloud:', err)
     return 0
-  }
-}
-
-/**
- * Cloud Push: UPSERT enriched contests to Supabase master DB.
- */
-export async function syncToCloud(contests: Contest[]): Promise<void> {
-  if (!supabase || contests.length === 0) return
-  try {
-    const rows = contests.map((c) => contestToRow(c))
-    const { error } = await withTimeout(
-      supabase.from('contests').upsert(rows, {
-        onConflict: 'id',
-        ignoreDuplicates: false,
-      }),
-      CLOUD_TIMEOUT_MS
-    )
-    if (error) {
-      console.warn('[Vault] syncToCloud error:', error.message)
-    }
-  } catch (err) {
-    console.warn('[Vault] syncToCloud:', err)
   }
 }
 

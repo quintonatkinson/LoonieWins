@@ -16,6 +16,7 @@ import { isCurrentContestEntry } from '../lib/utils/contestEntryScope'
 import { shareEnteredGiveaway } from '../lib/utils/shareContest'
 import SubscriptionModal from '../components/SubscriptionModal'
 import PageShell from '../components/PageShell'
+import { safeHttpUrl } from '../lib/utils/sanitizeContestUrl'
 
 type ScopeTab = 'current' | 'all'
 type StatusFilter = 'all' | ContestEntryStatus
@@ -434,7 +435,7 @@ export default function MyGiveaways() {
                 </div>
                 {c.url && (
                   <a
-                    href={c.url}
+                    href={safeHttpUrl(c.url)}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="shrink-0 p-2 rounded-lg text-win hover:bg-win/10 transition-colors"

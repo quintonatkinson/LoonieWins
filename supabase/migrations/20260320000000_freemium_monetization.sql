@@ -86,6 +86,9 @@ declare
   row public.profiles;
   week_start timestamptz := date_trunc('week', timezone('utc', now()));
 begin
+  if auth.role() in ('anon', 'authenticated') and p_uid is distinct from auth.uid() then
+    raise exception 'Not allowed';
+  end if;
   select * into row from public.profiles where id = p_uid for update;
   if not found then
     raise exception 'Profile not found';
@@ -102,6 +105,8 @@ begin
   return row;
 end;
 $$;
+revoke all on function public.ensure_week_reset(uuid) from public, anon, authenticated;
+
 
 create or replace function public.level_for_xp(p_xp int)
 returns int
@@ -124,7 +129,7 @@ as $$
 declare
   uid uuid := auth.uid();
   row public.profiles;
-  cap int := greatest(coalesce(p_weekly_cap, 7), 0);
+  cap int := least(greatest(coalesce(p_weekly_cap, 7), 0), 7);
   flags jsonb;
   effective_cap int;
 begin
