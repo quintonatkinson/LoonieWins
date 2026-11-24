@@ -106,7 +106,7 @@ export function useContestEntries() {
 
       if (user && isSupabaseConfigured) {
         const res = await rpcAwardEntryProgress(contestId, status)
-        if (res.ok && !res.local) {
+        if (!res.local) {
           await refreshProfile()
           return
         }
