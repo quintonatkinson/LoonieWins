@@ -26,5 +26,5 @@ jobs:
           curl -sS -X POST "${SUPABASE_URL}/functions/v1/verify-contest-links" \
             -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
             -H "Content-Type: application/json" \
-            -d '{"limit":120,"olderThanHours":12}' | tee /tmp/verify.json
-          python3 -c "import json; d=json.load(open('/tmp/verify.json')); print('scanned', d.get('scanned'), 'updated', d.get('updated'), 'dead', d.get('dead'), 'ok', d.get('ok')); raise SystemExit(0 if d.get('ok') else 1)"
+            -d '{"limit":120,"olderThanHours":12,"resolveUrls":true}' | tee /tmp/verify.json
+          python3 -c "import json; d=json.load(open('/tmp/verify.json')); print('scanned', d.get('scanned'), 'urlsResolved', d.get('urlsResolved', 0), 'updated', d.get('updated'), 'dead', d.get('dead'), 'ok', d.get('ok')); raise SystemExit(0 if d.get('ok') else 1)"

@@ -1,6 +1,7 @@
 /**
  * Server-side contest URL resolution (Edge Functions).
  * Mirrors client src/lib/data/linkResolver.ts without DOMParser or CORS proxy.
+ * v1 — deployed via main / deploy-supabase-functions workflow.
  */
 
 import { fetchPublicUrl } from './http.ts'
