@@ -18,6 +18,7 @@ import {
   json,
   requireServiceBearer,
 } from '../_shared/http.ts'
+import { contestRowId } from '../_shared/contestRowId.ts'
 
 type SourceCountry = 'CA' | 'US' | 'BOTH'
 type FetchStrategy = 'direct_first' | 'rss2json_first'
@@ -104,10 +105,10 @@ const DISABLED_SOURCE_IDS: string[] = [
 /** Keep in sync with getActiveSources() in src/lib/data/sources.ts */
 const ACTIVE_SOURCES: Source[] = [
   { id: 'redflagdeals', name: 'RedFlagDeals (Contests)', url: 'https://forums.redflagdeals.com/feed/forum/34', country: 'CA', enabled: true },
-  { id: 'contestcanada-net', name: 'Contest Canada (.net)', url: 'https://www.contestcanada.net/feed/', country: 'CA', enabled: true },
-  { id: 'cfs-contests', name: 'Canadian Free Stuff (Contests)', url: 'https://www.canadianfreestuff.com/canadian-contests/feed/', country: 'CA', enabled: true },
-  { id: 'cfs-daily', name: 'Canadian Free Stuff (Daily)', url: 'https://www.canadianfreestuff.com/canadian-contests/enter-daily/feed/', country: 'CA', enabled: true },
-  { id: 'cfs-canadian-contests', name: 'Canadian Free Stuff (Category)', url: 'https://www.canadianfreestuff.com/category/canadian-contests/feed/', country: 'CA', enabled: true },
+  { id: 'contestcanada-net', name: 'Contest Canada (.net)', url: 'https://www.contestcanada.net/feed/', country: 'CA', enabled: true, fetchStrategy: 'rss2json_first' },
+  { id: 'cfs-contests', name: 'Canadian Free Stuff (Contests)', url: 'https://www.canadianfreestuff.com/canadian-contests/feed/', country: 'CA', enabled: true, fetchStrategy: 'rss2json_first' },
+  { id: 'cfs-daily', name: 'Canadian Free Stuff (Daily)', url: 'https://www.canadianfreestuff.com/canadian-contests/enter-daily/feed/', country: 'CA', enabled: true, fetchStrategy: 'rss2json_first' },
+  { id: 'cfs-canadian-contests', name: 'Canadian Free Stuff (Category)', url: 'https://www.canadianfreestuff.com/category/canadian-contests/feed/', country: 'CA', enabled: true, fetchStrategy: 'rss2json_first' },
   { id: 'sweeties-sweeps', name: 'Sweeties Sweeps', url: 'https://sweetiessweeps.com/feed/', country: 'US', enabled: true },
   { id: 'sweepstakes-bible', name: 'Sweepstakes Bible', url: 'https://www.sweepstakesbible.com/feed/', country: 'US', enabled: true },
   { id: 'sweepstakes-bible-daily', name: 'Sweepstakes Bible (Daily Entry)', url: 'https://www.sweepstakesbible.com/category/daily-entry/feed/', country: 'US', enabled: true },
@@ -259,6 +260,27 @@ async function fetchDirect(
   }
 }
 
+function mergeFeedItems(primary: FeedItem[], secondary: FeedItem[]): FeedItem[] {
+  const byLink = new Map<string, FeedItem>()
+  for (const item of [...primary, ...secondary]) {
+    const link = item.link.trim()
+    if (!link || /\/(feed|rss)(\/|$)|atom\.xml$/i.test(link)) continue
+    const prev = byLink.get(link)
+    if (!prev) {
+      byLink.set(link, item)
+      continue
+    }
+    const prevDesc = prev.description ?? ''
+    const nextDesc = item.description ?? ''
+    byLink.set(link, {
+      title: item.title || prev.title,
+      link,
+      description: nextDesc.length > prevDesc.length ? item.description : prev.description,
+    })
+  }
+  return [...byLink.values()]
+}
+
 async function fetchRss2Json(
   source: Source
 ): Promise<{ items: FeedItem[]; httpStatus?: number; error?: string }> {
@@ -307,6 +329,27 @@ async function fetchFeedItems(
   source: Source
 ): Promise<{ items: FeedItem[]; httpStatus?: number; error?: string }> {
   const strategy = source.fetchStrategy ?? 'direct_first'
+  const hasRss2JsonKey = Boolean(Deno.env.get('RSS2JSON_API_KEY')?.trim())
+
+  if (hasRss2JsonKey) {
+    const [direct, viaApi] = await Promise.all([fetchDirect(source), fetchRss2Json(source)])
+    const merged =
+      strategy === 'rss2json_first'
+        ? mergeFeedItems(viaApi.items, direct.items)
+        : mergeFeedItems(direct.items, viaApi.items)
+    if (merged.length > 0) {
+      return {
+        items: merged,
+        httpStatus: viaApi.httpStatus ?? direct.httpStatus,
+      }
+    }
+    return {
+      items: [],
+      httpStatus: viaApi.httpStatus ?? direct.httpStatus,
+      error: viaApi.error ?? direct.error ?? 'empty',
+    }
+  }
+
   if (strategy === 'rss2json_first') {
     const viaApi = await fetchRss2Json(source)
     if (viaApi.items.length > 0) return viaApi
@@ -390,7 +433,7 @@ Deno.serve(async (req) => {
     try {
       const { items, httpStatus, error } = await fetchFeedItems(source)
       let kept = 0
-      items.forEach((item, index) => {
+      items.forEach((item) => {
         const itemBody = item.description ?? ''
         if (!matchesKeywords(source, item.title, itemBody)) return
         kept += 1
@@ -402,11 +445,12 @@ Deno.serve(async (req) => {
           requirements = mergeUnique(requirements, ['Purchase Required'])
         }
         if (/\b(daily|\[daily\])\b/i.test(text)) tags = mergeUnique(tags, ['Daily'])
-        const id = `${source.id}-${index}-${item.link.slice(-50).replace(/\W/g, '')}`
+        const url = item.link.trim()
+        const id = contestRowId(source.id, url)
         rows.push({
           id,
           title: item.title.slice(0, 500),
-          url: item.link,
+          url,
           source: source.name,
           eligibility: source.country === 'BOTH' ? 'NA' : source.country,
           tags,

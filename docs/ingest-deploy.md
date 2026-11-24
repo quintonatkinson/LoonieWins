@@ -65,6 +65,8 @@ curl -sS -X POST \
 
 Expect `ok: true`, non-zero `upserted`, and `perSource` counts for CA/US feeds.
 
+Contest ids are stable: `${sourceId}-${urlTail}` (see `supabase/functions/_shared/contestRowId.ts`). With `RSS2JSON_API_KEY` set, ingest merges direct XML + rss2json (`count=100`) per feed for fatter pulls (~1000+ rows after URL dedupe).
+
 ## 5. Client optional key
 
 Web `.env` / Expo env:
