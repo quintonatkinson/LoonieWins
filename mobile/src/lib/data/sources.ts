@@ -6,7 +6,7 @@
  * but are not fetched. Ready to move to Supabase Edge Functions later.
  */
 
-export type SourceType = 'rss_reddit' | 'rss_standard' | 'api_partner' | 'scaffold'
+export type SourceType = 'rss_reddit' | 'rss_standard' | 'wp_json' | 'api_partner' | 'scaffold'
 export type SourceCountry = 'CA' | 'US' | 'BOTH'
 /**
  * Fetch order for Cloudflare-sensitive hosts.
@@ -61,6 +61,8 @@ export const SOURCE_FALLBACK_IMAGES: Record<string, string> = {
   'cfs-contests': 'https://www.canadianfreestuff.com/favicon.ico',
   'cfs-daily': 'https://www.canadianfreestuff.com/favicon.ico',
   'cfs-canadian-contests': 'https://www.canadianfreestuff.com/favicon.ico',
+  'globalnews-contests': 'https://globalnews.ca/favicon.ico',
+  'contestscoop-wp': 'https://www.contestscoop.com/favicon.ico',
   'hip2save-sweeps': 'https://www.hip2save.com/favicon.ico',
   'online-sweepstakes': 'https://www.online-sweepstakes.com/favicon.ico',
   contestbee: 'https://www.contestbee.com/favicon.ico',
@@ -182,6 +184,38 @@ export const MASTER_SOURCES: Source[] = [
     fetchStrategy: 'rss2json_first',
   },
   {
+    id: 'globalnews-contests',
+    name: 'Global News (Contests)',
+    url: 'https://globalnews.ca/contests/feed/',
+    type: 'rss_standard',
+    country: 'CA',
+    trustScore: 8,
+    enabled: true,
+    notes: 'Corus / Global News contest listings RSS (2026-11-24 probe).',
+  },
+  {
+    id: 'contestscoop-wp',
+    name: 'ContestScoop (WP JSON)',
+    url: 'https://www.contestscoop.com/wp-json/wp/v2/posts?per_page=100',
+    type: 'wp_json',
+    country: 'CA',
+    trustScore: 7,
+    enabled: true,
+    includeKeywords: CONTEST_KEYWORDS,
+    notes: 'WordPress REST — full CA directory; RSS sibling only exposes site intro item.',
+  },
+  {
+    id: 'save-a-loonie',
+    name: 'SaveALoonie (Contests)',
+    url: 'https://www.savealoonie.com/feed/',
+    type: 'rss_standard',
+    country: 'CA',
+    trustScore: 7,
+    enabled: true,
+    includeKeywords: CONTEST_KEYWORDS,
+    notes: 'Main site RSS with keyword filter (category/contests feed empty 2026-11-24).',
+  },
+  {
     id: 'contestscoop',
     name: 'ContestScoop',
     url: 'https://contestscoop.com/feed/',
@@ -189,8 +223,7 @@ export const MASTER_SOURCES: Source[] = [
     country: 'CA',
     trustScore: 6,
     enabled: false,
-    notes:
-      'Disabled 2026-10-19: host returns WAF/HTML “access limited” (5xx) — not RSS. Direct + rss2json fail persistently.',
+    notes: 'Superseded by contestscoop-wp (WP JSON). Legacy RSS is intro-only.',
   },
   {
     id: 'contest-canada',
@@ -548,16 +581,6 @@ export const MASTER_SOURCES: Source[] = [
     trustScore: 8,
     enabled: false, // TLS / host down
   },
-  {
-    id: 'save-a-loonie',
-    name: 'SaveALoonie (Contests)',
-    url: 'https://www.savealoonie.com/category/contests/feed/',
-    type: 'rss_standard',
-    country: 'CA',
-    trustScore: 7,
-    enabled: false, // empty feed
-  },
-
   // ——— Scaffolds: no public contest listing feed/API (do not scrape) ———
   {
     id: 'gleam-directory',
@@ -826,7 +849,7 @@ export const MASTER_SOURCES: Source[] = [
 
 /** Sources the engine should actually fetch */
 export function getActiveSources(): Source[] {
-  return MASTER_SOURCES.filter((s) => s.enabled !== false)
+  return MASTER_SOURCES.filter((s) => s.enabled !== false && s.type !== 'wp_json')
 }
 
 export function getSourcesByCountry(country: 'CA' | 'US' | 'BOTH' | 'ANY'): Source[] {
