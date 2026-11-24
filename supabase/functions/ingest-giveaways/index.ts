@@ -23,6 +23,7 @@ import { contestRowId } from '../_shared/contestRowId.ts'
 
 type SourceCountry = 'CA' | 'US' | 'BOTH'
 type FetchStrategy = 'direct_first' | 'rss2json_first'
+type SourceFeedType = 'rss' | 'wp_json'
 
 interface Source {
   id: string
@@ -30,6 +31,7 @@ interface Source {
   url: string
   country: SourceCountry
   enabled?: boolean
+  feedType?: SourceFeedType
   includeKeywords?: string[]
   fetchStrategy?: FetchStrategy
   defaultRequirements?: string[]
@@ -110,6 +112,16 @@ const ACTIVE_SOURCES: Source[] = [
   { id: 'cfs-contests', name: 'Canadian Free Stuff (Contests)', url: 'https://www.canadianfreestuff.com/canadian-contests/feed/', country: 'CA', enabled: true, fetchStrategy: 'rss2json_first' },
   { id: 'cfs-daily', name: 'Canadian Free Stuff (Daily)', url: 'https://www.canadianfreestuff.com/canadian-contests/enter-daily/feed/', country: 'CA', enabled: true, fetchStrategy: 'rss2json_first' },
   { id: 'cfs-canadian-contests', name: 'Canadian Free Stuff (Category)', url: 'https://www.canadianfreestuff.com/category/canadian-contests/feed/', country: 'CA', enabled: true, fetchStrategy: 'rss2json_first' },
+  { id: 'globalnews-contests', name: 'Global News (Contests)', url: 'https://globalnews.ca/contests/feed/', country: 'CA', enabled: true },
+  {
+    id: 'contestscoop-wp',
+    name: 'ContestScoop (WP JSON)',
+    url: 'https://www.contestscoop.com/wp-json/wp/v2/posts?per_page=100',
+    country: 'CA',
+    enabled: true,
+    feedType: 'wp_json',
+    includeKeywords: CONTEST_KEYWORDS,
+  },
   { id: 'sweeties-sweeps', name: 'Sweeties Sweeps', url: 'https://sweetiessweeps.com/feed/', country: 'US', enabled: true },
   { id: 'sweepstakes-bible', name: 'Sweepstakes Bible', url: 'https://www.sweepstakesbible.com/feed/', country: 'US', enabled: true },
   { id: 'sweepstakes-bible-daily', name: 'Sweepstakes Bible (Daily Entry)', url: 'https://www.sweepstakesbible.com/category/daily-entry/feed/', country: 'US', enabled: true },
@@ -326,9 +338,49 @@ async function fetchRss2Json(
   }
 }
 
+async function fetchWpJson(
+  source: Source
+): Promise<{ items: FeedItem[]; httpStatus?: number; error?: string }> {
+  const headers = {
+    'User-Agent': 'LoonieWinsIngest/1.1 (+https://github.com/quintonatkinson/LoonieWins)',
+    Accept: 'application/json',
+  }
+  try {
+    const res = await fetchWithTimeout(source.url, { headers, timeoutMs: SOURCE_TIMEOUT_MS })
+    const httpStatus = res.status
+    if (!res.ok) {
+      return { items: [], httpStatus, error: `wp_json_http_${res.status}` }
+    }
+    const posts = await res.json()
+    if (!Array.isArray(posts)) {
+      return { items: [], httpStatus, error: 'wp_json_not_array' }
+    }
+    const items: FeedItem[] = []
+    for (const post of posts) {
+      const title = stripTags(String(post.title?.rendered ?? post.title ?? ''))
+      const link = String(post.link ?? '').trim()
+      const description = stripTags(
+        String(post.excerpt?.rendered ?? post.content?.rendered ?? post.excerpt ?? '')
+      )
+      if (title && link) items.push({ title, link, description })
+    }
+    return { items, httpStatus }
+  } catch (err) {
+    return {
+      items: [],
+      error: isTimeoutError(err)
+        ? 'wp_json_timeout'
+        : `wp_json_${err instanceof Error ? err.message : String(err)}`,
+    }
+  }
+}
+
 async function fetchFeedItems(
   source: Source
 ): Promise<{ items: FeedItem[]; httpStatus?: number; error?: string }> {
+  if ((source.feedType ?? 'rss') === 'wp_json') {
+    return fetchWpJson(source)
+  }
   const strategy = source.fetchStrategy ?? 'direct_first'
   const hasRss2JsonKey = Boolean(Deno.env.get('RSS2JSON_API_KEY')?.trim())
 
