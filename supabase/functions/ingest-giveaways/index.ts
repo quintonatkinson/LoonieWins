@@ -36,6 +36,12 @@ interface Source {
 
 const SOURCE_TIMEOUT_MS = 12_000
 
+/** Stable Hive Mind id: same URL keeps the same row when feed order shifts. */
+function contestIdForLink(sourceId: string, link: string): string {
+  const tail = link.slice(-50).replace(/\W/g, '')
+  return `${sourceId}-${tail}`
+}
+
 const CONTEST_KEYWORDS = [
   'contest',
   'sweepstake',
@@ -402,7 +408,7 @@ Deno.serve(async (req) => {
           requirements = mergeUnique(requirements, ['Purchase Required'])
         }
         if (/\b(daily|\[daily\])\b/i.test(text)) tags = mergeUnique(tags, ['Daily'])
-        const id = `${source.id}-${index}-${item.link.slice(-50).replace(/\W/g, '')}`
+        const id = contestIdForLink(source.id, item.link)
         rows.push({
           id,
           title: item.title.slice(0, 500),
