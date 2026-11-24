@@ -11,6 +11,7 @@ import {
 } from '../lib/contestSubmissions'
 import { isSupabaseConfigured } from '../lib/supabase'
 import PageShell from '../components/PageShell'
+import { safeHttpUrl } from '../lib/utils/sanitizeContestUrl'
 
 const ELIG_OPTIONS: { value: ContestEligibility; label: string }[] = [
   { value: 'CA', label: 'Canada' },
@@ -288,7 +289,7 @@ export default function SubmitContest() {
                   </span>
                 </div>
                 <a
-                  href={s.url}
+                  href={safeHttpUrl(s.url)}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="text-xs text-win/80 truncate hover:underline"

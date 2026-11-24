@@ -15,6 +15,7 @@ import {
 } from '../lib/monetization/tiers'
 import {
   localConsumeWeeklyEntry,
+  rpcClaimWelcomeBonus,
   rpcConsumeFreeEntry,
 } from '../lib/monetization/progression'
 import { purchaseSubscription, type BillingPlanId } from '../lib/billing/iap'
@@ -27,12 +28,11 @@ interface UserEarnContextValue {
   weeklyEntryCapValue: number | null
   setBalance: (n: number | ((prev: number) => number)) => void
   setLastDailyEntryAt: (iso: string | null) => void
-  setSubscriptionTier: (tier: SubscriptionTier) => void
   addPoints: (amount: number, meta?: { type?: string; description?: string }) => void
   /** Consume one free weekly slot (RPC when signed in). Returns false if paywalled. */
   consumeFreeEntry: () => Promise<boolean>
   spendPointsForEntry: (cost: number) => boolean
-  /** StoreKit/Play via RevenueCat (or QA stub) → flips subscription_tier / is_premium */
+  /** StoreKit/Play via RevenueCat (or QA stub); signed-in tiers are applied server-side by the store webhook */
   upgradeToPro: (planId: BillingPlanId) => Promise<void>
 }
 
@@ -50,19 +50,23 @@ export function UserEarnProvider({ children }: { children: ReactNode }) {
   })
   const syncing = useRef(false)
 
-  // Ensure new accounts start with a small welcome balance once (0 → 1250)
+  // New accounts get a one-time welcome balance (1250), granted server-side when signed in
   useEffect(() => {
     if (!profile || syncing.current) return
     if (profile.points_balance === 0 && !profile.settings?.welcome_granted) {
       syncing.current = true
-      void updateProfile({
-        points_balance: 1250,
-        settings: { ...profile.settings, welcome_granted: true },
-      }).finally(() => {
+      const claim =
+        user && isSupabaseConfigured
+          ? rpcClaimWelcomeBonus().then(() => refreshProfile())
+          : updateProfile({
+              points_balance: 1250,
+              settings: { ...profile.settings, welcome_granted: true },
+            })
+      void claim.finally(() => {
         syncing.current = false
       })
     }
-  }, [profile, updateProfile])
+  }, [profile, user, updateProfile, refreshProfile])
 
   const setBalance = useCallback(
     (n: number | ((prev: number) => number)) => {
@@ -80,22 +84,16 @@ export function UserEarnProvider({ children }: { children: ReactNode }) {
     [updateProfile]
   )
 
-  const setSubscriptionTier = useCallback(
-    (tier: SubscriptionTier) => {
-      void updateProfile({
-        subscription_tier: tier,
-        is_premium: tier === 'weekly' || tier === 'monthly',
-      })
-    },
-    [updateProfile]
-  )
-
   const upgradeToPro = useCallback(
     async (planId: BillingPlanId) => {
       const result = await purchaseSubscription(planId, { appUserId: user?.id })
       if (!result.ok) {
         if (result.cancelled) return
         throw new Error(result.message)
+      }
+      if (user && isSupabaseConfigured) {
+        await refreshProfile()
+        return
       }
       await updateProfile({
         subscription_tier: planId,
@@ -109,7 +107,7 @@ export function UserEarnProvider({ children }: { children: ReactNode }) {
         ...(result.productId ? { iap_product_id: result.productId } : {}),
       })
     },
-    [user?.id, profile?.feature_flags, updateProfile]
+    [user, profile?.feature_flags, updateProfile, refreshProfile]
   )
 
   const addPoints = useCallback(
@@ -198,7 +196,6 @@ export function UserEarnProvider({ children }: { children: ReactNode }) {
     weeklyEntryCapValue,
     setBalance,
     setLastDailyEntryAt,
-    setSubscriptionTier,
     addPoints,
     consumeFreeEntry,
     spendPointsForEntry,

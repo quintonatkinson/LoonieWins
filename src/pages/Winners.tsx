@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { Trophy, ExternalLink, ChevronDown, ChevronUp, Package } from 'lucide-react'
 import { giveaways, isSupabaseConfigured } from '../lib/supabase'
 import PageShell from '../components/PageShell'
+import { safeHttpUrl } from '../lib/utils/sanitizeContestUrl'
 
 interface WinnerCard {
   id: string
@@ -186,7 +187,7 @@ export default function Winners() {
                   <h3 className="font-semibold text-sm text-white line-clamp-2">{w.contestName}</h3>
                   {w.contestUrl && (
                     <a
-                      href={w.contestUrl}
+                      href={safeHttpUrl(w.contestUrl)}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="text-win shrink-0"

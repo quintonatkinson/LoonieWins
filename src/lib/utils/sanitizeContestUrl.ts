@@ -13,3 +13,20 @@ export function sanitizeContestUrl(url: string): string {
   }
   return u.replace(/\/$/, '') || u
 }
+
+/** The URL only when it is http(s); blocks javascript:, data: and other schemes in user-supplied links. */
+export function safeHttpUrl(url: string | null | undefined): string | undefined {
+  if (!url) return undefined
+  try {
+    const u = new URL(url.trim())
+    return u.protocol === 'http:' || u.protocol === 'https:' ? u.toString() : undefined
+  } catch {
+    return undefined
+  }
+}
+
+/** window.open for external links, refusing non-http(s) URLs. */
+export function openExternalUrl(url: string | null | undefined): Window | null {
+  const safe = safeHttpUrl(url)
+  return safe ? window.open(safe, '_blank', 'noopener,noreferrer') : null
+}

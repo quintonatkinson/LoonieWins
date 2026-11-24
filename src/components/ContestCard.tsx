@@ -20,6 +20,7 @@ import {
 import { formatEntriesToday } from '../hooks/useContestSocialProof'
 import { linkHealthHint, isDeadLink } from '../lib/utils/linkHealth'
 import { findVaultContestByUrl } from '../hooks/useContestVault'
+import { openExternalUrl } from '../lib/utils/sanitizeContestUrl'
 
 interface ContestCardProps {
   contest: Contest
@@ -126,11 +127,11 @@ export default function ContestCard({
   const handleEnter = useCallback(() => {
     if (contest.id === '__offline_alert__') return
     if (variant === 'ended') {
-      window.open(contest.url, '_blank', 'noopener,noreferrer')
+      openExternalUrl(contest.url)
       return
     }
     if (contest.isLocked) {
-      window.open(contest.url, '_blank', 'noopener,noreferrer')
+      openExternalUrl(contest.url)
       return
     }
     if (hasUnlimitedEntries) {

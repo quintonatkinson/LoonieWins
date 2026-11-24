@@ -17,7 +17,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.0'
 import {
   corsHeaders,
-  fetchWithTimeout,
+  fetchPublicUrl,
   json,
   requireServiceBearer,
 } from '../_shared/http.ts'
@@ -38,20 +38,11 @@ async function probeUrl(url: string): Promise<number | null> {
   }
   try {
     // Prefer HEAD; some hosts reject HEAD — fall back to GET
-    let res = await fetchWithTimeout(url, {
-      method: 'HEAD',
-      headers,
-      redirect: 'follow',
-      timeoutMs: 10_000,
-    })
+    let res = await fetchPublicUrl(url, { method: 'HEAD', headers, timeoutMs: 10_000 })
     if (res.status === 405 || res.status === 501) {
-      res = await fetchWithTimeout(url, {
-        method: 'GET',
-        headers,
-        redirect: 'follow',
-        timeoutMs: 10_000,
-      })
+      res = await fetchPublicUrl(url, { method: 'GET', headers, timeoutMs: 10_000 })
     }
+    await res.body?.cancel()
     return res.status
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)
